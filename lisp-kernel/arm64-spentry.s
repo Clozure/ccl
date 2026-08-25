@@ -1079,9 +1079,8 @@ C(egc_rplaca_did_store):
         add temp0, temp0, imm0                  /* ldxr/stxr take [Xn]     */
 2:      ldxr imm1, [temp0]                      /* ppc:504 lrarx           */
         orr imm1, imm1, imm3                    /* ppc:505                 */
-        stxr w17, imm1, [temp0]                  /* ppc:506 strcx           */
+        stlxr w17, imm1, [temp0]                  /* ppc:506 strcx           */
         cbnz w17, 2b                             /* ppc:507                 */
-        dmb ish                                 /* ppc:508 isync           */
         and imm4, imm2, #0x3f                   /* ppc:509                 */
         lsr imm2, imm2, #bitmap_shift           /* ppc:510                 */
         mov imm3, #0x8000000000000000           /* ppc:511                 */
@@ -1091,9 +1090,8 @@ C(egc_rplaca_did_store):
         add temp0, temp0, imm2                  /* ldxr/stxr take [Xn]     */
 3:      ldxr imm1, [temp0]                      /* ppc:515 lrarx           */
         orr imm1, imm1, imm3                    /* ppc:516                 */
-        stxr w17, imm1, [temp0]                  /* ppc:517 strcx           */
+        stlxr w17, imm1, [temp0]                  /* ppc:517 strcx           */
         cbnz w17, 3b                             /* ppc:518                 */
-        dmb ish                                 /* ppc:519 isync           */
 1:      ret
 endsp rplaca
 
@@ -1124,9 +1122,8 @@ C(egc_rplacd_did_store):
         add temp0, temp0, imm0                  /* ldxr/stxr take [Xn]     */
 2:      ldxr imm1, [temp0]                      /* ppc:544 lrarx           */
         orr imm1, imm1, imm3                    /* ppc:545                 */
-        stxr w17, imm1, [temp0]                  /* ppc:546 strcx           */
+        stlxr w17, imm1, [temp0]                  /* ppc:546 strcx           */
         cbnz w17, 2b                             /* ppc:547                 */
-        dmb ish                                 /* ppc:548 isync           */
         and imm4, imm2, #0x3f                   /* ppc:549                 */
         lsr imm2, imm2, #bitmap_shift           /* ppc:550                 */
         mov imm3, #0x8000000000000000           /* ppc:551                 */
@@ -1136,9 +1133,8 @@ C(egc_rplacd_did_store):
         add temp0, temp0, imm2                  /* ldxr/stxr take [Xn]     */
 3:      ldxr imm1, [temp0]                      /* ppc:555 lrarx           */
         orr imm1, imm1, imm3                    /* ppc:556                 */
-        stxr w17, imm1, [temp0]                  /* ppc:557 strcx           */
+        stlxr w17, imm1, [temp0]                  /* ppc:557 strcx           */
         cbnz w17, 3b                             /* ppc:558                 */
-        dmb ish                                 /* ppc:559 isync           */
 1:      ret
 endsp rplacd
 
@@ -1176,10 +1172,9 @@ C(egc_gvset_did_store):
         add temp0, temp0, imm0          /* ldxr/stxr take [Xn] only        */
 1:      ldxr imm1, [temp0]
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp0]         /* status=temp5/x17: w2 aliases imm2,
+        stlxr w17, imm1, [temp0]         /* status=temp5/x17: w2 aliases imm2,
                                            which is STILL LIVE (granule) */
         cbnz w17, 1b
-        dmb ish
         and imm4, imm2, #0x3f /* extract_bit_shift_count */
         lsr imm2, imm2, #bitmap_shift
         mov imm3, #0x8000000000000000
@@ -1189,9 +1184,8 @@ C(egc_gvset_did_store):
         add temp0, temp0, imm2          /* ldxr/stxr take [Xn] only        */
 2:      ldxr imm1, [temp0]
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp0]
+        stlxr w17, imm1, [temp0]
         cbnz w17, 2b
-        dmb ish
 9:      ret
 endsp gvset
 
@@ -1228,9 +1222,8 @@ C(egc_set_hash_key_did_store):
         add temp2, temp0, imm0          /* ldxr/stxr take [Xn] only        */
 1:      ldxr imm1, [temp2]              /* ppc:640 lrarx                   */
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp2]         /* status=temp5/x17 (imm2 live)        */
+        stlxr w17, imm1, [temp2]         /* status=temp5/x17 (imm2 live)        */
         cbnz w17, 1b
-        dmb ish                         /* ppc:644 isync                   */
         mov imm3, #0x8000000000000000   /* ppc:645                         */
         and imm4, imm2, #0x3f           /* ppc:646                         */
         lsr imm2, imm2, #bitmap_shift   /* ppc:647                         */
@@ -1239,9 +1232,8 @@ C(egc_set_hash_key_did_store):
         add temp2, temp1, imm2
 2:      ldxr imm1, [temp2]              /* ppc:650                         */
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp2]
+        stlxr w17, imm1, [temp2]
         cbnz w17, 2b
-        dmb ish                         /* ppc:654                         */
 3:      /* -- memoize the hash VECTOR itself (ppc:656-683) -- */
         ref_global imm1, ref_base       /* ppc:656                         */
         sub imm0, arg_x, imm1           /* ppc:657                         */
@@ -1258,9 +1250,8 @@ C(egc_set_hash_key_did_store):
         add temp2, temp0, imm0
 4:      ldxr imm1, [temp2]              /* ppc:668                         */
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp2]
+        stlxr w17, imm1, [temp2]
         cbnz w17, 4b
-        dmb ish                         /* ppc:672                         */
         mov imm3, #0x8000000000000000   /* ppc:673                         */
         and imm4, imm2, #0x3f           /* ppc:674                         */
         lsr imm2, imm2, #bitmap_shift   /* ppc:675                         */
@@ -1269,9 +1260,8 @@ C(egc_set_hash_key_did_store):
         add temp2, temp1, imm2
 5:      ldxr imm1, [temp2]              /* ppc:678                         */
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp2]
+        stlxr w17, imm1, [temp2]
         cbnz w17, 5b
-        dmb ish                         /* ppc:682                         */
 9:      ret                             /* ppc:683                         */
 endsp set_hash_key
 
@@ -1309,9 +1299,8 @@ C(egc_store_node_conditional_test):
         add temp1, temp1, imm0
 2:      ldxr imm1, [temp1]              /* ppc:732                         */
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp1]
+        stlxr w17, imm1, [temp1]
         cbnz w17, 2b
-        dmb ish                         /* ppc:736                         */
         mov imm3, #0x8000000000000000   /* ppc:737                         */
         and imm4, imm2, #0x3f           /* ppc:738                         */
         lsr imm2, imm2, #bitmap_shift   /* ppc:739                         */
@@ -1321,9 +1310,8 @@ C(egc_store_node_conditional_test):
         add temp1, temp1, imm2
 3:      ldxr imm1, [temp1]              /* ppc:743                         */
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp1]
+        stlxr w17, imm1, [temp1]
         cbnz w17, 3b
-        dmb ish                         /* ppc:747                         */
 8:      add arg_z, rnil, #t_offset            /* success => T              */
         ret
 9:      clrex                                 /* PPC strcx-to-RESERVATION_
@@ -1370,9 +1358,8 @@ C(egc_set_hash_key_conditional_test):
         add temp0, temp2, imm0          /* [Xn] form (temp0 free)          */
 2:      ldxr imm1, [temp0]              /* ppc:783                         */
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp0]
+        stlxr w17, imm1, [temp0]
         cbnz w17, 2b
-        dmb ish                         /* ppc:787                         */
         mov imm3, #0x8000000000000000   /* ppc:788                         */
         and imm4, imm2, #0x3f           /* ppc:789                         */
         lsr imm2, imm2, #bitmap_shift   /* ppc:790                         */
@@ -1381,9 +1368,8 @@ C(egc_set_hash_key_conditional_test):
         add temp0, temp1, imm2
 3:      ldxr imm1, [temp0]              /* ppc:793                         */
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp0]
+        stlxr w17, imm1, [temp0]
         cbnz w17, 3b
-        dmb ish                         /* ppc:797                         */
         /* -- memoize the hash VECTOR itself (ppc:799-828) -- */
         ref_global temp1, refbits       /* ppc:800                         */
         ref_global imm1, ref_base       /* ppc:801                         */
@@ -1401,9 +1387,8 @@ C(egc_set_hash_key_conditional_test):
         add temp0, temp1, imm0
 4:      ldxr imm1, [temp0]              /* ppc:813                         */
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp0]
+        stlxr w17, imm1, [temp0]
         cbnz w17, 4b
-        dmb ish                         /* ppc:817                         */
         ref_global temp1, ephemeral_refidx      /* ppc:818                 */
         mov imm3, #0x8000000000000000   /* ppc:819                         */
         and imm4, imm2, #0x3f           /* ppc:820                         */
@@ -1413,9 +1398,8 @@ C(egc_set_hash_key_conditional_test):
         add temp0, temp1, imm2
 5:      ldxr imm1, [temp0]              /* ppc:824                         */
         orr imm1, imm1, imm3
-        stxr w17, imm1, [temp0]
+        stlxr w17, imm1, [temp0]
         cbnz w17, 5b
-        dmb ish                         /* ppc:828                         */
         .globl C(egc_write_barrier_end)
 C(egc_write_barrier_end):               /* ppc:829 (family END marker)     */
 8:      add arg_z, rnil, #t_offset            /* success => T              */
