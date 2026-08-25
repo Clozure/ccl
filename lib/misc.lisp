@@ -1473,7 +1473,11 @@ are running on, or NIL if we can't find any useful information."
 
 (defun kernel-global-address (global)
   (check-type global symbol)
-  (+ (target-nil-value) (target::%kernel-global global)))
+  ;; arm64: statics (and therefore nil) have no fixed VA; the canonical
+  ;; (target-nil-value) is wrong when the loader relocated the static
+  ;; section.  Use the live nil address.
+  #+arm64-target (+ (%address-of nil) (target::%kernel-global global))
+  #-arm64-target (+ (target-nil-value) (target::%kernel-global global)))
 
 (defloadvar *static-cons-address* (%int-to-ptr (kernel-global-address 'static-conses)))
 
