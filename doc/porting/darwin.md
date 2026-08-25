@@ -31,6 +31,28 @@ a register (rnil) because we can't rely on having a fixed address for it.
 This means we will access kernel globals and `nil`-relative symbols as
 offsets from rnil.
 
+## 16 KiB pages (Apple Silicon)
+
+Intel macOS uses 4 KiB pages; Apple Silicon uses **16 KiB**
+(`sysconf(_SC_PAGESIZE)` / `getpagesize()` → 16384).
+
+`mprotect` / `mmap` require addresses and lengths aligned to the OS
+page size. CCL historically hardcodes `log2_page_size = 12` in
+`*-exceptions.c` and uses 4 KiB-oriented stack-guard sizes
+(`CSTACK_SOFTPROT = 100<<10` = 102400, not a multiple of 16384).
+That yields `mprotect` **EINVAL** and `Bug("couldn't protect …")`
+during TCR/stack setup.
+
+Workaround in this port:
+
+* After `page_size = sysconf(_SC_PAGESIZE)`, set `log2_page_size`
+  from the live page size (do not leave the 4 KiB default).
+* Round stack soft/hard guard sizes up to `page_size` before
+  `mprotect`.
+* Heap **image files** remain 4 KiB-aligned on disk
+  (`heap-image.lisp`); `seek_to_next_page` must keep using 4 KiB,
+  not the OS page size.
+
 ## ARM ABI
 Official ARM documentation: https://github.com/ARM-software/abi-aa
 
@@ -53,19 +75,11 @@ On arm64, macOS enforces a policy called W^X.  This means that a memory
 region can be either writable or executable, but never both at the same
 time.
 
-Apple recognizes that this policy affects dynamic languages.  They
-document their accomodation for this at
+Apple documents the accommodation for dynamic languages at
 https://developer.apple.com/documentation/apple-silicon/porting-just-in-time-compilers-to-apple-silicon.
 
-In short, you are supposed to call `mmap` with the `MAP_JIT` flags to
-allocate a distinguished region of memory.  Threads can then call
-`pthread_jit_write_protect_np` to enable and disable write access.
-Note that this operates on a per-thread basis.
-Officially, only a single `MAP_JIT` region is supported.
-
-CCL has traditionally managed a single dynamic memory area that contains
-code and other data.  Given the W^X policy, I see no alternative to a separate
-memory area just for code-vector objects.
+Practical constraints (also hit by every shipping Darwin/arm64 JIT —
+Lisp, Lua, JS, Python, Wasm):
 
 * Allocate code with `mmap(..., PROT_READ|PROT_WRITE|PROT_EXEC,
   MAP_PRIVATE|MAP_ANON|MAP_JIT, ...)`.  Despite RWX in the call, the
@@ -225,52 +239,3 @@ not):
 
 Nil = static + 4 KiB + `fulltag_nil` (`#x20000100b`).  Longer term this
 should move to rnil-relative addressing without fixed static VA.
-
-## Enhanced Security / MIE readiness (macOS 26)
-
-Memory Integrity Enforcement (EMTE tagging, kernel + ~70 system
-processes) is always-on **hardware** on A19/M5+ and opt-in per app via
-`com.apple.security.hardened-process.*` entitlements; there is no user
-toggle.  Measured on macOS 26.6.2 / M4 by re-signing `darm64cl` with
-those entitlements (`tools/darwin-fixed-mmap-probe.c` bisects VA
-policy per entitlement):
-
-| Entitlement | Effect on this port |
-|---|---|
-| `hardened-process` + `enhanced-security-version` 2 | boots; no VA change |
-| `+ hardened-heap` (guard objects, xzone) | boots; GC stress clean |
-| `+ dyld-ro` | **breaks**: `MAP_FIXED` RW at `#x200000000` → EPERM; image load fails at `AREA_STATIC` |
-| `+ platform-restrictions` 2 | **killed at exec** (ad-hoc signature; Mach IPC hardening unprobed) |
-
-Consequences:
-
-* ~~The fixed `STATIC_BASE_ADDRESS` is the single point of failure~~
-  **Fixed: statics are relocatable.**  The loader probes the canonical
-  base; when the OS refuses (dyld-ro owns `#x200000000`) it maps the
-  static section wherever allowed and rebases references
-  (`static_space_bias`, saved base stashed in the `AREA_STATIC` section
-  header's `static_dnodes` slot; older images imply the canonical
-  base).  The nilreg area is rebased word-wise (raw globals page + nil
-  pun would misparse the object walker).  Kernel-global access compiles
-  rnil-relative (`%get-kernel-global*` archmacros → `*-from-offset`
-  primitives); `(target-nil-value)` must never be baked into arm64
-  code.  Test: `CCL_FORCE_STATIC_RELOC=1`
-  (`tools/darwin-static-reloc-smoke.lisp`, in the CI gate); audit knob
-  `CCL_STATIC_RELOC_AUDIT=1` reports leftover unrebased references.
-  Verified: full smoke gate under forced relocation, hardened
-  (dyld-ro and full Enhanced Security set) boots, save/reload
-  round-trips both directions.
-* EMTE tag checks apply to secure-allocator (`malloc`) memory, not raw
-  anonymous `mmap`; the lisp heap is untagged either way.  FFI keeps
-  full 64-bit pointers (tag byte intact).  Audit deliberate
-  out-of-bounds reads in FFI/string paths before enabling
-  `checked-allocations` on M5 hardware (`…soft-mode` gives simulated
-  crashes for auditing).
-* Mach exception ports may conflict with platform-restrictions Mach
-  IPC hardening; the Unix-signal fallback path
-  (`DARWIN_USE_PSEUDO_SIGRETURN`) is the escape hatch to validate on
-  MIE hardware.
-* `load_image_section` / `CommitMemory` / `MapFile` failures now name
-  the syscall, VA, length, and errno — a bare
-  "Couldn't load lisp heap image: Invalid argument" on a newer
-  machine is this policy family until proven otherwise.
