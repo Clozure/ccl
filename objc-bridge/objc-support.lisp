@@ -160,17 +160,28 @@
       (setq nclasses 0))))
 
 (register-objc-class-decls)
+;;; Modern cocoa CDBs omit Protocol (only NSURLProtocol / …).  Without a
+;;; declaration install-foreign-objc-class keeps it private and never
+;;; exports ns:protocol.  Declare it like x86 CDB did.
+(%ensure-class-declaration "Protocol" "NSObject")
 (maybe-map-objc-classes t)
 
 
 (defvar *class-init-keywords* (make-hash-table :test #'eq))
+
+(defun objc-init-result-type-p (result-type)
+  "Init methods historically returned :id; modern SDKs use :instancetype.
+Both are object returns and must participate in make-instance init-keyword
+registration (otherwise :with-frame etc. silently fall back to #/init)."
+  (or (eq result-type :id)
+      (eq result-type :instancetype)))
 
 (defun process-init-message (message-info)
   (let* ((keys (objc-to-lisp-init (objc-message-info-message-name message-info))))
     (when keys
       (let* ((keyinfo (cons keys (objc-message-info-lisp-name message-info))))
         (dolist (method (objc-message-info-methods message-info))
-          (when (and (eq :id (objc-method-info-result-type method))
+          (when (and (objc-init-result-type-p (objc-method-info-result-type method))
                      (let* ((flags (objc-method-info-flags method)))
                        (not (or (memq :class flags)
                                 (memq :protocol flags)))))
@@ -279,9 +290,17 @@
 #+apple-objc-2.0
 (progn
 (defun setup-objc-exception-globals ()
-  (flet ((set-global (offset name)
-           (setf (%get-ptr (%int-to-ptr (+ (target-nil-value) (%kernel-global-offset offset))))
-                 (foreign-symbol-address name))))
+  (flet ((set-global (name foreign-name)
+           #-arm64-target
+           (setf (%get-ptr (%int-to-ptr (+ (target-nil-value)
+                                           (%kernel-global-offset name))))
+                 (foreign-symbol-address foreign-name))
+           #+arm64-target
+           ;; rnil-relative: target-nil-value is not the relocated base
+           ;; on darwinarm64 (lowmem-bias still 0).
+           (%set-kernel-global-ptr-from-offset
+            (%kernel-global-offset name)
+            (foreign-symbol-address foreign-name))))
     (set-global 'objc-2-personality "___objc_personality_v0")
     (set-global 'objc-2-begin-catch "objc_begin_catch")
     (set-global 'objc-2-end-catch "objc_end_catch")
@@ -366,6 +385,83 @@
   nil)
 
 
+)
+
+#+arm64-target
+(progn
+;;; Callback-frame survivors after .SPcallback exit (arm64-arch.lisp):
+;;;   CBF+0 = x0, CBF+8 = x1, CBF-64 = d0, foreign LR at CBF-152.
+;;; Trampoline: fmov x16,d0; mov lr,x1; br x16 — x0 already holds the
+;;; NSException / encapsulated throw.  Built lazily (defloadvar +
+;;; makedataexecutable during OBJC-SUPPORT load SEGV'd on darwinarm64).
+(defvar *arm64-objc-callback-error-return-trampoline* nil)
+
+(defun %arm64-objc-callback-error-return-trampoline ()
+  (or *arm64-objc-callback-error-return-trampoline*
+      (setq *arm64-objc-callback-error-return-trampoline*
+            (let* ((code-words '(#x9e670010      ; fmov x16, d0
+                                 #xaa0103fe      ; mov lr, x1
+                                 #xd61f0200))    ; br x16
+                   (nbytes (* 4 (length code-words)))
+                   (ptr (%allocate-callback-pointer 16))
+                   ;; On Darwin the callback page is MAP_JIT: assemble
+                   ;; into a heap scratch and let kernel C blit it into
+                   ;; place (same pattern as make-callback-trampoline).
+                   (scratch (make-array 16 :element-type '(unsigned-byte 8)
+                                        :initial-element 0)))
+              (with-macptrs ((s))
+                (%vect-data-to-macptr scratch s)
+                (do* ((i 0 (+ i 4))
+                      (words code-words (cdr words)))
+                     ((null words))
+                  (setf (%get-unsigned-long s i) (car words)))
+                #+(and darwin-target arm64-target)
+                (ff-call (foreign-symbol-address "darwin_arm64_jit_install_code")
+                         :address ptr
+                         :address s
+                         :unsigned-fullword nbytes
+                         :void)
+                #-(and darwin-target arm64-target)
+                (dotimes (i nbytes)
+                  (setf (%get-unsigned-byte ptr i) (%get-unsigned-byte s i))))
+              #-(and darwin-target arm64-target)
+              (ff-call (%kernel-import #.arm64::kernel-import-makedataexecutable)
+                       :address ptr
+                       :unsigned-fullword nbytes
+                       :void)
+              ptr))))
+
+(defun %arm64-objc-exception-throw-bits ()
+  (let* ((addr (%reference-external-entry-point
+                (load-time-value (external "_objc_exception_throw")))))
+    (cond ((typep addr 'fixnum) addr)
+          ((macptrp addr) (%ptr-to-int addr))
+          (t (error "Unexpected _objc_exception_throw entry ~s" addr)))))
+
+(defun objc-callback-error-return (condition return-value-pointer return-address-pointer)
+  (process-debug-condition *current-process* condition (%get-frame-ptr))
+  (setf (%get-ptr return-value-pointer 0) (ns-exception condition)
+        (%get-ptr return-value-pointer 8) (%get-ptr return-address-pointer 0)
+        (%get-ptr return-address-pointer 0) (%arm64-objc-callback-error-return-trampoline))
+  (let* ((addr (%arm64-objc-exception-throw-bits)))
+    (if (< addr 0)
+      (setf (%%get-signed-longlong return-value-pointer
+                                   #.arm64::callback-frame.fp-save-offset) addr)
+      (setf (%%get-unsigned-longlong return-value-pointer
+                                     #.arm64::callback-frame.fp-save-offset) addr)))
+  nil)
+
+(defun objc-propagate-throw (throw-info return-value-pointer return-address-pointer)
+  (setf (%get-ptr return-value-pointer 0) (encapsulate-throw-info throw-info)
+        (%get-ptr return-value-pointer 8) (%get-ptr return-address-pointer 0)
+        (%get-ptr return-address-pointer 0) (%arm64-objc-callback-error-return-trampoline))
+  (let* ((addr (%arm64-objc-exception-throw-bits)))
+    (if (< addr 0)
+      (setf (%%get-signed-longlong return-value-pointer
+                                   #.arm64::callback-frame.fp-save-offset) addr)
+      (setf (%%get-unsigned-longlong return-value-pointer
+                                     #.arm64::callback-frame.fp-save-offset) addr)))
+  nil)
 )
 
 #+x8632-target
@@ -593,7 +689,12 @@ instance variable."
       (has-lisp-slot-vector nsobject)
       (let* ((cf-p (%cf-instance-p nsobject)) 
              (isize (if cf-p (external-call "malloc_size" :address nsobject :size_t) (%objc-class-instance-size (#/class nsobject))))
-             (skip (if cf-p (+ (record-length :id) 4 #+64-bit-target 4) (record-length :id))))
+             ;; Prefer :objc_object: modern ffigen also installs an
+             ;; incomplete (:struct :id) via (struct-ref "id"), which
+             ;; shadows the id typedef in record-length.  Header size
+             ;; is the isa slot either way (8 on 64-bit).
+             (skip (if cf-p (+ (record-length :objc_object) 4 #+64-bit-target 4)
+                       (record-length :objc_object))))
         (declare (fixnum isize skip))
         (or (> skip isize)
             (do* ((i skip (1+ i)))
@@ -750,6 +851,11 @@ NSObjects describe themselves in more detail than others."
   (augment-objc-interfaces interfaces-name interfaces-dir))
 
                       
+;; Protocol is declared via %ensure-class-declaration (and CDB inject)
+;; so ns:protocol is exported on darwinarm64 too.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (export (intern "PROTOCOL" "NS") "NS"))
+
 (defmethod print-object ((p ns:protocol) stream)
   (print-unreadable-object (p stream :type t)
     (format stream "~a (#x~x)"
