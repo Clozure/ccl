@@ -1773,7 +1773,7 @@
         (if (and (= (hard-regspec-class vreg) hard-reg-class-fpr)
                  (or (and (typep form 'double-float) (= (get-regspec-mode vreg) hard-reg-class-fpr-mode-double))
                      (and (typep form 'short-float)(= (get-regspec-mode vreg) hard-reg-class-fpr-mode-single))))
-          (if (zerop form)
+          (if (or (eql form 0.0d0) (eql form 0.0s0))
             (if (eql form 0.0d0)
               (! zero-double-float-register vreg)
               (! zero-single-float-register vreg))
