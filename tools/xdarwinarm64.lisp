@@ -21,9 +21,10 @@
   (unless (boundp '*arm64-xload-modules*)
     (error "ccl:lib;compile-ccl.lisp did not define *arm64-xload-modules*"))
   (update-modules *arm64-xload-modules* t)
-  ;; Prefer the dedicated Darwin arch (nil #x20000100b).  Do not mutate
-  ;; the shared linux-shaped *arm64-target-arch*.
-  (ensure-darwinarm64-target-arch)
+  ;; If you're loading into a linuxarm64 host, you'll need to manually
+  ;; evaluate the *darwinarm64-backend* defvar in arm64-backend.lisp and
+  ;; do (pushnew *darwinarm64-backend* *known-backends* :key #'backend-name)
+  ;; so that (find-backend :darwinarm64) works.
   (format t "~&;; darwinarm64 nil-value => #x~x~%"
           (arch::target-nil-value
            (backend-target-arch *darwinarm64-backend*))))
