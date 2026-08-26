@@ -26,22 +26,6 @@
 (in-package "CCL")
 
 ;;; %frame-backlink and lisp-frame-p live in lib/arm64-backtrace.lisp
-;;; (16m17): they need the fake-stack-frame accessor macros at compile
-;;; time, and the cross gate compiles each file in a host image that
-;;; only gets those macros inside that compile unit.  (The x86-donor
-;;; versions that used to sit here checked the VALUE stack — an x8664
-;;; frame model; this design's lisp frames are marker frames on the
-;;; CONTROL stack, kernel arm64-gc.c mark_cstack_area.)
-
-;;; %%frame-backlink (one step toward the parent/older frame) is a
-;;; LEVEL-0 LAP primitive (level-0/ARM64/arm64-def.lisp:~300, promoted
-;;; 16m21).  Under the DECIDED cstack-walk design (Option A,
-;;; comms/ARM64-CSTACK-WALK-DECISION.md), the cstack is a HOMOGENEOUS
-;;; chain of 32-byte marker frames (nfp + stack-cons live on the TSP),
-;;; so the walk is a plain +32 stride — NOT the ARM32-twin heterogeneous
-;;; ivector-skip decode (Option B, explicitly not chosen).  It carries a
-;;; marker@0 rather than a stored backlink, unlike PPC's one-load
-;;; %%frame-backlink (ppc-def.lisp:227-230).
 
 (defun bottom-of-stack-p (p context)            ; ppc-threads-utils:87-92
   (and (fixnump p)

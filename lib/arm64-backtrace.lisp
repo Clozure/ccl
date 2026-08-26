@@ -47,6 +47,10 @@
   %fake-stack-frame.link        ; next in *fake-stack-frames* list
   )
 
+;;; Give the istruct a class so that class-cell-typep has a real
+;;; class wrapper to look at.
+(make-istruct-class 'fake-stack-frame *istruct-class*)
+
 ;;; Linked list of fake stack frames.
 ;;; %frame-backlink looks here (ppc:31-33).
 (def-standard-initial-binding *fake-stack-frames* nil)
@@ -54,12 +58,32 @@
 (defun fake-stack-frame-p (x)   ; ppc:36
   (istruct-typep x 'fake-stack-frame))
 
+;;; The control stack on arm64 contains only 32-byte lisp frames (word 0
+;;; being lisp-frame-marker) and stack-allocated u64-vectors that cover
+;;; foreign data.
+(defun %cstack-next-object (p)
+  "Return the next (older, higher-addressed) object on the control stack."
+  (declare (fixnum p))
+  (let ((header (%fixnum-ref-natural p)))
+    (cond
+      ((eql header arm64::lisp-frame-marker)
+       (+ p (ash arm64::lisp-frame.size (- arm64::word-shift))))
+      ;; A foreign-data cover: header word + elements, padded to a dnode.
+      ((eql (logand header (1- (ash 1 arm64::num-subtag-bits)))
+            arm64::subtag-u64-vector)
+       (let ((words (1+ (ash header (- arm64::num-subtag-bits)))))
+         (+ p (if (logtest words 1) (1+ words) words))))
+      ;; Neither.  Something is wrong.  Maybe if we close our eyes, it
+      ;; will go away.  lisp-frame-p will treat nil as the bottom of
+      ;; the stack.
+      (t nil))))
+
 ;;; ppc-threads-utils.lisp:67-79 (see placement note in the header).
 (defun %frame-backlink (p &optional context)
   (cond ((fake-stack-frame-p p)
          (%fake-stack-frame.next-sp p))
         ((fixnump p)
-         (let ((backlink (%%frame-backlink p))
+         (let ((backlink (%cstack-next-object p))
                (fake-frame
                 (if context (bt.fake-frames context) *fake-stack-frames*)))
            (loop
@@ -72,12 +96,11 @@
 ;;; arm-threads-utils.lisp:61-65 shape (marker frames); PPC instead
 ;;; validates frame size + savefn because its frames carry no marker.
 (defun lisp-frame-p (p context)
-  (if (fake-stack-frame-p p)
-    (values t nil)
-    (if (bottom-of-stack-p p context)
-      (values nil t)
-      (values (eql (%fixnum-ref-natural p) arm64::lisp-frame-marker)
-              nil))))
+  (cond ((null p) (values nil t))
+        ((fake-stack-frame-p p) (values t nil))
+        ((bottom-of-stack-p p context) (values nil t))
+        (t (values (eql (%fixnum-ref-natural p) arm64::lisp-frame-marker)
+                   nil))))
 
 (defun cfp-lfun (p)             ; ppc:39-47
   (if (fake-stack-frame-p p)

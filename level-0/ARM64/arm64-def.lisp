@@ -801,27 +801,13 @@
   (ret))                                ; ppc:339
 
 ;;; =====================================================================
-;;; Frame-walk / catch-top set — ppc:227/236/241/270/289 (promoted from
+;;; Frame-walk / catch-top set — ppc:236/241/270/289 (promoted from
 ;;; the def draft; demand: 16m17 lib/arm64-backtrace cfp-lfun cluster,
 ;;; 16m21 %frame-backlink runtime call from the trap reporter/backtrace).
 ;;; lisp-frame layout is kernel ground truth: marker@0 savevsp@8
 ;;; savefn@16 savelr@24 — 4 nodes = 32 bytes (arm64-constants.h:378
 ;;; `_struct lisp_frame`; spentry-D-call-builtins.s:60-64).
 ;;; =====================================================================
-
-;;; %%frame-backlink — ppc:227.  ARM64-DEVIATION: PPC loads a stored
-;;; backlink from lisp-frame word @0, but Matt's marker frame has marker@0
-;;; and NO stored backlink.  Under the DECIDED cstack-walk design (Option
-;;; A, comms/ARM64-CSTACK-WALK-DECISION.md — cstack is a homogeneous 32B
-;;; frame chain, nfp + stack-cons on the TSP), the parent (older) frame is
-;;; simply the next 32-byte frame at a higher address, so backlink = p+32
-;;; (kernel-verified lisp_frame size).  Matches the fixed-frame assumption
-;;; the rest of this set already bakes in.  (16m21: this fell through the
-;;; quartet promotion and was left undefined, looping the trap reporter.)
-(defarm64lapfunction %%frame-backlink ((p arg_z))
-  (check-nargs 1)                       ; ppc:228
-  (add arg_z arg_z (:$ 32))             ; ppc:229 — lisp_frame.size (32)
-  (ret))                                ; ppc:230
 
 ;;; %%frame-savefn — ppc:236
 (defarm64lapfunction %%frame-savefn ((p arg_z))
