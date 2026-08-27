@@ -1115,7 +1115,17 @@ Which one name refers to depends on foreign-type-spec in the obvious manner."
                                     (setq first-field-p nil)
                                     natural-alignment)
                                   (min 32 natural-alignment))
-                                (if use-natural-alignment
+                                ;; A member whose alignment exceeds one word
+                                ;; keeps it.  The bits-per-word cap states a
+                                ;; target's DEFAULT rule for a member and must
+                                ;; not override an alignment the type states
+                                ;; explicitly.  Records only: an array takes its
+                                ;; element's alignment, so admitting arrays would
+                                ;; wrongly widen an array of double on a 32-bit
+                                ;; target.
+                                (if (or use-natural-alignment
+                                        (and (typep field-type 'foreign-record-type)
+                                             (> natural-alignment bits-per-word)))
                                   natural-alignment
                                   (min bits-per-word natural-alignment)))))
                  (parsed-field
