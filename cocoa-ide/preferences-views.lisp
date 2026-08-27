@@ -17,7 +17,7 @@
 
 (defun %checkbox-button (frame title)
   (let ((checkbox (#/initWithFrame: (#/alloc ns:ns-button) frame)))
-    (#/setButtonType: checkbox #$NSSwitchButton)
+    (#/setButtonType: checkbox $button-type-switch)
     (with-cfstring (s title)
       (#/setTitle: checkbox s))
     checkbox))
@@ -27,14 +27,14 @@
          (cell (#/cell checkbox))
          (font (#/systemFontOfSize: ns:ns-font
                                     (#/systemFontSizeForControlSize:
-                                     ns:ns-font #$NSSmallControlSize))))
-    (#/setControlSize: cell #$NSSmallControlSize)
+                                     ns:ns-font $control-size-small))))
+    (#/setControlSize: cell $control-size-small)
     (#/setFont: cell font)
     checkbox))
 
 (defun %push-button (frame title)
   (let* ((button (#/initWithFrame: (#/alloc ns:ns-button) frame)))
-    (#/setBezelStyle: button #$NSRoundedBezelStyle)
+    (#/setBezelStyle: button $bezel-style-rounded)
     (with-cfstring (s title)
       (#/setTitle: button s))
     button))
@@ -44,8 +44,8 @@
          (cell (#/cell button))
          (font (#/systemFontOfSize: ns:ns-font
                                     (#/systemFontSizeForControlSize:
-                                     ns:ns-font #$NSSmallControlSize))))
-    (#/setControlSize: cell #$NSSmallControlSize)
+                                     ns:ns-font $control-size-small))))
+    (#/setControlSize: cell $control-size-small)
     (#/setFont: cell font)
     button))
 
@@ -64,8 +64,8 @@
          (cell (#/cell label))
          (font (#/systemFontOfSize: ns:ns-font
                                     (#/systemFontSizeForControlSize:
-                                     ns:ns-font #$NSSmallControlSize))))
-    (#/setControlSize: cell #$NSSmallControlSize)
+                                     ns:ns-font $control-size-small))))
+    (#/setControlSize: cell $control-size-small)
     (#/setFont: cell font)
     label))
 
@@ -74,8 +74,8 @@
          (cell (#/cell field))
          (font (#/systemFontOfSize: ns:ns-font
                                     (#/systemFontSizeForControlSize:
-                                     ns:ns-font #$NSSmallControlSize))))
-    (#/setControlSize: cell #$NSSmallControlSize)
+                                     ns:ns-font $control-size-small))))
+    (#/setControlSize: cell $control-size-small)
     (#/setFont: cell font)
     field))
     
@@ -95,7 +95,7 @@
                                         text-field-frame))
           (font (#/systemFontOfSize: ns:ns-font
                                      (#/systemFontSizeForControlSize:
-                                      ns:ns-font #$NSRegularControlSize)))
+                                      ns:ns-font $control-size-regular)))
           (dc (#/sharedUserDefaultsController ns:ns-user-defaults-controller)))
       (#/setFont: (#/cell meta-checkbox) font)
       (#/addSubview: view meta-checkbox)
@@ -359,8 +359,8 @@
 (defun %preferences-panel ()
   (ns:with-ns-rect (r 0 0 467 312)
     (let ((panel (#/initWithContentRect:styleMask:backing:defer:
-		  (#/alloc ns:ns-panel) r (logior #$NSTitledWindowMask
-						  #$NSClosableWindowMask)
+		  (#/alloc ns:ns-panel) r (logior $window-style-mask-titled
+						  $window-style-mask-closable)
                   #$NSBackingStoreBuffered nil)))
       (#/setShowsToolbarButton: panel nil)
       panel)))

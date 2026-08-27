@@ -133,7 +133,7 @@
   ;;otherwise bring frontmost search files window to the front
   (declare (ignore sender))
   (let ((w nil))
-    (if (or (current-event-modifier-p #$NSFunctionKeyMask)
+    (if (or (current-event-modifier-p $event-modifier-flag-function)
             (null (setf w (first-window-with-controller-type 'search-files-window-controller))))
       (let* ((wc (make-instance 'search-files-window-controller)))
         (#/showWindow: wc self)
@@ -332,10 +332,10 @@
   (with-slots (wrap-lines-to-window) self
     (cond (wrap-lines-to-window
            (disable-window-line-wrapping self)
-           (#/setState: sender #$NSOffState))
+           (#/setState: sender $control-state-value-off))
           (t
            (enable-window-line-wrapping self)
-           (#/setState: sender #$NSOnState)))))
+           (#/setState: sender $control-state-value-on)))))
 
 (objc:defmethod (#/validateMenuItem: :<BOOL>) ((self hemlock-frame)
                                                item)
@@ -343,7 +343,7 @@
          (wrapping (slot-value self 'wrap-lines-to-window)))
     (cond ((eql action (@selector #/toggleWindowLineWrapping:))
            (if wrapping
-               (#/setState: item #$NSOnState)
-               (#/setState: item #$NSOffState))
+               (#/setState: item $control-state-value-on)
+               (#/setState: item $control-state-value-off))
            t)
           (t #+cocotron t #-cocotron (call-next-method item)))))

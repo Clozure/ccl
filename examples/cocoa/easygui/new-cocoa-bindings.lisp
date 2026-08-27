@@ -1,5 +1,24 @@
 (in-package :easygui)
 
+;;; Modern SDKs define the pre-10.12 AppKit names (NSOffState,
+;;; NSCommandKeyMask, ...) as `static const' aliases that interface
+;;; translation cannot record as constants; use their fixed ABI values.
+(defconstant +control-state-value-off+ 0)  ; NSControlStateValueOff
+(defconstant +control-state-value-on+ 1)   ; NSControlStateValueOn
+(defconstant +modifier-flag-shift+ (ash 1 17))   ; NSEventModifierFlagShift
+(defconstant +modifier-flag-control+ (ash 1 18)) ; NSEventModifierFlagControl
+(defconstant +modifier-flag-option+ (ash 1 19))  ; NSEventModifierFlagOption
+(defconstant +modifier-flag-command+ (ash 1 20)) ; NSEventModifierFlagCommand
+(defconstant +alert-first-button-return+ 1000)   ; NSAlertFirstButtonReturn
+(defconstant +ns-not-found+ (1- (expt 2 63)))    ; NSNotFound = NSIntegerMax
+(defconstant +window-style-mask-titled+ 1)       ; NSWindowStyleMaskTitled
+(defconstant +window-style-mask-closable+ 2)     ; NSWindowStyleMaskClosable
+(defconstant +window-style-mask-miniaturizable+ 4) ; NSWindowStyleMaskMiniaturizable
+(defconstant +window-style-mask-resizable+ 8)    ; NSWindowStyleMaskResizable
+(defconstant +bezel-style-rounded+ 1)            ; NSBezelStyleRounded
+(defconstant +button-type-switch+ 3)             ; NSButtonTypeSwitch
+(defconstant +button-type-radio+ 4)              ; NSButtonTypeRadio
+
 ;;; Helper types:
 
 ;;; point:
@@ -76,10 +95,10 @@
                    (point-x size) (point-y size)))
 
 (defparameter *flag-to-mask-alist*
-              `( ;; (:zoomable-p . #$NSZoomableWindowMask) ; doesn't work
-                (:minimizable-p . ,#$NSMiniaturizableWindowMask)
-                (:resizable-p . ,#$NSResizableWindowMask)
-                (:closable-p . ,#$NSClosableWindowMask)))
+              `( ;; (:zoomable-p . +window-style-mask-resizable+) ; doesn't work
+                (:minimizable-p . ,+window-style-mask-miniaturizable+)
+                (:resizable-p . ,+window-style-mask-resizable+)
+                (:closable-p . ,+window-style-mask-closable+)))
 
 (defun flag-mask (keyword enabled-p)
   (if enabled-p
@@ -87,10 +106,10 @@
       0))
 
 (defparameter *key-to-mask-alist*
-              `((:control . ,#$NSControlKeyMask)
-                (:alt     . ,#$NSAlternateKeyMask)
-                (:command . ,#$NSCommandKeyMask)
-                (:shift   . ,#$NSShiftKeyMask)))
+              `((:control . ,+modifier-flag-control+)
+                (:alt     . ,+modifier-flag-option+)
+                (:command . ,+modifier-flag-command+)
+                (:shift   . ,+modifier-flag-shift+)))
 
 (defun key-mask (keyword)
   (or (cdr (assoc keyword *key-to-mask-alist*)) 0))

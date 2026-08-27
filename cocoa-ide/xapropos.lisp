@@ -21,6 +21,8 @@
    (matched-symbols :initform (make-array 100 :fill-pointer 0 :adjustable t)
                     :accessor matched-symbols)
    (external-only-p :initform nil :accessor external-only-p)
+   ;; Bumped on every search request; async workers drop stale results.
+   (search-generation :initform 0 :accessor search-generation)
    ;; outlets
    (action-menu :foreign-type :id :accessor action-menu)
    (action-popup-button :foreign-type :id :accessor action-popup-button)
@@ -72,7 +74,7 @@
     (let* ((button (make-instance 'ns:ns-pop-up-button :with-frame r :pulls-down t))
            (item (#/itemAtIndex: menu 0))
            (image-name (if (post-tiger-p) #@"NSActionTemplate" #@"gear")))
-      (#/setBezelStyle: button #$NSTexturedRoundedBezelStyle)
+      (#/setBezelStyle: button $bezel-style-textured-rounded)
       ;; This looks bad on Tiger: the arrow is in the bottom corner of the button.
       #-cocotron                        ; no setArrowPosition
       (#/setArrowPosition: (#/cell button) #$NSPopUpArrowAtBottom)
@@ -130,31 +132,46 @@
     (apropos-search wc (lisp-string-from-nsstring substring))))
 
 (defun apropos-search (wc substring)
-  (with-accessors ((v matched-symbols)
-                   (category search-category)
-                   (array row-objects)) wc
-    (setf (fill-pointer v) 0)
-    (flet ((maybe-include-symbol (sym)
-             (when (case category
-                     (:function (fboundp sym))
-                     (:variable (boundp sym))
-                     (:macro (macro-function sym))
-                     (:class (find-class sym nil))
-                     (t t))
-               (when (ccl::%apropos-substring-p substring (symbol-name sym))
-                 (vector-push-extend sym v)))))
-      (if (external-only-p wc)
-        (dolist (p (list-all-packages))
-          (do-external-symbols (sym p)
-            (maybe-include-symbol sym)))
-        (do-all-symbols (sym)
-          (maybe-include-symbol sym))))
-    (setf v (sort v #'string-lessp))
-    (#/removeAllObjects array)
-    (let ((n (#/null ns:ns-null)))
-      (dotimes (i (length v))
-        (#/addObject: array n))))
-  (#/reloadData (table-view wc)))
+  "Collect matching symbols off the event thread, then reload the table on the GUI.
+Empty SUBSTRING (All symbols) does DO-ALL-SYMBOLS + SORT of tens of thousands of
+symbols; running that inside an ObjC IMP on darwinarm64 has crashed in freeGCptrs
+(GC while TCR valence=foreign)."
+  (let* ((substring (copy-seq (or substring "")))
+         (category (search-category wc))
+         (external-only-p (external-only-p wc))
+         (generation (incf (search-generation wc))))
+    (process-run-function
+     (list :name (format nil "xapropos-search-~d" generation)
+           :priority 0)
+     (lambda ()
+       (let ((v (make-array 100 :fill-pointer 0 :adjustable t)))
+         (flet ((maybe-include-symbol (sym)
+                  (when (case category
+                          (:function (fboundp sym))
+                          (:variable (boundp sym))
+                          (:macro (macro-function sym))
+                          (:class (find-class sym nil))
+                          (t t))
+                    (when (ccl::%apropos-substring-p substring (symbol-name sym))
+                      (vector-push-extend sym v)))))
+           (if external-only-p
+             (dolist (p (list-all-packages))
+               (do-external-symbols (sym p)
+                 (maybe-include-symbol sym)))
+             (do-all-symbols (sym)
+               (maybe-include-symbol sym))))
+         (setq v (sort v #'string-lessp))
+         (gui::queue-for-gui
+          (lambda ()
+            (when (and (eql generation (search-generation wc))
+                       (not (%null-ptr-p (table-view wc))))
+              (setf (matched-symbols wc) v)
+              (let ((array (row-objects wc))
+                    (n (#/null ns:ns-null)))
+                (#/removeAllObjects array)
+                (dotimes (i (length v))
+                  (#/addObject: array n)))
+              (#/reloadData (table-view wc))))))))))
 
 (objc:defmethod (#/setSearchCategory: :void) ((wc xapropos-window-controller) sender)
   (let* ((tag (#/tag sender))
@@ -165,18 +182,18 @@
     (when pair
       (let* ((items (#/itemArray (#/menu sender))))
         (dotimes (i (#/count items))
-          (#/setState: (#/objectAtIndex: items i) #$NSOffState)))
-      (#/setState: sender #$NSOnState)
+          (#/setState: (#/objectAtIndex: items i) $control-state-value-off)))
+      (#/setState: sender $control-state-value-on)
       (#/setLabel: (search-field-toolbar-item wc) label)
       (setf (search-category wc) (cdr pair))
       (#/search: wc (search-field wc)))))
 
 (objc:defmethod (#/toggleExternalOnly: :void) ((wc xapropos-window-controller) sender)
   (cond ((eql sender (all-symbols-button wc))
-         (#/setState: (external-symbols-button wc) #$NSOffState)
+         (#/setState: (external-symbols-button wc) $control-state-value-off)
          (setf (external-only-p wc) nil))
         ((eql sender (external-symbols-button wc))
-         (#/setState: (all-symbols-button wc) #$NSOffState)
+         (#/setState: (all-symbols-button wc) $control-state-value-off)
          (setf (external-only-p wc) t)))
   (#/search: wc (search-field wc)))
   
@@ -186,7 +203,9 @@
          (clicked-row (#/clickedRow (table-view wc))))
     (when (/= clicked-row -1)
       (setq row clicked-row))
-    (inspect (aref (matched-symbols wc) row))))
+    ;; A double-click on empty space (or a stale action) reports row -1.
+    (when (and (>= row 0) (< row (length (matched-symbols wc))))
+      (inspect (aref (matched-symbols wc) row)))))
 
 (objc:defmethod (#/source: :void) ((wc xapropos-window-controller) sender)
   (declare (ignore sender))
@@ -194,7 +213,8 @@
          (clicked-row (#/clickedRow (table-view wc))))
     (when (/= clicked-row -1)
       (setq row clicked-row))
-    (hemlock::edit-definition (aref (matched-symbols wc) row))))
+    (when (and (>= row 0) (< row (length (matched-symbols wc))))
+      (hemlock::edit-definition (aref (matched-symbols wc) row)))))
 
 (objc:defmethod (#/validateMenuItem: #>BOOL) ((wc xapropos-window-controller) menu-item)
   (cond ((or (eql (action-menu wc) (#/menu menu-item))

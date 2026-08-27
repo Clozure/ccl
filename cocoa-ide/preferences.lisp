@@ -33,7 +33,7 @@
   (let* ((font (#/unarchiveObjectWithData: ns:ns-keyed-unarchiver value))
          (name (#/displayName font))
          (size (float (#/pointSize font) 0.0d0)))
-    (#/stringWithFormat: ns:ns-string #@"%@ %.0f" :id name :double-float size)))
+    (#/stringWithFormat: ns:ns-string #@"%@ %.0f" name size)))
 
 (defclass ccl-preferences-window-controller (ns:ns-window-controller)
   ((general-view :foreign-type :id)
