@@ -907,20 +907,22 @@
   (lock (make-lock)))
 
 (defun make-sparse-vector (size element-type default)
-  (unless (and (typep size 'fixnum)
-               (locally (declare (fixnum size))
-                 (and (> size 0)
-                      (< size array-total-size-limit))))
-    (report-bad-arg size `(integer 1 ,array-total-size-limit)))
-  (setq element-type (upgraded-array-element-type element-type))
-  (unless (typep default element-type)
-    (report-bad-arg default element-type))
-  (%make-sparse-vector :size size
-                       :element-type element-type
-                       :default default
-                       :table (make-array 1
-                                          :element-type t
-                                          :initial-element nil)))
+  (let* ((total-size-limit
+          #.(expt 2 (- target::nbits-in-word target::num-subtag-bits))))
+    (unless (and (typep size 'fixnum)
+                 (locally (declare (fixnum size))
+                   (and (> size 0)
+                        (< size total-size-limit))))
+      (report-bad-arg size `(integer 1 ,total-size-limit)))
+    (setq element-type (upgraded-array-element-type element-type))
+    (unless (typep default element-type)
+      (report-bad-arg default element-type))
+    (%make-sparse-vector :size size
+                         :element-type element-type
+                         :default default
+                         :table (make-array 1
+                                            :element-type t
+                                            :initial-element nil))))
 
 (defun sparse-vector-ref (sv i)
   (unless (and (typep i 'fixnum)

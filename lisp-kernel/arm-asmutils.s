@@ -37,6 +37,10 @@ _exportfn(C(flush_cache_lines))
         __(mov r12,#0x80000000)
         __(svc #0)
         __endif   
+        __ifdef(`NETBSD')
+        __(add r1,r1,r0)
+        __(b C(netbsd_clear_cache))
+        __endif
 	__(bx lr)
 
 _exportfn(C(touch_page))
@@ -199,6 +203,10 @@ _endfn
 _exportfn(call_handler_on_main_stack)
         __(ldr ip,[sp])
         __(mov lr,r3)
+        __ifdef(`NETBSD')
+        /* NetBSD's ARM signal trampoline passes its ucontext in r5. */
+        __(mov r5,r2)
+        __endif
         __(mov sp,r1)
         __(bx ip)
 _endfn                

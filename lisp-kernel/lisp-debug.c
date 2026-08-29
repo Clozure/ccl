@@ -1244,6 +1244,24 @@ debug_show_fpu(ExceptionInformation *xp, siginfo_t *info, int arg)
     fprintf(dbgout, "FPSCR = 0x%08x\n", vfp->fpscr);
   }
 #endif
+#ifdef NETBSD
+  if (xp->uc_flags & _UC_ARM_VFP) {
+    __vfpregset_t *vfp = &xp->uc_mcontext.__fpu.__vfpregs;
+    float *fp = (float *)vfp->__vfp_fstmx;
+    double *dp = (double *)vfp->__vfp_fstmx;
+    unsigned *up = (unsigned *)vfp->__vfp_fstmx;
+    unsigned long long *llp = (unsigned long long *)vfp->__vfp_fstmx;
+    int dn, fn;
+
+    for (dn = 0, fn = 0; dn < 16; dn++) {
+      fprintf(dbgout, "s%02d = %10e (0x%08x)        s%02d = %10e (0x%08x)\n",
+              fn, fp[fn], up[fn], fn+1, fp[fn+1], up[fn+1]);
+      fn += 2;
+      fprintf(dbgout, "d%02d = %10e (0x%015llx)\n", dn, dp[dn], llp[dn]);
+    }
+    fprintf(dbgout, "FPSCR = 0x%08x\n", vfp->__vfp_fpscr);
+  }
+#endif
 #endif
   return debug_continue;
 }

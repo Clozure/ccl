@@ -8808,7 +8808,10 @@
 (defun x862-inline-sub2 (seg vreg xfer form1 form2)
   (let* ((v2 (acode-fixnum-form-p form2))
          (tailp (and (x862-tailcallok xfer) (not (x862-fold-popj)))))
-    (if (and v2 (not (eql v2 most-negative-fixnum)))
+    (if (and v2
+             (/= v2
+                 (arch::target-most-negative-fixnum
+                  (backend-target-arch *target-backend*))))
       (x862-inline-add2 seg vreg xfer form1 (make-acode (%nx1-operator fixnum) (- v2)))
       (with-x86-local-vinsn-macros (seg vreg xfer)
         (x862-two-targeted-reg-forms seg form1 ($ *x862-arg-y*) form2 ($ *x862-arg-z*))

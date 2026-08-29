@@ -103,6 +103,7 @@
                         (:solarisx8632 "ccl:solarisx86-headers;")
                         (:freebsdx8632 "ccl:freebsd-headers;")
                         (:linuxarm "ccl:arm-headers;")
+                        (:netbsdarm "ccl:netbsd-arm-headers;")
                         (:darwinarm "ccl:darwin-arm-headers;")
                        (:androidarm "ccl:android-headers;"))
                     :interface-package-name

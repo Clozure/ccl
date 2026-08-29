@@ -3418,10 +3418,12 @@
       (scale-buffer-size octets))))
 
 (defun milliseconds-until-deadline (deadline ioblock)
-  (let* ((now (get-internal-real-time)))
+  (let* ((now (get-internal-real-time))
+         (units-per-second #+64-bit-target 1000000
+                           #-64-bit-target 1000))
     (if (> now deadline)
       (error 'communication-deadline-expired :stream (ioblock-stream ioblock))
-      (values (round (- deadline now) (/ internal-time-units-per-second 1000))))))
+      (values (round (- deadline now) (/ units-per-second 1000))))))
 
 
 ;;; Note that we can get "bivalent" streams by specifiying :character-p t

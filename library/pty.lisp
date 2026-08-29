@@ -20,7 +20,7 @@
 
 ;;; Open a (connected) pair of pty file descriptors, such that anything
 ;;; written to one can be read from the other.
-#+linuxppc-target
+#+(or linuxppc-target netbsd-target)
 (eval-when (:load-toplevel :execute)
   (open-shared-library "libutil.so"))
 
@@ -50,8 +50,8 @@
 	   (pref attr :termios.c_oflag)
 	   (pref attr :termios.c_cflag)
 	   (pref attr :termios.c_lflag)
-	   #+darwin-target 0
-	   #-darwin-target
+	   #+(or darwin-target netbsd-target) 0
+	   #-(or darwin-target netbsd-target)
 	   (pref attr :termios.c_line)
 	   control-chars
 	   (pref attr :termios.c_ispeed)

@@ -38,6 +38,13 @@ if [ -z "$OPENMCL_KERNEL" ]; then
     ;;
     FreeBSD) OPENMCL_KERNEL=fx86cl
     ;;
+    NetBSD) case `uname -p` in
+              earmv7*) OPENMCL_KERNEL=narmcl ;;
+              *)
+              echo "Unsupported NetBSD architecture."
+              exit 1
+              ;;
+            esac ;;
     *)
     echo "Can't determine host OS.  Fix this."
     exit 1

@@ -208,7 +208,8 @@
                        typename
                        element-count
                        (copy-tree typename)
-                       (1- target::array-total-size-limit)
+                       (1- #.(expt 2 (- target::nbits-in-word
+                                        target::num-subtag-bits)))
                        qualifier)))))
 
 (define-condition type-error (error)

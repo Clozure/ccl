@@ -347,7 +347,7 @@ nil;  otherwise return true.
 ; This table cannot be weak on key since hash tables are reaped before gcable-macptrs.
 (defvar *termination-functions-table* (make-hash-table :test 'eql))
 
-(defvar *terminable-macptr-max-id* most-negative-fixnum)
+(defvar *terminable-macptr-max-id* target::target-most-negative-fixnum)
 (defvar *free-terminable-macptr-ids* nil)
 
 (defun make-terminable-macptr (macptr termination-function &key master)

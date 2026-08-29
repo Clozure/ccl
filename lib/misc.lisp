@@ -97,17 +97,17 @@ are running on, or NIL if we can't find any useful information."
                        ((null line))
                     (let* ((matched (cpu-info-match target line)))
                       (when matched (return matched)))))))
-            #+freebsd-target
+            #+(or freebsd-target netbsd-target)
             (%stack-block ((ret 512)
-                           (mib (* (record-length :uint))))
+                           (mib (* (record-length :uint) 2)))
               (setf (%get-unsigned-long mib 0)
                     #$CTL_HW
                     (%get-unsigned-long mib (record-length :uint))
                     #$HW_MODEL)
-              (rlet ((oldsize :uint 512))
+              (rlet ((oldsize :size_t 512))
                 (if (eql 0 (#_sysctl mib 2 ret oldsize (%null-ptr) 0))
                   (%get-cstring ret)
-                  1)))
+                  nil)))
             #+solaris-target
             (rlet ((info :processor_info_t))
               (do* ((i 0 (1+ i)))
@@ -447,8 +447,10 @@ are running on, or NIL if we can't find any useful information."
                                   minor-page-faults major-page-faults
                                   swaps)
   (let* ((s *trace-output*)
+         (units-per-second #+64-bit-target 1000000
+                           #-64-bit-target 1000)
          (units
-          (ecase internal-time-units-per-second
+          (ecase units-per-second
             (1000000 "microseconds")
             (1000  "milliseconds")))
          (iwidth (max (length (format nil "~:D" elapsed-time))
@@ -457,13 +459,17 @@ are running on, or NIL if we can't find any useful information."
                           (length (format nil "~:D" gc-time))))
                       
          (fwidth
-          (ecase internal-time-units-per-second
+          (ecase units-per-second
             (1000000 6)
             (1000  3)))
-         (elapsed-seconds (/ elapsed-time internal-time-units-per-second))
-         (user-seconds (/ user-time internal-time-units-per-second))
-         (system-seconds (/ system-time internal-time-units-per-second))
-         (gc-seconds  (/ gc-time internal-time-units-per-second))
+         (elapsed-seconds
+          (/ elapsed-time units-per-second))
+         (user-seconds
+          (/ user-time units-per-second))
+         (system-seconds
+          (/ system-time units-per-second))
+         (gc-seconds
+          (/ gc-time units-per-second))
          (ffield-width (max (length (format nil "~,vF" fwidth elapsed-seconds))
                                 (length (format nil "~,vF" fwidth user-seconds))
                                 (length (format nil "~,vF" fwidth system-seconds))

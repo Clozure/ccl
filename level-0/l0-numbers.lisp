@@ -1824,7 +1824,7 @@
             (check-type integer integer)
             (if (plusp count)
               (error "Count ~s too large for ASH" count)
-              (%ash-right integer most-positive-fixnum)))))))
+              (%ash-right integer target::target-most-positive-fixnum)))))))
 
 (defun integer-length (integer)
   "Return the number of significant bits in the absolute value of integer."

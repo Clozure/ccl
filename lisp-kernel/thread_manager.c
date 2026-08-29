@@ -17,6 +17,18 @@
 
 #include "threads.h"
 
+#ifdef USE_NETBSD_FUTEX_SEMAPHORES
+#include <sys/futex.h>
+#include <sys/syscall.h>
+
+#if (INT_MAX != 2147483647)
+#error NetBSD futex semaphores require 32-bit int
+#endif
+#if !defined(__GCC_ATOMIC_INT_LOCK_FREE) || (__GCC_ATOMIC_INT_LOCK_FREE != 2)
+#error NetBSD futex semaphores require lock-free int atomics
+#endif
+#endif
+
 
 typedef struct {
   TCR *tcr;
@@ -44,6 +56,94 @@ atomic_swap(signed_natural*, signed_natural);
 #define FUTEX_AVAIL (0)
 #define FUTEX_LOCKED (1)
 #define FUTEX_CONTENDED (2)
+#endif
+
+#ifdef USE_NETBSD_FUTEX_SEMAPHORES
+struct netbsd_futex_semaphore {
+  int count;
+};
+
+static int
+netbsd_futex(int *address, int operation, int value,
+             const struct timespec *timeout, int value3)
+{
+  return syscall(SYS___futex, address, operation, value, timeout,
+                 NULL, 0, value3);
+}
+
+static int
+netbsd_futex_semaphore_try_wait(SEMAPHORE semaphore)
+{
+  int count = __atomic_load_n(&semaphore->count, __ATOMIC_RELAXED);
+
+  while (count > 0) {
+    if (__atomic_compare_exchange_n(&semaphore->count, &count, count - 1,
+                                    false, __ATOMIC_ACQUIRE,
+                                    __ATOMIC_RELAXED)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static SEMAPHORE
+new_netbsd_futex_semaphore(int count)
+{
+  SEMAPHORE semaphore;
+
+  if (count < 0) {
+    errno = EINVAL;
+    return NULL;
+  }
+  semaphore = malloc(sizeof(*semaphore));
+  if (semaphore != NULL) {
+    __atomic_store_n(&semaphore->count, count, __ATOMIC_RELAXED);
+  }
+  return semaphore;
+}
+
+int
+netbsd_futex_semaphore_wait(SEMAPHORE semaphore,
+                            const struct timespec *deadline)
+{
+  int status;
+
+  while (!netbsd_futex_semaphore_try_wait(semaphore)) {
+    status = netbsd_futex(&semaphore->count,
+                          FUTEX_WAIT_BITSET | FUTEX_PRIVATE_FLAG |
+                          FUTEX_CLOCK_REALTIME,
+                          0, deadline, FUTEX_BITSET_MATCH_ANY);
+    if ((status < 0) && (errno != EAGAIN)) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+int
+netbsd_futex_semaphore_post(SEMAPHORE semaphore)
+{
+  int count, status;
+
+  count = __atomic_load_n(&semaphore->count, __ATOMIC_RELAXED);
+  do {
+    if (count == INT_MAX) {
+      errno = EOVERFLOW;
+      return -1;
+    }
+  } while (!__atomic_compare_exchange_n(&semaphore->count, &count, count + 1,
+                                        false, __ATOMIC_RELEASE,
+                                        __ATOMIC_RELAXED));
+
+  /* A positive count can coexist briefly with waiters, so wake on every
+     post. */
+  do {
+    status = netbsd_futex(&semaphore->count,
+                          FUTEX_WAKE | FUTEX_PRIVATE_FLAG,
+                          1, NULL, 0);
+  } while ((status < 0) && (errno == EINTR));
+  return (status < 0) ? -1 : 0;
+}
 #endif
 
 #ifdef WINDOWS
@@ -455,6 +555,9 @@ sem_wait_forever(SEMAPHORE s)
 #ifdef USE_MACH_SEMAPHORES
     status = SEM_WAIT(s);
 #endif
+#ifdef USE_NETBSD_FUTEX_SEMAPHORES
+    status = SEM_WAIT(s);
+#endif
 #ifdef USE_POSIX_SEMAPHORES
     status = SEM_WAIT(s);
 #endif
@@ -467,7 +570,7 @@ sem_wait_forever(SEMAPHORE s)
 int
 wait_on_semaphore(void *s, int seconds, int millis)
 {
-#ifdef USE_POSIX_SEMAPHORES
+#if defined(USE_POSIX_SEMAPHORES) || defined(USE_NETBSD_FUTEX_SEMAPHORES)
   int nanos = (millis % 1000) * 1000000;
   int status;
 
@@ -646,6 +749,25 @@ os_get_current_thread_stack_bounds(void **base, natural *size)
   pthread_attr_destroy(&attr);
   *(natural *)base += *size;
 #endif
+#ifdef NETBSD
+  pthread_attr_t attr;
+  void *stack_base;
+  size_t stack_size;
+  int error;
+
+  error = pthread_getattr_np(p, &attr);
+  if (error != 0) {
+    fatal_oserr("Can't get current thread attributes.", error);
+  }
+  error = pthread_attr_getstack(&attr, &stack_base, &stack_size);
+  if (error != 0) {
+    pthread_attr_destroy(&attr);
+    fatal_oserr("Can't get current thread stack bounds.", error);
+  }
+  pthread_attr_destroy(&attr);
+  *base = (BytePtr)stack_base + stack_size;
+  *size = (natural)stack_size;
+#endif
 #ifdef FREEBSD
   pthread_attr_t attr;
   void * temp_base;
@@ -679,6 +801,9 @@ os_get_current_thread_stack_bounds(void **base, natural *size)
 void *
 new_semaphore(int count)
 {
+#ifdef USE_NETBSD_FUTEX_SEMAPHORES
+  return new_netbsd_futex_semaphore(count);
+#endif
 #ifdef USE_POSIX_SEMAPHORES
   sem_t *s = malloc(sizeof(sem_t));
   sem_init(s, 0, count);
@@ -735,6 +860,9 @@ void
 destroy_semaphore(void **s)
 {
   if (*s) {
+#ifdef USE_NETBSD_FUTEX_SEMAPHORES
+    free(*s);
+#endif
 #ifdef USE_POSIX_SEMAPHORES
     sem_destroy((sem_t *)*s);
     free(*s);    
@@ -1519,6 +1647,9 @@ current_native_thread_id()
           pthread_mach_thread_np(pthread_self())
 #endif
 #ifdef FREEBSD
+	  pthread_self()
+#endif
+#ifdef NETBSD
 	  pthread_self()
 #endif
 #ifdef SOLARIS
@@ -2442,7 +2573,7 @@ rwlock_new()
       } else {
         destroy_semaphore(&(rw->writer_signal));
       }
-      free(rw);
+      free(p);
       rw = NULL;
     }
 #endif
