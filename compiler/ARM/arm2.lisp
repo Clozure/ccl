@@ -8691,6 +8691,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 
 (defarm2 arm2-lambda-bind lambda-bind (seg vreg xfer vals req rest keys-p auxen body p2decls)
   (let* ((old-stack (arm2-encode-stack))
+         (*arm2-nfp-depth* *arm2-nfp-depth*)
          (nreq (list-length req))
          (rest-arg (nthcdr nreq vals))
          (apply-body (arm2-eliminate-&rest body rest keys-p auxen rest-arg)))
