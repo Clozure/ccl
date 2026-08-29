@@ -1186,8 +1186,35 @@ satisfy the optional predicate PREDICATE."
            (length (length string)))
       (cons length (map 'list #'char-code string)))))
 
+(define-condition simple-type-definition-error (simple-error)
+  ())
+
+(define-condition simple-type-definition-warning (simple-warning)
+  ())
+
 (defun encode-ffi-field (field)
   (destructuring-bind (name type offset width) field
+    (cond
+      ;; check for some possible errors in the *.ffi encoding
+      ((minusp offset)
+       (cerror "Ignore this type definition"
+               'simple-type-definition-error
+               :format-control "Negative offset ~S for field ~S"
+               :format-arguments (list offset name))
+       (throw  'ignore-type (values)))
+     ((minusp width)
+      (cerror "Ignore this type definition"
+               'simple-type-definition-error
+               :format-control "Negative width ~S for field ~S"
+               :format-arguments (list offset name))
+      (throw 'ignore-type (values)))
+     ((zerop width)
+      ;; The warning text may be verbosely descriptive, using
+      ;; the unabridged contents of the FIELD description
+      ;; rather than the field name
+      (warn 'simple-type-definition-warning
+            :format-control "Field has zero width: ~S"
+            :format-arguments (list field))))
   `(,@(encode-name name)
     ,@(encode-ffi-type type)
     ,@(encode-uint offset)
@@ -1480,12 +1507,13 @@ satisfy the optional predicate PREDICATE."
                (when ml
                  `(,@(encode-ffi-objc-method (car ml))
                    ,@(encode-objc-method-list (cdr ml))))))
-      (db-write-byte-list cdbm
-                          (ffi-objc-message-string message)
-                          `(,@(encode-uint nmethods)
-                            ,@(encode-uint nargs)
-                            ,@(encode-objc-method-list methods))
-                          t))))
+      (catch 'ignore-type
+        (db-write-byte-list cdbm
+                            (ffi-objc-message-string message)
+                            `(,@(encode-uint nmethods)
+                              ,@(encode-uint nargs)
+                              ,@(encode-objc-method-list methods))
+                            t)))))
   
     
 (defun save-byte-list (ptr l)
@@ -1498,54 +1526,62 @@ satisfy the optional predicate PREDICATE."
       (setf (%get-unsigned-byte ptr i) b))))
 
 (defun db-write-byte-list (cdbm keyname bytes &optional verbatim)
-  (let* ((len (length bytes)))
-    (%stack-block ((p len))
-      (save-byte-list p bytes)
-      (rletZ ((contents :cdb-datum)
-	      (key :cdb-datum))
-        (let* ((foreign-name
-		(if verbatim
-		  keyname
-		  (unescape-foreign-name keyname))))
-	  (with-cstrs ((keystring foreign-name))
-	    (setf (pref contents :cdb-datum.data) p
-		  (pref contents :cdb-datum.size) len
-		  (pref key :cdb-datum.data) keystring
-		  (pref key :cdb-datum.size) (length foreign-name))
-	    (cdbm-put cdbm key contents)))))))
+  (catch 'ignore-type
+    (let* ((len (length bytes)))
+      (%stack-block ((p len))
+        (save-byte-list p bytes)
+        (rletZ ((contents :cdb-datum)
+                (key :cdb-datum))
+          (let* ((foreign-name
+                  (if verbatim
+                    keyname
+                    (unescape-foreign-name keyname))))
+            (with-cstrs ((keystring foreign-name))
+              (setf (pref contents :cdb-datum.data) p
+                    (pref contents :cdb-datum.size) len
+                    (pref key :cdb-datum.data) keystring
+                    (pref key :cdb-datum.size) (length foreign-name))
+              (cdbm-put cdbm key contents))))))))
 
 (defun save-ffi-function (cdbm fun)
-  (let* ((encoding (encode-ffi-function fun)))
-    (db-write-byte-list cdbm
-			(ffi-function-string fun)
-			encoding
-			t)))
+  (catch 'ignore-type
+    (let* ((encoding (encode-ffi-function fun)))
+      (db-write-byte-list cdbm
+			  (ffi-function-string fun)
+			  encoding
+			  t))))
 
 (defun save-ffi-typedef (cdbm def)
-  (db-write-byte-list cdbm
-                       (ffi-typedef-string def)
-                       (encode-ffi-type (ffi-typedef-type def))
-		       t))
+  (catch 'ignore-type
+    (db-write-byte-list cdbm
+                        (ffi-typedef-string def)
+                        (encode-ffi-type (ffi-typedef-type def))
+		        t)))
 
 (defun save-ffi-struct (cdbm s)
-  (db-write-byte-list cdbm (ffi-struct-reference s) (encode-ffi-struct s)))
+  (catch 'ignore-type
+    (db-write-byte-list cdbm (ffi-struct-reference s) (encode-ffi-struct s))))
 
 (defun save-ffi-union (cdbm u)
-  (db-write-byte-list cdbm (ffi-union-reference u) (encode-ffi-union u)))
+  (catch 'ignore-type
+    (db-write-byte-list cdbm (ffi-union-reference u) (encode-ffi-union u))))
 
 (defun save-ffi-transparent-union (cdbm u)
-  (db-write-byte-list cdbm (ffi-transparent-union-reference u) (encode-ffi-transparent-union u)))
+  (catch 'ignore-type
+    (db-write-byte-list cdbm (ffi-transparent-union-reference u) (encode-ffi-transparent-union u))))
 
 
 (defun db-define-var (cdbm name type)
-  (db-write-byte-list cdbm
-                      (if *prepend-underscores-to-ffi-function-names*
-                        (concatenate 'string "_" name)
-                        name)
-  (encode-ffi-type type) t))
+  (catch 'ignore-type
+    (db-write-byte-list cdbm
+                        (if *prepend-underscores-to-ffi-function-names*
+                            (concatenate 'string "_" name)
+                            name)
+                        (encode-ffi-type type) t)))
 
 (defun save-ffi-objc-class (cdbm c)
-  (db-write-byte-list cdbm (ffi-objc-class-name c) (encode-ffi-objc-class c)))
+  (catch 'ignore-type
+    (db-write-byte-list cdbm (ffi-objc-class-name c) (encode-ffi-objc-class c))))
 
 
 ;;; An "uppercase-sequence" is a maximal substring of a string that
