@@ -2487,6 +2487,27 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
   }
 
   /*
+   * Complete a pair store after a register-sized control-stack reservation.
+   * SP already protects the new memory from asynchronous signal delivery, but
+   * the pending STP must initialize it before GC can inspect the stack.  The
+   * store is idempotent: normal execution repeats it when the thread resumes.
+   * Register 31 in either source field denotes XZR.
+   */
+#define IS_STP_PAIR_TO_SP0(i) (((i) & 0xFFFF83E0) == 0xA90003E0)
+#define IS_SUB_SP_SP_REG(i)    (((i) & 0xFFE003FF) == 0xCB2003FF)
+
+  if (IS_STP_PAIR_TO_SP0(instr) &&
+      IS_SUB_SP_SP_REG(program_counter[-1])) {
+    unsigned rt = instr & 0x1f;
+    unsigned rt2 = (instr >> 10) & 0x1f;
+    LispObj *slots = (LispObj *)ptr_from_lispobj(xpSP(xp));
+
+    slots[0] = (rt == 31) ? 0 : xpGPR(xp, rt);
+    slots[1] = (rt2 == 31) ? 0 : xpGPR(xp, rt2);
+    return;
+  }
+
+  /*
    * Ensure GC safety when building lisp frames on the control stack
    *
    * The canonical way to build a lisp frame on the control stack is
