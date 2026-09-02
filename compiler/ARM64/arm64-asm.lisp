@@ -1235,7 +1235,7 @@
 
 ;;; lap-form is a list and its car isn't a pseudo-op or lapmacro
 (defun assemble-instruction (seg lap-form)
-  (let ((insn (%make-instruction lap-form)))
+  (let ((insn (make-instruction lap-form)))
     (destructuring-bind (name . lap-operands) lap-form
       (let ((templates (gethash (string name) *instruction-template-lists*)))
         (unless templates
@@ -2609,32 +2609,13 @@
   address
   (size 0))
 
-(ccl::def-standard-initial-binding *instruction-freelist*
-                                   (ccl::make-dll-node-freelist))
-
 ;;; An instruction in the process of being assembled
 (defstruct (instruction (:include instruction-element (size 4))
-                        (:constructor %make-instruction (source)))
+                        (:constructor make-instruction (source)))
   source                             ;the lap form
   template                           ;the matched instruction-template
   (word 0 :type (unsigned-byte 32))  ;encoded instruction word
   parsed-operands)
-
-(defun make-instruction (form)
-  (let ((insn (ccl::alloc-dll-node *instruction-freelist*)))
-    (if (typep insn 'instruction)
-      (progn
-        (setf (instruction-source insn) form
-              (instruction-template insn) nil
-              (instruction-word insn) 0
-              (instruction-parsed-operands insn) nil
-              (instruction-address insn) nil
-              ;; Every A64 instruction is one 4-byte word.  (%make-instruction
-              ;; and the struct default agree; a recycled node must too, or
-              ;; addressing/branch displacements come out wrong.)
-              (instruction-size insn) 4)
-        insn)
-      (%make-instruction form))))
 
 ;;; Labels and branch fixups.
 ;;;
@@ -2645,24 +2626,11 @@
 ;;; reference on the target label without resolving it; FINALIZE is pass
 ;;; two, computing label addresses and patching branch displacements.
 
-(ccl::def-standard-initial-binding *label-freelist*
-                                   (ccl::make-dll-node-freelist))
-
 ;; A label definition
 (defstruct (label (:include instruction-element)
-                  (:constructor %%make-label (name)))
+                  (:constructor %make-label (name)))
   name                                  ;a symbol
   refs)
-
-(defun %make-label (name)
-  (let ((lab (ccl::alloc-dll-node *label-freelist*)))
-    (if lab
-      (progn
-        (setf (label-address lab) nil
-              (label-refs lab) nil
-              (label-name lab) name)
-        name)
-      (%%make-label name))))
 
 (defun emit-element (seg element)
   (ccl::append-dll-node element seg)

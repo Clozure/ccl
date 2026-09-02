@@ -81,7 +81,7 @@
     (cond
       ((null template) nil)
       ((template-branches-p template) :branch)
-      (t (let ((insn (%make-instruction nil)))
+      (t (let ((insn (make-instruction nil)))
            (setf (instruction-template insn) template
                  (instruction-parsed-operands insn)
                  (mapcar #'(lambda (spec) (decode-operand word spec))

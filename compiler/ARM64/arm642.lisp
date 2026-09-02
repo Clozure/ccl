@@ -504,156 +504,155 @@
   vcells)
 
 (defun arm642-compile (afunc &optional lambda-form *arm642-record-symbols*)
-  (progn
-    (dolist (a  (afunc-inner-functions afunc))
-      (unless (afunc-lfun a)
-        (arm642-compile a
+  (dolist (a (afunc-inner-functions afunc))
+    (unless (afunc-lfun a)
+      (arm642-compile a
                       (if lambda-form
                         (afunc-lambdaform a))
                       *arm642-record-symbols*))) ; always compile inner guys
-    (let* ((*arm642-cur-afunc* afunc)
-           (*arm642-returning-values* nil)
-           (*arm642-woi* nil)
-           (*encoded-reg-value-byte* (byte 5 0))
-           (*arm642-open-code-inline* nil)
-           (*arm642-optimize-for-space* nil)
-           (*arm642-register-restore-count* nil)
-           (*arm642-compiler-register-save-note* nil)
-           (*arm642-non-volatile-fpr-count* 0)
-           (*arm642-register-restore-ea* nil)
-           (*arm642-vstack* 0)
-           (*arm642-cstack* 0)
-           (*arm642-target-fixnum-shift* (arch::target-fixnum-shift
-                                          (backend-target-arch
-                                           *target-backend*)))
-           (*arm642-target-node-shift* (arch::target-word-shift
+  (let* ((*arm642-cur-afunc* afunc)
+         (*arm642-returning-values* nil)
+         (*arm642-woi* nil)
+         (*encoded-reg-value-byte* (byte 5 0))
+         (*arm642-open-code-inline* nil)
+         (*arm642-optimize-for-space* nil)
+         (*arm642-register-restore-count* nil)
+         (*arm642-compiler-register-save-note* nil)
+         (*arm642-non-volatile-fpr-count* 0)
+         (*arm642-register-restore-ea* nil)
+         (*arm642-vstack* 0)
+         (*arm642-cstack* 0)
+         (*arm642-target-fixnum-shift* (arch::target-fixnum-shift
                                         (backend-target-arch
                                          *target-backend*)))
-           (*arm642-target-bits-in-word* (arch::target-nbits-in-word
-                                          (backend-target-arch
-                                           *target-backend*)))
-	   (*arm642-target-node-size* (arch::target-lisp-node-size
-                                       (backend-target-arch *target-backend*)))
-           (*arm642-target-half-fixnum-type* *arm642-target-half-fixnum-type*)
-           (*backend-vinsns* (backend-p2-vinsn-templates *target-backend*))
-           (*backend-node-regs* arm64-node-regs)
-           (*backend-node-temps* arm64-temp-node-regs)
-           (*available-backend-node-temps* arm64-temp-node-regs)
-           (*backend-imm-temps* arm64-imm-regs)
-           (*available-backend-imm-temps* arm64-imm-regs)
-           (*backend-fp-temps* arm64-temp-fp-regs)
-           (*available-backend-fp-temps* arm64-temp-fp-regs)
-           (*backend-crf-temps* arm64-cr-fields)
-           (*available-backend-crf-temps* arm64-cr-fields)
-           (bits 0)
-           (*logical-register-counter* -1)
-           (*arm642-undo-count* 0)
-           (*backend-labels* (arm642-make-stack 64
-                                                target::subtag-simple-vector))
-           (*arm642-undo-stack* (arm642-make-stack
-                                 64 target::subtag-simple-vector))
-           (*arm642-undo-because* (arm642-make-stack 64))
-           (*backend-immediates* (arm642-make-stack
-                                  64 target::subtag-simple-vector))
-           (*arm642-entry-label* nil)
-           (*arm642-fixed-args-label* nil)
-           (*arm642-fixed-args-tail-label*)
-           (*arm642-fixed-nargs* nil)
-           (*arm642-inhibit-register-allocation* nil)
-           (*arm642-tail-allow* t)
-           (*arm642-reckless* nil)
-	   (*arm642-full-safety* nil)
-           (*arm642-float-safety* nil)
-           (*arm642-trust-declarations* t)
-           (*arm642-entry-vstack* nil)
-           (*arm642-need-nargs* t)
-           (fname (afunc-name afunc))
-           (*arm642-entry-vsp-saved-p* nil)
-           (*arm642-vcells* (arm642-ensure-binding-indices-for-vcells (afunc-vcells afunc)))
-           (*arm642-fcells* (afunc-fcells afunc))
-           *arm642-recorded-symbols*
-           (*arm642-emitted-source-notes* '())
-           (*arm642-gpr-locations-valid-mask* 0)
-           (*arm642-gpr-locations* (make-array 32 :initial-element nil))
-           (*arm642-gpr-constants-valid-mask* 0)
-           (*arm642-gpr-constants* (make-array 32 :initial-element nil))
-           (*arm642-nfp-depth* 0)
-           (*arm642-max-nfp-depth* ())
-           (*arm642-all-nfp-pushes* ())
-           (*arm642-nfp-vars* ()))
-      (declare (dynamic-extent *arm642-gpr-locations*))
+         (*arm642-target-node-shift* (arch::target-word-shift
+                                      (backend-target-arch
+                                       *target-backend*)))
+         (*arm642-target-bits-in-word* (arch::target-nbits-in-word
+                                        (backend-target-arch
+                                         *target-backend*)))
+	 (*arm642-target-node-size* (arch::target-lisp-node-size
+                                     (backend-target-arch *target-backend*)))
+         (*arm642-target-half-fixnum-type* *arm642-target-half-fixnum-type*)
+         (*backend-vinsns* (backend-p2-vinsn-templates *target-backend*))
+         (*backend-node-regs* arm64-node-regs)
+         (*backend-node-temps* arm64-temp-node-regs)
+         (*available-backend-node-temps* arm64-temp-node-regs)
+         (*backend-imm-temps* arm64-imm-regs)
+         (*available-backend-imm-temps* arm64-imm-regs)
+         (*backend-fp-temps* arm64-temp-fp-regs)
+         (*available-backend-fp-temps* arm64-temp-fp-regs)
+         (*backend-crf-temps* arm64-cr-fields)
+         (*available-backend-crf-temps* arm64-cr-fields)
+         (bits 0)
+         (*logical-register-counter* -1)
+         (*arm642-undo-count* 0)
+         (*backend-labels* (arm642-make-stack 64
+                                              target::subtag-simple-vector))
+         (*arm642-undo-stack* (arm642-make-stack
+                               64 target::subtag-simple-vector))
+         (*arm642-undo-because* (arm642-make-stack 64))
+         (*backend-immediates* (arm642-make-stack
+                                64 target::subtag-simple-vector))
+         (*arm642-entry-label* nil)
+         (*arm642-fixed-args-label* nil)
+         (*arm642-fixed-args-tail-label*)
+         (*arm642-fixed-nargs* nil)
+         (*arm642-inhibit-register-allocation* nil)
+         (*arm642-tail-allow* t)
+         (*arm642-reckless* nil)
+	 (*arm642-full-safety* nil)
+         (*arm642-float-safety* nil)
+         (*arm642-trust-declarations* t)
+         (*arm642-entry-vstack* nil)
+         (*arm642-need-nargs* t)
+         (fname (afunc-name afunc))
+         (*arm642-entry-vsp-saved-p* nil)
+         (*arm642-vcells* (arm642-ensure-binding-indices-for-vcells (afunc-vcells afunc)))
+         (*arm642-fcells* (afunc-fcells afunc))
+         *arm642-recorded-symbols*
+         (*arm642-emitted-source-notes* '())
+         (*arm642-gpr-locations-valid-mask* 0)
+         (*arm642-gpr-locations* (make-array 32 :initial-element nil))
+         (*arm642-gpr-constants-valid-mask* 0)
+         (*arm642-gpr-constants* (make-array 32 :initial-element nil))
+         (*arm642-nfp-depth* 0)
+         (*arm642-max-nfp-depth* ())
+         (*arm642-all-nfp-pushes* ())
+         (*arm642-nfp-vars* ()))
+    (declare (dynamic-extent *arm642-gpr-locations*))
+    (set-fill-pointer
+     *backend-labels*
+     (set-fill-pointer
+      *arm642-undo-stack*
       (set-fill-pointer
-       *backend-labels*
+       *arm642-undo-because*
        (set-fill-pointer
-        *arm642-undo-stack*
-        (set-fill-pointer
-         *arm642-undo-because*
-         (set-fill-pointer
-          *backend-immediates* 0))))
-      (backend-get-next-label)          ; start @ label 1, 0 is confused with NIL in compound cd
-      (let* ((vinsns (make-vinsn-list))
-             (*vinsn-list* vinsns))
-        (unwind-protect
-             (progn
-               (setq bits (arm642-toplevel-form vinsns (make-wired-lreg *arm642-result-reg*) $backend-return (afunc-acode afunc)))
-               (dotimes (i (length *backend-immediates*))
-                 (let ((imm (aref *backend-immediates* i)))
-                   (when (arm642-symbol-locative-p imm) (aset *backend-immediates* i (car imm)))))
-               (optimize-vinsns vinsns)
-               (when (logbitp arm642-debug-vinsns-bit *arm642-debug-mask*)
-                 (format t "~% vinsns for ~s (after generation)" (afunc-name afunc))
-                 (do-dll-nodes (v vinsns) (format t "~&~s" v))
-                 (format t "~%~%"))
+        *backend-immediates* 0))))
+    (backend-get-next-label) ; start @ label 1, 0 is confused with NIL in compound cd
+    (let* ((vinsns (make-vinsn-list))
+           (*vinsn-list* vinsns))
+      (unwind-protect
+           (progn
+             (setq bits (arm642-toplevel-form vinsns (make-wired-lreg *arm642-result-reg*) $backend-return (afunc-acode afunc)))
+             (dotimes (i (length *backend-immediates*))
+               (let ((imm (aref *backend-immediates* i)))
+                 (when (arm642-symbol-locative-p imm) (aset *backend-immediates* i (car imm)))))
+             (optimize-vinsns vinsns)
+             (when (logbitp arm642-debug-vinsns-bit *arm642-debug-mask*)
+               (format t "~% vinsns for ~s (after generation)" (afunc-name afunc))
+               (do-dll-nodes (v vinsns) (format t "~&~s" v))
+               (format t "~%~%"))
 
-               (with-dll-node-freelist (code arm64::*instruction-freelist*)
-                 (let* ((arm64::*labels* nil)
-                        debug-info)
-                     (arm642-expand-vinsns vinsns code)
-                     (if (logbitp $fbitnonnullenv (the fixnum (afunc-bits afunc)))
-                       (setq bits (+ bits (ash 1 $lfbits-nonnullenv-bit))))
-                     (setq debug-info (afunc-lfun-info afunc))
-                     (when lambda-form
-                       (setq debug-info (list* 'function-lambda-expression lambda-form debug-info)))
-                     (when *arm642-recorded-symbols*
-                       (setq debug-info (list* 'function-symbol-map *arm642-recorded-symbols* debug-info)))
-                     (when (and (getf debug-info '%function-source-note) *arm642-emitted-source-notes*)
-                       (setq debug-info (list* 'pc-source-map *arm642-emitted-source-notes* debug-info)))
-                     ;; Reserve the REGISTER-SAVE-INFO slot now (real value
-                     ;; needs label addresses assigned by FINALIZE below).
-                     (when *arm642-register-restore-count*
-                       (setq debug-info (list* 'register-save-info t debug-info)))
-                     (when debug-info
-                       (setq bits (logior (ash 1 $lfbits-info-bit) bits))
-                       (backend-new-immediate debug-info))
-                     (if (or fname lambda-form *arm642-recorded-symbols*)
-                       (backend-new-immediate fname)
-                       (setq bits (logior (ash -1 $lfbits-noname-bit) bits)))
+             (let* ((code (make-dll-header))
+                    (arm64::*labels* nil)
+                    debug-info)
+               (arm642-expand-vinsns vinsns code)
+               (if (logbitp $fbitnonnullenv (the fixnum (afunc-bits afunc)))
+                 (setq bits (+ bits (ash 1 $lfbits-nonnullenv-bit))))
+               (setq debug-info (afunc-lfun-info afunc))
+               (when lambda-form
+                 (setq debug-info (list* 'function-lambda-expression lambda-form debug-info)))
+               (when *arm642-recorded-symbols*
+                 (setq debug-info (list* 'function-symbol-map *arm642-recorded-symbols* debug-info)))
+               (when (and (getf debug-info '%function-source-note) *arm642-emitted-source-notes*)
+                 (setq debug-info (list* 'pc-source-map *arm642-emitted-source-notes* debug-info)))
+               ;; Reserve the REGISTER-SAVE-INFO slot now (real value
+               ;; needs label addresses assigned by FINALIZE below).
+               (when *arm642-register-restore-count*
+                 (setq debug-info (list* 'register-save-info t debug-info)))
+               (when debug-info
+                 (setq bits (logior (ash 1 $lfbits-info-bit) bits))
+                 (backend-new-immediate debug-info))
+               (if (or fname lambda-form *arm642-recorded-symbols*)
+                 (backend-new-immediate fname)
+                 (setq bits (logior (ash -1 $lfbits-noname-bit) bits)))
 
-                     (unless (afunc-parent afunc)
-                       (arm642-fixup-fwd-refs afunc))
-                     (setf (afunc-all-vars afunc) nil)
-                     (setf (afunc-argsword afunc) bits)
-                     (setf (afunc-lfun afunc)
-                           (arm642-xmake-function
-                            code
-                            *backend-immediates*
-                            bits))
-                     (when (getf debug-info 'pc-source-map)
-                       (setf (getf debug-info 'pc-source-map)
-                             (arm642-generate-pc-source-map debug-info)))
-                     (when (getf debug-info 'function-symbol-map)
-                       (setf (getf debug-info 'function-symbol-map)
-                             (arm642-digest-symbols)))
-                     ;; FINALIZE has now assigned the save-note's label,
-                     ;; so the real record can be filled into the slot
-                     ;; reserved above.
-                     (when *arm642-register-restore-count*
-                       (setf (getf debug-info 'register-save-info)
-                             (arm642-encode-regsave-info
-                              *arm642-compiler-register-save-note*
-                              *arm642-register-restore-ea*
-                              *arm642-register-restore-count*)))))))))
-    afunc))
+               (unless (afunc-parent afunc)
+                 (arm642-fixup-fwd-refs afunc))
+               (setf (afunc-all-vars afunc) nil)
+               (setf (afunc-argsword afunc) bits)
+               (setf (afunc-lfun afunc)
+                     (arm642-xmake-function
+                      code
+                      *backend-immediates*
+                      bits))
+               (when (getf debug-info 'pc-source-map)
+                 (setf (getf debug-info 'pc-source-map)
+                       (arm642-generate-pc-source-map debug-info)))
+               (when (getf debug-info 'function-symbol-map)
+                 (setf (getf debug-info 'function-symbol-map)
+                       (arm642-digest-symbols)))
+               ;; FINALIZE has now assigned the save-note's label,
+               ;; so the real record can be filled into the slot
+               ;; reserved above.
+               (when *arm642-register-restore-count*
+                 (setf (getf debug-info 'register-save-info)
+                       (arm642-encode-regsave-info
+                        *arm642-compiler-register-save-note*
+                        *arm642-register-restore-ea*
+                        *arm642-register-restore-count*))))))))
+  afunc)
 
 (defun arm642-xmake-function (code imms bits)
   (collect ((lap-imms))
