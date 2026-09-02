@@ -49,17 +49,16 @@
 ;;; for unboxed temporaries, and link it onto tcr.nfp.  Layout (see
 ;;; ARM642-NFP-FRAME-SIZE): [header][saved tcr.nfp = element 0][data...].
 ;;;
-;;; The frame is constant-size (ARM642-MAX-NFP-DEPTH is known at
-;;; compile time), so the pre-indexed STP builds it atomically: a GC
-;;; at any instruction boundary sees either the old SP or a complete
-;;; self-describing ivector whose header covers the whole (unboxed)
-;;; frame, so skip_over_ivector skips it.
-;;;
-;;; The frame must fit the STP scaled-imm7 reach (<= 512 bytes).
+;;; The frame is constant-size (ARM642-MAX-NFP-DEPTH is known at compile
+;;; time).  A small frame can be published atomically with pre-indexed STP.
+;;; A large frame moves SP first so asynchronous signal delivery cannot use
+;;; the frame memory.  PC-LUSER-XP completes the immediately following pair
+;;; store if a suspension lands in the one-instruction initialization window.
 (define-arm64-vinsn save-nfp (()
                               ()
                               ((header :u64)
-                               (nfp :imm)))
+                               (nfp :imm)
+                               (size :u64)))
   ((:pred > (:apply arm642-max-nfp-depth) 0)
    (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))    ;nfp = old tcr.nfp (the link)
    (movz header (:$ (:apply logand (:apply arm642-nfp-header) #xffff)))
@@ -67,8 +66,27 @@
                             (:apply ash (:apply arm642-nfp-header) -16)
                             #xffff)
                  :lsl 16))
-   ;; create u64-vector in one instruction
-   (stp header nfp (:@! sp (:$ (:apply - (:apply arm642-nfp-frame-size)))))
+   ((:pred <= (:apply arm642-nfp-frame-size) 512)
+    (stp header nfp (:@! sp (:$ (:apply - (:apply arm642-nfp-frame-size))))))
+   ((:pred > (:apply arm642-nfp-frame-size) 512)
+    (movz size (:$ (:apply logand (:apply arm642-nfp-frame-size) #xffff)))
+    ((:pred /= (:apply logand #xffff
+                       (:apply ash (:apply arm642-nfp-frame-size) -16)) 0)
+     (movk size (:$ (:apply logand #xffff
+                            (:apply ash (:apply arm642-nfp-frame-size) -16))
+                 :lsl 16)))
+    ((:pred /= (:apply logand #xffff
+                       (:apply ash (:apply arm642-nfp-frame-size) -32)) 0)
+     (movk size (:$ (:apply logand #xffff
+                            (:apply ash (:apply arm642-nfp-frame-size) -32))
+                 :lsl 32)))
+    ((:pred /= (:apply logand #xffff
+                       (:apply ash (:apply arm642-nfp-frame-size) -48)) 0)
+     (movk size (:$ (:apply logand #xffff
+                            (:apply ash (:apply arm642-nfp-frame-size) -48))
+                 :lsl 48)))
+    (sub sp sp size)
+    (stp header nfp (:@ sp (:$ 0))))
    (add nfp sp (:$ 0))                           ;nfp = new frame base
    (str nfp (:@ rcontext (:$ arm64::tcr.nfp))))) ;tcr.nfp = frame base
 
@@ -79,7 +97,26 @@
   ((:pred > (:apply arm642-max-nfp-depth) 0)
    (ldr nfp (:@ sp (:$ arm64::node-size)))        ;nfp = saved link (element 0)
    (str nfp (:@ rcontext (:$ arm64::tcr.nfp)))    ;restore tcr.nfp
-   (add sp sp (:$ (:apply arm642-nfp-frame-size)))))
+   ((:pred <= (:apply arm642-nfp-frame-size) 4095)
+    (add sp sp (:$ (:apply arm642-nfp-frame-size))))
+   ((:pred > (:apply arm642-nfp-frame-size) 4095)
+    (movz nfp (:$ (:apply logand (:apply arm642-nfp-frame-size) #xffff)))
+    ((:pred /= (:apply logand #xffff
+                       (:apply ash (:apply arm642-nfp-frame-size) -16)) 0)
+     (movk nfp (:$ (:apply logand #xffff
+                           (:apply ash (:apply arm642-nfp-frame-size) -16))
+                :lsl 16)))
+    ((:pred /= (:apply logand #xffff
+                       (:apply ash (:apply arm642-nfp-frame-size) -32)) 0)
+     (movk nfp (:$ (:apply logand #xffff
+                           (:apply ash (:apply arm642-nfp-frame-size) -32))
+                :lsl 32)))
+    ((:pred /= (:apply logand #xffff
+                       (:apply ash (:apply arm642-nfp-frame-size) -48)) 0)
+     (movk nfp (:$ (:apply logand #xffff
+                           (:apply ash (:apply arm642-nfp-frame-size) -48))
+                :lsl 48)))
+    (add sp sp nfp))))
 
 ;;; NFP single-float access.  The datum lives at frame-base + dnode-size +
 ;;; offset -- past the u64-vector header word and the saved-nfp link (element
