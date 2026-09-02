@@ -771,14 +771,45 @@
   function
   super-function)
 
+(defun %objc-unsupported-send-stub (sig reason)
+  (warn "objc-method-signature-info: skip ~s: ~a" sig reason)
+  (lambda (&rest args)
+    (declare (ignore args))
+    (error "ObjC send for signature ~s not supported on this backend (~a)"
+           sig reason)))
+
+;;; Compile send functions lazily on first use.  Eager compile during
+;;; cocoa method registration used to SO the compiler when thousands of
+;;; init* signatures (incl. N-word / varargs) were compiled up front;
+;;; arm64 backends for those shapes now exist, but lazy is still safer.
 (defun objc-method-signature-info (sig)
   (values
    (or (gethash sig *objc-method-signatures*)
-       (setf (gethash sig *objc-method-signatures*)
-             (make-objc-method-signature-info
-              :type-signature sig
-              :function (compile-send-function-for-signature  sig)
-              :super-function (%compile-send-function-for-signature  sig t))))))
+       (let ((info (make-objc-method-signature-info :type-signature sig)))
+         (setf (objc-method-signature-info-function info)
+               ;; Lazy compile on first use.  ARGS is (receiver selector . msg-args).
+               (lambda (&rest args)
+                 (declare (dynamic-extent args))
+                 (let ((f (handler-case
+                              (compile-send-function-for-signature sig)
+                            (error (c)
+                              (%objc-unsupported-send-stub sig c)))))
+                   (setf (objc-method-signature-info-function info) f)
+                   (%invoke-objc-send-function f (car args) (cadr args) (cddr args))))
+               (objc-method-signature-info-super-function info)
+               (lambda (&rest args)
+                 (declare (dynamic-extent args))
+                 (let ((f (handler-case
+                              (%compile-send-function-for-signature sig t)
+                            (error (c)
+                              (declare (ignore c))
+                              (lambda (&rest a)
+                                (declare (ignore a))
+                                (error "ObjC super-send for signature ~s not supported on this backend"
+                                       sig))))))
+                   (setf (objc-method-signature-info-super-function info) f)
+                   (%invoke-objc-send-function f (car args) (cadr args) (cddr args))))
+               (gethash sig *objc-method-signatures*) info)))))
 
 (defmethod make-load-form ((siginfo objc-method-signature-info) &optional env)
   (declare (ignore env))
@@ -865,10 +896,11 @@
                 (declare (dynamic-extent args))
                 (or (check-receiver receiver)
                  (with-ns-exceptions-as-errors 
-                     (apply (objc-method-signature-info-function
-                             (load-time-value                                
-                              (objc-method-info-signature-info ,first-method)))
-                            receiver ,selector args))))
+                     (%invoke-objc-send-function
+                      (objc-method-signature-info-function
+                       (load-time-value
+                        (objc-method-info-signature-info ,first-method)))
+                      receiver ,selector args))))
               :name `(:objc-dispatch ,name)))
             (let* ((protocol-pairs (let* ((pp ()))
                                      (dolist (pm (objc-message-info-protocol-methods message-info) pp)
@@ -907,7 +939,8 @@
                                       (when (typep receiver class)
                                         (return-from m (cdr pair))))))))))
                      (with-ns-exceptions-as-errors
-                         (apply function receiver ,selector args)))))
+                         (%invoke-objc-send-function
+                          function receiver ,selector args)))))
                 :name `(:objc-dispatch ,name)))))))
       (set-funcallable-instance-function
        gf
@@ -916,31 +949,61 @@
                   (symbol-name name) args))))))
                                              
 
-(defun %call-next-objc-method (self class selector sig &rest args)
-  (declare (dynamic-extent args))
-  (rlet ((s :objc_super #+(or apple-objc cocotron-objc) :receiver #+gnu-objc :self self
-            #+(or apple-objc-2.0 cocotron-objc)  :super_class #-(or apple-objc-2.0 cocotron-objc) :class
-            #+(or apple-objc-2.0 cocotron-objc) (#_class_getSuperclass class)
-            #-(or apple-objc-2.0 cocotron-objc) (pref class :objc_class.super_class)))
-    (let* ((siginfo (objc-method-signature-info sig))
-           (function (or (objc-method-signature-info-super-function siginfo)
-                         (setf (objc-method-signature-info-super-function siginfo)
-                               (%compile-send-function-for-signature sig t)))))
-      (with-ns-exceptions-as-errors
-          (apply function s selector args)))))
+;;; Arm64 call-next-method note (see tools/darwin-cocoa-apps/09-*):
+;;; rlet of :objc_super in a &rest frame was clobbered by apply's stack
+;;; traffic (super_class → garbage → objc_msgSendSuper hang/recurse on
+;;; #/init); the super struct stays on the heap (make-record below).
+;;; The bring-up-era APPLY ban (fixed-arity CASE with a 6-arg cap) is
+;;; gone: the "nested ff-call scalar return corruption" it papered over
+;;; was the GC-invisible ff-call state bug, fixed in .SPffcall.
+(defun %invoke-objc-send-function (function receiver selector args)
+  (apply function receiver selector args))
 
+(defun %call-next-objc-method-apply (self class selector sig args)
+  "ARGS is a list of message arguments (not &rest). Used by call-next-method."
+  (let* ((args (if (listp args) (copy-list args) (list args)))
+         (siginfo (objc-method-signature-info sig))
+         (function (or (objc-method-signature-info-super-function siginfo)
+                       (setf (objc-method-signature-info-super-function siginfo)
+                             (%compile-send-function-for-signature sig t))))
+         (s (make-record :objc_super
+                         #+(or apple-objc cocotron-objc) :receiver #+gnu-objc :self self
+                         #+(or apple-objc-2.0 cocotron-objc) :super_class
+                         #-(or apple-objc-2.0 cocotron-objc) :class
+                         #+(or apple-objc-2.0 cocotron-objc) (#_class_getSuperclass class)
+                         #-(or apple-objc-2.0 cocotron-objc) (pref class :objc_class.super_class))))
+    (unwind-protect
+         (with-ns-exceptions-as-errors
+           (%invoke-objc-send-function function s selector args))
+      (free s))))
+
+(defun %call-next-objc-method (self class selector sig &rest args)
+  (%call-next-objc-method-apply self class selector sig args))
+
+
+(defun %call-next-objc-class-method-apply (self class selector sig args)
+  (let* ((args (if (listp args) (copy-list args) (list args)))
+         (siginfo (objc-method-signature-info sig))
+         (function (or (objc-method-signature-info-super-function siginfo)
+                       (setf (objc-method-signature-info-super-function siginfo)
+                             (%compile-send-function-for-signature sig t))))
+         (s (make-record :objc_super
+                         #+(or apple-objc cocotron-objc) :receiver #+gnu-objc :self self
+                         #+(or apple-objc-2.0 cocotron-objc) :super_class
+                         #-(or apple-objc-2.0 cocotron-objc) :class
+                         #+(or apple-objc-2.0 cocotron-objc)
+                         (#_class_getSuperclass (#_object_getClass class))
+                         #-(or apple-objc-2.0 cocotron-objc)
+                         (pref (pref class #+apple-objc :objc_class.isa
+                                            #+gnu-objc :objc_class.class_pointer)
+                               :objc_class.super_class))))
+    (unwind-protect
+         (with-ns-exceptions-as-errors
+           (%invoke-objc-send-function function s selector args))
+      (free s))))
 
 (defun %call-next-objc-class-method (self class selector sig &rest args)
-  (rlet ((s :objc_super #+(or apple-objc cocotron-objc) :receiver #+gnu-objc :self self
-            #+(or apple-objc-2.0 cocotron-objc) :super_class #-(or apple-objc-2.0 cocotron-objc) :class
-            #+(or apple-objc-2.0 cocotron-objc) (#_class_getSuperclass (#_object_getClass class))
-            #-(or apple-objc-2.0 cocotron-objc) (pref (pref class #+apple-objc :objc_class.isa #+gnu-objc :objc_class.class_pointer) :objc_class.super_class)))
-    (let* ((siginfo (objc-method-signature-info sig))
-           (function (or (objc-method-signature-info-super-function siginfo)
-                         (setf (objc-method-signature-info-super-function siginfo)
-                               (%compile-send-function-for-signature sig t)))))
-      (with-ns-exceptions-as-errors
-          (apply function s selector args)))))
+  (%call-next-objc-class-method-apply self class selector sig args))
 
 (defun postprocess-objc-message-info (message-info)
   (let* ((objc-name (objc-message-info-message-name message-info))
@@ -960,14 +1023,19 @@
       (flet ((ensure-method-signature (m)
                (or (objc-method-info-signature m)
                    (setf (objc-method-info-signature m)
-                         (let* ((sig 
-                                 (cons (reduce-to-ffi-type
-                                        (objc-method-info-result-type m))
-                                       (mapcar #'reduce-to-ffi-type
-                                               (objc-method-info-arglist m)))))
-                           (setf (objc-method-info-signature-info m)
-                                 (objc-method-signature-info sig))
-                           sig)))))
+                         (handler-case
+                             (let* ((sig
+                                     (cons (reduce-to-ffi-type
+                                            (objc-method-info-result-type m))
+                                           (mapcar #'reduce-to-ffi-type
+                                                   (objc-method-info-arglist m)))))
+                               (setf (objc-method-info-signature-info m)
+                                     (objc-method-signature-info sig))
+                               sig)
+                           (error (c)
+                             (warn "ensure-method-signature: skip ~s: ~a"
+                                   objc-name c)
+                             nil))))))
         (let* ((methods (objc-message-info-methods message-info))
                (signatures ())
                (protocol-methods)
@@ -975,22 +1043,25 @@
           (labels ((signatures-equal (xs ys)
                      (and xs
                           ys
-                          (do* ((xs xs (cdr xs))
-                                (ys ys (cdr ys)))
-                               ((or (null xs) (null ys))
-                                (and (null xs) (null ys)))
-                            (unless (foreign-type-= (ensure-foreign-type (car xs))
-                                                    (ensure-foreign-type (car ys)))
-                              (return nil))))))
+                          (handler-case
+                              (do* ((xs xs (cdr xs))
+                                    (ys ys (cdr ys)))
+                                   ((or (null xs) (null ys))
+                                    (and (null xs) (null ys)))
+                                (unless (foreign-type-= (ensure-foreign-type (car xs))
+                                                        (ensure-foreign-type (car ys)))
+                                  (return nil)))
+                            (error () nil)))))
             (dolist (m methods)
               (let* ((signature (ensure-method-signature m)))
-                (pushnew signature signatures :test #'signatures-equal)
-                (if (getf (objc-method-info-flags m) :protocol)
-                  (push m protocol-methods)
-                  (let* ((pair (assoc signature signature-alist :test #'signatures-equal)))
-                    (if pair
-                      (push m (cdr pair))
-                      (push (cons signature (list m)) signature-alist)))))))
+                (when signature
+                  (pushnew signature signatures :test #'signatures-equal)
+                  (if (getf (objc-method-info-flags m) :protocol)
+                    (push m protocol-methods)
+                    (let* ((pair (assoc signature signature-alist :test #'signatures-equal)))
+                      (if pair
+                        (push m (cdr pair))
+                        (push (cons signature (list m)) signature-alist))))))))
           (setf (objc-message-info-ambiguous-methods message-info)
                 (mapcar #'cdr
                         (sort signature-alist
@@ -1002,9 +1073,10 @@
                 protocol-methods)
           (when (cdr signatures)
             (setf (getf (objc-message-info-flags message-info) :ambiguous) t))
-          (let* ((first-method (car methods))
-                 (first-sig (objc-method-info-signature first-method))
-                 (first-sig-len (length first-sig)))
+          (let* ((first-method (or (find-if #'objc-method-info-signature methods)
+                                   (car methods)))
+                 (first-sig (and first-method (objc-method-info-signature first-method)))
+                 (first-sig-len (if first-sig (length first-sig) 1)))
             (setf (objc-message-info-req-args message-info)
                   (1- first-sig-len))
             ;; Whether some arg/result types vary or not, we want to insist
@@ -1020,9 +1092,14 @@
                      (eq (car (last (objc-method-info-arglist m)))
                          *void-foreign-type*))
                    (method-has-structure-arg (m)
+                     ;; Unknown typedefs (ObjC generics, missing CDB
+                     ;; entries) must not abort message registration.
                      (dolist (arg (objc-method-info-arglist m))
-                       (when (typep (ensure-foreign-type arg) 'foreign-record-type)
-                         (return t)))))
+                       (handler-case
+                           (when (typep (ensure-foreign-type arg)
+                                        'foreign-record-type)
+                             (return t))
+                         (error () nil)))))
               (when (dolist (method methods)
                       (when (method-has-structure-arg method)
                         (return t)))

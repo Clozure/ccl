@@ -4300,7 +4300,7 @@
       (%%typep thing #.(specifier-type t))))
 
 (defun make-simple-type-predicate (function datum)
-  #+ppc-target
+  #+(or ppc-target arm64-target)
   (gvector :function
            (uvref *simple-predicate-function-prototype* 0)
            datum

@@ -1442,8 +1442,12 @@ satisfy the optional predicate PREDICATE."
      `(#\t ,@(encode-name (ffi-typedef-name (cadr spec)))))
     (:pointer
       `(#\a))
+    ;; C adjusts a parameter of array type to a pointer to the element
+    ;; type (C11 6.7.6.3p7); clang-era ffigen emits the array type
+    ;; verbatim, so perform the adjustment here.  Arrays do not decay
+    ;; in ENCODE-FFI-TYPE (typedefs, record fields), and must not.
     (:array
-      `(#\?))))
+      `(#\a))))
 
 (defun encode-ffi-arg-list (args)
   (if args

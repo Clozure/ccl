@@ -1924,6 +1924,12 @@ to replace that class with ~s" name old-class new-class)
     (make-built-in-class 'symbol-vector (find-class 'gvector))
     (make-built-in-class 'function-vector (find-class 'gvector)))
 
+  #+arm64-target
+  (progn
+    ;; A symbol is a uvector with subtag-symbol reached through
+    ;; a pointer tagged with fulltag-symol.
+    (make-built-in-class 'symbol-vector (find-class 'gvector)))
+
   #+64-bit-target
   (progn
     (make-built-in-class 'doubleword-vector *vector-class*)
@@ -2101,6 +2107,68 @@ to replace that class with ~s" name old-class new-class)
               (find-class 'doubleword-vector)
               (find-class 'unsigned-doubleword-vector)
               (find-class 'double-float-vector))))
+
+  ;; arm64: the three ivector header fulltags each get a 16-entry
+  ;; class vector indexed by the subtag's value field (subtag >>
+  ;; ntagbits), mirroring the x8664 scheme above.  Positions come from
+  ;; the define-subtag forms in compiler/ARM64/arm64-arch.lisp.
+  ;; Non-CL-vector subtags (macptr, bignum, code-vector, ...) can never
+  ;; reach the vectorH dispatch and map to *t-class*.
+  #+arm64-target
+  (progn
+    (defparameter *immheader-0-classes*   ;ivector-class-other-bit
+      (vector *t-class*                   ;0
+              *t-class*                   ;1
+              *t-class*                   ;2
+              *t-class*                   ;3
+              *t-class*                   ;4
+              *t-class*                   ;5
+              *t-class*                   ;6
+              *t-class*                   ;7
+              *t-class*                   ;8
+              (find-class 'complex-double-float-vector) ;9
+              (find-class 'word-vector)                 ;10 s16
+              (find-class 'unsigned-word-vector)        ;11 u16
+              *t-class*                   ;12
+              (find-class 'byte-vector)                 ;13 s8
+              (find-class 'unsigned-byte-vector)        ;14 u8
+              (find-class 'bit-vector)))                ;15
+
+    (defparameter *immheader-1-classes*   ;ivector-class-32-bit
+      (vector *t-class*                   ;0
+              *t-class*                   ;1 bignum
+              *t-class*                   ;2 double-float
+              *t-class*                   ;3 xcode-vector
+              *t-class*                   ;4 complex-single-float
+              *t-class*                   ;5 complex-double-float
+              *t-class*                   ;6 code-vector
+              *t-class*                   ;7
+              *t-class*                   ;8
+              *t-class*                   ;9
+              *t-class*                   ;10
+              *t-class*                   ;11
+              (find-class 'base-string)                 ;12
+              (find-class 'long-vector)                 ;13 s32
+              (find-class 'unsigned-long-vector)        ;14 u32
+              (find-class 'short-float-vector)))        ;15
+
+    (defparameter *immheader-2-classes*   ;ivector-class-64-bit
+      (vector *t-class*                   ;0
+              *t-class*                   ;1 macptr
+              *t-class*                   ;2 dead-macptr
+              *t-class*                   ;3
+              *t-class*                   ;4
+              *t-class*                   ;5
+              *t-class*                   ;6
+              *t-class*                   ;7
+              *t-class*                   ;8
+              *t-class*                   ;9
+              *t-class*                   ;10
+              (find-class 'complex-single-float-vector) ;11
+              (find-class 'fixnum-vector)               ;12
+              (find-class 'doubleword-vector)           ;13 s64
+              (find-class 'unsigned-doubleword-vector)  ;14 u64
+              (find-class 'double-float-vector))))      ;15
 
   #+arm-target
   (defparameter *ivector-vector-classes*
@@ -2335,6 +2403,25 @@ to replace that class with ~s" name old-class new-class)
                 (%svref v (+ slice arm::fulltag-cons)) *cons-class*
                 (%svref v (+ slice arm::fulltag-nil)) *null-class*
                 (%svref v (+ slice arm::fulltag-imm)) *immediate-class*))
+        ;; arm64 U-RATIFY (class-of contract): the table is indexed by
+        ;; canonical TYPECODE — subtag byte for fulltag-misc, else the
+        ;; 4-bit fulltag.  The per-slice fills below additionally cover
+        ;; a raw-low-byte dispatch for the tags whose payload reaches
+        ;; the low byte (fixnums); the future arm64 class-of
+        ;; lapfunction must canonicalize anything else.  Immediates
+        ;; (characters, markers) and single-floats keep their payload
+        ;; above bit 7, so their low byte IS the canonical typecode.
+        #+arm64-target
+        (do* ((slice 0 (+ 16 slice)))
+             ((= slice 256))
+          (declare (type (unsigned-byte 8) slice))
+          (setf (%svref v (+ slice arm64::fulltag-even-fixnum)) *fixnum-class*
+                (%svref v (+ slice arm64::fulltag-odd-fixnum))  *fixnum-class*
+                (%svref v (+ slice arm64::fulltag-cons)) *cons-class*
+                (%svref v (+ slice arm64::fulltag-nil)) *null-class*
+                (%svref v (+ slice arm64::fulltag-single-float)) (find-class 'short-float)
+                (%svref v (+ slice arm64::fulltag-imm-0)) *immediate-class*
+                (%svref v (+ slice arm64::fulltag-imm-1)) *immediate-class*))
 
         (macrolet ((map-subtag (subtag class-name)
                      `(setf (%svref v ,subtag) (find-class ',class-name))))
@@ -2349,6 +2436,8 @@ to replace that class with ~s" name old-class new-class)
           (map-subtag ppc64::subtag-code-vector code-vector)
           #+arm-target
           (map-subtag arm::subtag-code-vector code-vector)
+          #+arm64-target
+          (map-subtag arm64::subtag-code-vector code-vector)
           #+ppc32-target
           (map-subtag ppc32::subtag-creole-object creole-object)
           (map-subtag target::subtag-xcode-vector xcode-vector)
@@ -2387,7 +2476,8 @@ to replace that class with ~s" name old-class new-class)
           (map-subtag target::subtag-simple-vector simple-vector)
           (map-subtag target::subtag-slot-vector slot-vector)
           #+x8664-target (map-subtag x8664::subtag-symbol symbol-vector)
-          #+x8664-target (map-subtag x8664::subtag-function function-vector))
+          #+x8664-target (map-subtag x8664::subtag-function function-vector)
+          #+arm64-target (map-subtag arm64::subtag-symbol symbol-vector))
         (setf (%svref v target::subtag-arrayH)
               #'(lambda (x)
                   (if (logbitp $arh_simple_bit
@@ -2420,7 +2510,11 @@ to replace that class with ~s" name old-class new-class)
         (setf (%svref v #+ppc-target target::subtag-symbol
                       #+arm-target target::subtag-symbol
 		      #+x8632-target target::subtag-symbol
-		      #+x8664-target target::tag-symbol)
+		      #+x8664-target target::tag-symbol
+                      ;; arm64: symbol POINTERS have their own fulltag;
+                      ;; typecode canonicalizes to it (cf. x8664
+                      ;; tag-symbol).
+                      #+arm64-target arm64::fulltag-symbol)
               #-ppc64-target
               #'(lambda (s) (if (eq (symbol-package s) *keyword-package*)
                               *keyword-class*
@@ -2437,7 +2531,8 @@ to replace that class with ~s" name old-class new-class)
                       #+ppc-target target::subtag-function
                       #+arm-target target::subtag-function
                       #+x8632-target target::subtag-function
-                      #+x8664-target target::tag-function) 
+                      #+x8664-target target::tag-function
+                      #+arm64-target arm64::subtag-function)
               class-of-function-function)
         (setf (%svref v target::subtag-vectorH)
               #'(lambda (v)
@@ -2445,7 +2540,7 @@ to replace that class with ~s" name old-class new-class)
                     (declare (fixnum subtype))
                     (if (eql subtype target::subtag-simple-vector)
                       *general-vector-class*
-                      #-x8664-target
+                      #-(or x8664-target arm64-target)
                       (%svref *ivector-vector-classes*
                               #+ppc32-target
                               (ash (the fixnum (- subtype ppc32::min-cl-ivector-subtag))
@@ -2468,7 +2563,17 @@ to replace that class with ~s" name old-class new-class)
                               ((= class x8664::fulltag-immheader-2)
                                (%svref *immheader-2-classes* idx))
                               (t *t-class*)))
-                               
+
+                      #+arm64-target
+                      (let* ((class (logand arm64::fulltagmask subtype))
+                             (idx (ash subtype (- arm64::ntagbits))))
+                        (cond ((= class arm64::fulltag-immheader-0)
+                               (%svref *immheader-0-classes* idx))
+                              ((= class arm64::fulltag-immheader-1)
+                               (%svref *immheader-1-classes* idx))
+                              ((= class arm64::fulltag-immheader-2)
+                               (%svref *immheader-2-classes* idx))
+                              (t *t-class*)))
                       ))))
         (setf (%svref v target::subtag-lock)
               #'(lambda (thing)
@@ -2608,7 +2713,7 @@ to replace that class with ~s" name old-class new-class)
 (defmethod create-reader-method-function ((class slots-class)
 					  (reader-method-class standard-reader-method)
 					  (dslotd direct-slot-definition))
-  #+ppc-target
+  #+(or ppc-target arm64-target)
   (gvector :function
            (uvref *reader-method-function-proto* 0)
            (ensure-slot-id (%slot-definition-name dslotd))
@@ -2636,7 +2741,7 @@ to replace that class with ~s" name old-class new-class)
 (defmethod create-writer-method-function ((class slots-class)
 					  (writer-method-class standard-writer-method)
 					  (dslotd direct-slot-definition))
-  #+ppc-target
+  #+(or ppc-target arm64-target)
   (gvector :function
            (uvref *writer-method-function-proto* 0)
            (ensure-slot-id (%slot-definition-name dslotd))

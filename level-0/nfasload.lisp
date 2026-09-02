@@ -687,23 +687,56 @@
 (deffaslop $fasl-code-vector (s)
   (let* ((element-count (%fasl-read-count s))
          (size-in-bytes (* 4 element-count))
-         (vector (allocate-typed-vector :code-vector element-count)))
+         ;; Darwin/arm64 AREA_CODE: MAP_JIT for executable fasl code.
+         ;; Purify copies into AREA_READONLY.  Flag defaults to T.
+         (use-jit #+darwinarm64-target
+                  (and (boundp '*darwinarm64-map-jit-fasls*)
+                       *darwinarm64-map-jit-fasls*
+                       (fboundp '%allocate-code-vector))
+                  #-darwinarm64-target
+                  nil)
+         (vector #+darwinarm64-target
+                 (if use-jit
+                   (%allocate-code-vector element-count)
+                   (allocate-typed-vector :code-vector element-count))
+                 #-darwinarm64-target
+                 (allocate-typed-vector :code-vector element-count)))
     (declare (fixnum element-count size-in-bytes))
+    (declare (ignorable use-jit))
     (%epushval s vector)
-    (%fasl-read-n-bytes s vector 0 size-in-bytes)
-    (%make-code-executable vector)
+    #+darwinarm64-target
+    (if use-jit
+      (let ((scratch (make-array size-in-bytes :element-type
+                                 '(unsigned-byte 8))))
+        (%fasl-read-n-bytes s scratch 0 size-in-bytes)
+        (%darwinarm64-jit-install-code vector scratch size-in-bytes)))
+    #-darwinarm64-target
+    (progn
+      (%fasl-read-n-bytes s vector 0 size-in-bytes)
+      (%make-code-executable vector))
     vector))
 
 (defun fasl-read-gvector (s subtype)
   (let* ((n (%fasl-read-count s))
-         (vector (%alloc-misc n subtype)))
+         (vector (%alloc-misc n subtype))
+         (result vector))
     (declare (fixnum n subtype))
-    (%epushval s vector)
+    ;; NO-OP since the fulltag_function removal (patch 0055): an arm64
+    ;; function IS its misc-tagged uvector (fulltag-misc + header
+    ;; subtag-function), so function-vector-to-function is the identity
+    ;; here -- a typecode assertion, not a retag.  It reads as the general
+    ;; form: on a target whose function tag is a fulltag, the epushed
+    ;; value and faslval must carry it (funcall and self-reference need
+    ;; it), exactly as x86's $fasl-clfun does; the slots are filled
+    ;; through VECTOR either way.
+    #+arm64-target (when (= subtype arm64::subtag-function)
+                     (setq result (function-vector-to-function vector)))
+    (%epushval s result)
     (dotimes (i n)
       (setf (%svref vector i) (%fasl-expr s)))
     #+arm-target (when (= subtype arm::subtag-function)
                    (%fix-fn-entrypoint vector))
-    (setf (faslstate.faslval s) vector)))
+    (setf (faslstate.faslval s) result)))
 
 (deffaslop $fasl-vgvec (s)
   (let* ((subtype (%fasl-read-byte s)))
@@ -812,7 +845,7 @@
   (labels ((reg (lfun refs)
 	     (unless (memq lfun refs)
 	       (let* ((lfv (function-to-function-vector lfun))
-		      (start #+ppc-target 0 #+x86-target (%function-code-words lfun))
+		      (start #+ppc-target 0 #+x86-target (%function-code-words lfun) #+arm64-target 0)
 		      (refs (cons lfun refs)))
 		 (declare (dynamic-extent refs))
 		 (loop for i from start below (uvsize lfv) as imm = (uvref lfv i)
@@ -1046,6 +1079,16 @@
   htab)
 
 
+;;; A symbol-tagged package-hash-table cell whose pname is not a simple
+;;; string means heap corruption.  Fail loudly instead of silently
+;;; skipping the cell — silent skips let the corruption spread to the
+;;; next GC/purify cycle unobserved.  The message avoids printing the
+;;; object itself (CLASS-OF on a corrupt header would recurse).
+(defun %htab-corrupt-cell-error (s)
+  (error "Corrupt package hash-table cell: symbol-tagged object at #x~x ~
+          whose pname is not a simple string."
+         (%address-of s)))
+
 (defun %resize-htab (htab)
   (declare (optimize (speed 3) (safety 0)))
   (without-interrupts
@@ -1056,7 +1099,10 @@
      (let* ((nsyms 0))
        (declare (fixnum nsyms))
        (dovector (s old-vector)
-         (when (symbolp s) (incf nsyms)))
+         (when (symbolp s)
+           (unless (simple-string-p (symbol-name s))
+             (%htab-corrupt-cell-error s))
+           (incf nsyms)))
        (%initialize-htab htab 
                          (the fixnum (+ 
                                       (the fixnum 
@@ -1103,6 +1149,8 @@
       (declare (fixnum i idx))
       (when (symbolp elt)
         (let* ((pname (symbol-name elt)))
+          (unless (simple-string-p pname)
+            (%htab-corrupt-cell-error elt))
           (if (and 
                (= (the fixnum (length pname)) len)
                (dotimes (j len t)

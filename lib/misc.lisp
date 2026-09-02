@@ -93,7 +93,20 @@ are running on, or NIL if we can't find any useful information."
                               (read-line f nil nil))
                         (target #+ppc-target "machine"
                                 #+x86-target "model name"
-                                #+arm-target "Hardware"))
+                                #+arm-target "Hardware"
+                                ;; ARM64-DEVIATION: an aarch64 kernel emits
+                                ;; neither "model name" nor ARM32's
+                                ;; "Hardware" line -- arch/arm64/kernel/
+                                ;; cpuinfo.c's c_show() writes only
+                                ;; processor / BogoMIPS / Features / CPU
+                                ;; implementer / CPU architecture / CPU
+                                ;; variant / CPU part / CPU revision, and
+                                ;; "Hardware" is emitted by arch/arm/ only.
+                                ;; "CPU part" is the MIDR_EL1 part number,
+                                ;; i.e. the model of the core, and is the
+                                ;; most specific hardware identifier that is
+                                ;; always present.
+                                #+arm64-target "CPU part"))
                        ((null line))
                     (let* ((matched (cpu-info-match target line)))
                       (when matched (return matched)))))))
@@ -825,6 +838,7 @@ are running on, or NIL if we can't find any useful information."
   (#+ppc-target ppc-xdisassemble
    #+x86-target x86-xdisassemble
    #+arm-target arm-xdisassemble
+   #+arm64-target arm64-xdisassemble
    (require-type (function-for-disassembly thing) 'compiled-function)))
 
 (defun function-for-disassembly (thing)
@@ -930,17 +944,25 @@ are running on, or NIL if we can't find any useful information."
       "svnversion"))
 
 (defun local-git-revision ()
-  (let ((s (make-string-output-stream))
-	(git-dir (native-translated-namestring
-		  (merge-pathnames (ccl-directory) ".git"))))
-    (multiple-value-bind (status exit-code)
-	(external-process-status
-	 (run-program "git" (list "--git-dir" git-dir "describe" "--dirty")
-		      :output s :error :output))
-      (when (and (eq status :exited)
-		 (= exit-code 0))
-	(string-right-trim (list #\space #\newline)
-			   (get-output-stream-string s))))))
+  ;; After MAP_JIT-heavy compile on Darwin/arm64, fork/run-program has
+  ;; occasionally returned with pid NIL ("Bug: fork failed but status
+  ;; field not set?").  Retry; never abort an xload for a version string.
+  (dotimes (attempt 5)
+    (when (plusp attempt) (gc) (sleep 0.2))
+    (handler-case
+        (let ((s (make-string-output-stream))
+              (git-dir (native-translated-namestring
+                        (merge-pathnames (ccl-directory) ".git"))))
+          (multiple-value-bind (status exit-code)
+              (external-process-status
+               (run-program "git" (list "--git-dir" git-dir "describe" "--dirty")
+                            :output s :error :output))
+            (when (and (eq status :exited)
+                       (= exit-code 0))
+              (return-from local-git-revision
+                (string-right-trim (list #\space #\newline)
+                                   (get-output-stream-string s))))))
+      (error ()))))
 
 (defun local-svn-revision ()
   (let* ((s (make-string-output-stream))
@@ -1297,6 +1319,28 @@ are running on, or NIL if we can't find any useful information."
                      (%svref *immheader-types* (ash i -2)))
                     ((= lowtag ppc64::lowtag-nodeheader)
                      (%svref *nodeheader-types* (ash i -2)))))))
+    #+arm64-target
+    (dotimes (i 256)
+      (let* ((fulltag (logand i arm64::fulltagmask))
+             (names-vector
+              (cond ((= fulltag arm64::fulltag-nodeheader-0)
+                     *nodeheader-0-types*)
+                    ((= fulltag arm64::fulltag-nodeheader-1)
+                     *nodeheader-1-types*)
+                    ((= fulltag arm64::fulltag-immheader-0)
+                     *immheader-0-types*)
+                    ((= fulltag arm64::fulltag-immheader-1)
+                     *immheader-1-types*)
+                    ((= fulltag arm64::fulltag-immheader-2)
+                     *immheader-2-types*)))
+             (name (if names-vector
+                     (aref names-vector
+                           (ash i (- arm64::ntagbits))))))
+        (if (eq name 'symbol-vector)
+          (setq name 'symbol)
+          (if (eq name 'function-vector)
+            (setq name 'function)))
+        (setf (aref a i) name)))
     #+(or ppc32-target x8632-target arm-target)
     (dotimes (i 256)
       (let* ((fulltag (logand i target::fulltagmask)))
@@ -1408,7 +1452,7 @@ are running on, or NIL if we can't find any useful information."
   "Returns the size of THING (in bytes), including any headers and
    alignment overhead.  Does not descend an object's components."
   (cond ((consp thing) #+64-bit-target 16 #+32-bit-target 8)
-        #+x8664-target ((symbolp thing)
+        #+(or x8664-target arm64-target) ((symbolp thing)
                         (object-direct-size (%symptr->symvector thing)))
         #+x8664-target ((functionp thing)
                         (object-direct-size (function-to-function-vector thing)))
@@ -1429,7 +1473,11 @@ are running on, or NIL if we can't find any useful information."
 
 (defun kernel-global-address (global)
   (check-type global symbol)
-  (+ (target-nil-value) (target::%kernel-global global)))
+  ;; arm64: statics (and therefore nil) have no fixed VA; the canonical
+  ;; (target-nil-value) is wrong when the loader relocated the static
+  ;; section.  Use the live nil address.
+  #+arm64-target (+ (%address-of nil) (target::%kernel-global global))
+  #-arm64-target (+ (target-nil-value) (target::%kernel-global global)))
 
 (defloadvar *static-cons-address* (%int-to-ptr (kernel-global-address 'static-conses)))
 

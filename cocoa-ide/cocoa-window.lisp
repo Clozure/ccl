@@ -111,22 +111,36 @@
                                                   (ccl::%current-frame-ptr)
                                                   #+ppc-target ccl::*fake-stack-frames*
                                                   #+x86-target (ccl::%current-frame-ptr)
+                                                  #+arm-target (or (ccl::current-fake-stack-frame)
+                                                                  (ccl::%current-frame-ptr))
+                                                  #+arm64-target (ccl::%current-frame-ptr)
                                                   (ccl::db-link)
                                                   (1+ ccl::*break-level*)))
                         (ccl::*backtrace-contexts* (cons context ccl::*backtrace-contexts*)))  
                    (format t "~%~%*** Error in event process: ~a~%~%" condition)
-                   (print-call-history :context context :detailed-p t :count 20
+                   (print-call-history :context context
+                                       :detailed-p t
+                                       :count 20
                                        :origin frame-pointer)
                    (format t "~%~%~%")
                    (force-output t)
                    ))))))))
-
 (defun enable-foreground ()
   #+apple-objc
-  (rlet ((psn :<P>rocess<S>erial<N>umber))
-    (#_GetCurrentProcess psn)
-    (#_TransformProcessType psn #$kProcessTransformToForegroundApplication)
-    (eql 0 (#_SetFrontProcess psn))))
+  (progn
+    ;; Modern macOS: TransformProcessType alone is not enough for a
+    ;; non-bundled or ad-hoc process to show windows / take focus.
+    ;; NSApplicationActivationPolicyRegular == 0 (not in our CDB yet).
+    (ignore-errors
+      (when *nsapp*
+        (#/setActivationPolicy: *nsapp* 0)))
+    (rlet ((psn :<P>rocess<S>erial<N>umber))
+      (#_GetCurrentProcess psn)
+      (#_TransformProcessType psn #$kProcessTransformToForegroundApplication)
+      (eql 0 (#_SetFrontProcess psn)))
+    (ignore-errors
+      (when *nsapp*
+        (#/activateIgnoringOtherApps: *nsapp* #$YES)))))
 
 (objc:defmethod (#/toggleConsole: :void) ((self ide-application) sender)
   (let* ((console (console self)))
@@ -354,11 +368,11 @@
                                initargs))))
   (unless (and style-mask-p (typep style-mask 'fixnum))
     (setq initargs (cons :style-mask
-                         (cons (logior #$NSTitledWindowMask
-                                       (if closable #$NSClosableWindowMask 0)
-                                       (if iconifyable #$NSMiniaturizableWindowMask 0)
-                                       (if expandable #$NSResizableWindowMask 0)
-                                       (if metal #$NSTexturedBackgroundWindowMask 0))
+                         (cons (logior $window-style-mask-titled
+                                       (if closable $window-style-mask-closable 0)
+                                       (if iconifyable $window-style-mask-miniaturizable 0)
+                                       (if expandable $window-style-mask-resizable 0)
+                                       (if metal $window-style-mask-textured-background 0))
                                initargs))))
   (unless (typep (getf initargs :backing) 'fixnum)
     (setq initargs

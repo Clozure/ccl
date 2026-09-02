@@ -1,18 +1,6 @@
-;;;-*-Mode: LISP; Package: CCL -*-
-;;;
-;;; Copyright 1994-2009 Clozure Associates
-;;;
-;;; Licensed under the Apache License, Version 2.0 (the "License");
-;;; you may not use this file except in compliance with the License.
-;;; You may obtain a copy of the License at
-;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
-;;;
-;;; Unless required by applicable law or agreed to in writing, software
-;;; distributed under the License is distributed on an "AS IS" BASIS,
-;;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-;;; See the License for the specific language governing permissions and
-;;; limitations under the License.
+;;;; -*-Mode: LISP; Package: CCL -*-
+;;;;
+;;;; SPDX-License-Identifier: Apache-2.0
 
 ;; L1-boot.lisp
 
@@ -32,22 +20,6 @@
 (defun lisp-implementation-type ()
   #+clozure-common-lisp "Clozure Common Lisp"
   #-clozure-common-lisp "OpenMCL")
-
-
-(defparameter *platform-os-names*
-  `((,platform-os-vxworks . :vxwork)
-    (,platform-os-linux . :linux)
-    (,platform-os-solaris . :solaris)
-    (,platform-os-darwin . :darwin)
-    (,platform-os-freebsd . :freebsd)
-    (,platform-os-windows . :windows)
-    (,platform-os-android . :android)))
-
-(defparameter *platform-cpu-names*
-  `((,platform-cpu-ppc . :ppc)
-    (,platform-cpu-sparc . :sparc)
-    (,platform-cpu-x86 . :x86)
-    (,platform-cpu-arm . :arm)))
 
 (defun host-platform ()
   (let* ((pf (%get-kernel-global 'host-platform)))

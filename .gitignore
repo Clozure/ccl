@@ -15,8 +15,15 @@ tags
 /.gdb*
 
 /*.image
+/*.image.*
 /*boot*
+/darm64cl.smoke-bin
+/tmp-bench/
+/darwin-x86-headers64
+/darwin-arm64-headers
 
+/arm64cl
+/darm64cl
 /armcl
 /?x86cl
 /?x86cl64
@@ -37,6 +44,8 @@ lisp-kernel/darwinx8632/mach_exc_server.c
 lisp-kernel/darwinx8632/probes.h
 lisp-kernel/darwinx8664/mach_exc.h
 lisp-kernel/darwinx8664/mach_exc_server.c
+lisp-kernel/darwinarm64/mach_exc.h
+lisp-kernel/darwinarm64/mach_exc_server.c
 lisp-kernel/darwinx8664/probes.h
 lisp-kernel/static-linuxppc/external-functions.h
 

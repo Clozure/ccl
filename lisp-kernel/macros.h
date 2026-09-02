@@ -82,6 +82,14 @@
 #define immheader_tag_p(tag) (tag == fulltag_immheader)
 #endif
 
+#ifdef ARM64
+#define nodeheader_tag_p(tag) (((tag) & tagmask) == tag_nodeheader)
+#define IMMHEADER_MASK ((1<<fulltag_immheader_0)   | \
+			(1UL<<fulltag_immheader_1) | \
+			(1UL<<fulltag_immheader_2))
+#define immheader_tag_p(tag) ((1<<(tag)) & IMMHEADER_MASK)
+#endif
+
 #ifdef VC
 #define inline
 #define __attribute__(x)

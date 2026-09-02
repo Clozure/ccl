@@ -219,7 +219,8 @@
       (ignore-errors (clear-output *debug-io*))
       (ignore-errors (format *debug-io* "~&Lisp error: ~s" (or emsg condition)))
       (when (eq *log-callback-errors* :backtrace)
-        (let* ((err (nth-value 1 (ignore-errors (ccl:print-call-history :detailed-p t)))))
+        (let* ((err (nth-value 1 (ignore-errors
+                                   (ccl:print-call-history :detailed-p t)))))
           (when err
             (ignore-errors (format *debug-io* "~&Error printing call history - "))
             (ignore-errors (print err *debug-io*))
@@ -253,7 +254,7 @@
     (logtest modifier-mask modifiers)))
 
 (defun current-event-command-key-p ()
-  (current-event-modifier-p #$NSCommandKeyMask))
+  (current-event-modifier-p $event-modifier-flag-command))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -285,7 +286,10 @@
   (%make-nsstring (double-%-in (or (ignore-errors (princ-to-string cond))
                                    "#<error printing error message>"))))
 
-
+;;; Diagnostic loggers for the open darwinarm64 BOGUS-object issue
+;;; (no-class-error / Hemlock condition logs) live in
+;;; tools/ide-debug-loggers.lisp — load explicitly when debugging;
+;;; nothing here writes to /tmp or redefines error reporting.
 
 (defun assume-cocoa-thread ()
   (assert (eq *current-process* ccl::*initial-process*)))
@@ -320,10 +324,10 @@ was clicked."
     (unless (eql ns-other-button +null-ptr+)
       (#/release ns-other-button))
     (ecase result
-      (#.#$NSAlertDefaultReturn :default)
-      (#.#$NSAlertAlternateReturn :alternate)
-      (#.#$NSAlertOtherReturn :other)
-      (#.#$NSAlertErrorReturn (error "Error running alert panel")))))
+      (#.$alert-default-return :default)
+      (#.$alert-alternate-return :alternate)
+      (#.$alert-other-return :other)
+      (#.$alert-error-return (error "Error running alert panel")))))
 
 ;;; -----------------------------------------------------------------
 ;;; utility to display a Cocoa progress window

@@ -1,18 +1,7 @@
-;;;-*- Mode: Lisp; Package: CCL -*-
-;;;
-;;; Copyright 1994-2009 Clozure Associates
-;;;
-;;; Licensed under the Apache License, Version 2.0 (the "License");
-;;; you may not use this file except in compliance with the License.
-;;; You may obtain a copy of the License at
-;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
-;;;
-;;; Unless required by applicable law or agreed to in writing, software
-;;; distributed under the License is distributed on an "AS IS" BASIS,
-;;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-;;; See the License for the specific language governing permissions and
-;;; limitations under the License.
+;;;; -*- Mode: Lisp; Package: CCL -*-
+;;;;
+;;;; SPDX-License-Identifier: Apache-2.0
+
 (in-package "CCL")
 
 (eval-when (:compile-toplevel :execute)
@@ -24,10 +13,19 @@
                                          platform-os-mask))
 (defconstant platform-word-size-32 0)
 (defconstant platform-word-size-64 64)
+
 (defconstant platform-cpu-ppc (ash 0 3))
 (defconstant platform-cpu-sparc (ash 1 3))
 (defconstant platform-cpu-x86 (ash 2 3))
 (defconstant platform-cpu-arm (ash 3 3))
+(defconstant platform-cpu-arm64 (ash 4 3))
+(defparameter *platform-cpu-names*
+  `((,platform-cpu-ppc . :ppc)
+    (,platform-cpu-sparc . :sparc)
+    (,platform-cpu-x86 . :x86)
+    (,platform-cpu-arm . :arm)
+    (,platform-cpu-arm64 . :arm64)))
+
 (defconstant platform-os-vxworks 0)
 (defconstant platform-os-linux 1)
 (defconstant platform-os-solaris 2)
@@ -35,6 +33,18 @@
 (defconstant platform-os-freebsd 4)
 (defconstant platform-os-windows 5)
 (defconstant platform-os-android 6)
+(defparameter *platform-os-names*
+  `((,platform-os-vxworks . :vxworks)
+    (,platform-os-linux . :linux)
+    (,platform-os-solaris . :solaris)
+    (,platform-os-darwin . :darwin)
+    (,platform-os-freebsd . :freebsd)
+    (,platform-os-windows . :windows)
+    (,platform-os-android . :android)))
+
+(defun target-os-name (&optional (backend *target-backend*))
+  (cdr (assoc (logand platform-os-mask (backend-target-platform backend))
+              *platform-os-names*)))
 
 (defun backend-real-lowmem-bias (backend)
   (let* ((b (backend-lowmem-bias backend)))
@@ -77,12 +87,6 @@
 (defmethod print-object ((b backend) s)
   (print-unreadable-object (b s :type t :identity t)
     (format s "~A" (backend-name b))))
-
-
-(defun target-os-name (&optional (backend *target-backend*))
-  (cdr (assoc (logand platform-os-mask (backend-target-platform backend))
-              *platform-os-names*)))
-
 
 (defparameter *backend-node-regs* 0)
 (defparameter *backend-node-temps* 0)

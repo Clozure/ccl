@@ -1,67 +1,223 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 /*
- * Copyright 2012 Clozure Associates
+ * On arm64, we implement UUOs with the udf instruction.  The upper 16
+ * bits of a udf instruction are 0; the lower 16 are an immediate.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * The udf instruction is architecturally undefined.  It will always
+ * generate an undefined instruction exception (which will appear as
+ * SIGILL).
  *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * The hlt instruction could probably work here, or maybe brk, but udf
+ * doesn't carry any extra semantic intent, so it seems like the best
+ * choice.
  */
-/* Encode (some) exceptional conditions in aarch64 'hlt' instructions,
-   which accept a 16-bit immediate operand.  The low 3 bits of this operand
-   define the format of the upper 13 bits ; in general, there are 3 formats:
-   nullary (the upper 13 bits contain arbitrary immediate values),
-   unary (bits 7:3 encode a register (likely a GPR), bits 15:8 encode
-   type or other info, and binary (bits 7:3 encode register operand 0,
-   bits 12:8 encode register operand 1, and bits 15:13 encode extra info */
 
-hlt_code_nullary = 0
-hlt_code_unary_reg_not_lisptag = 1
-hlt_code_unary_reg_not_fulltag = 2
-hlt_code_unary_reg_not_subtag = 3
-hlt_code_unary_reg_not_xtype = 4
-hlt_code_unary_misc = 5
-hlt_code_binary = 6
+/*
+ * The low 2 bits of the udf operand define the format of the
+ * remaining upper 14 bits.
+ *
+ * NOTA BENE: udf #0 must remain reserved because it is used as a
+ * sentinel instruction at the start of a code vector.
+ */
 
-define(`uuo_error_reg_not_lisptag',`
-        __(hlt #(hlt_code_unary_reg_not_lisptag|(gprval($1)<<3)|$2<<8))
-        ')
+/*
+ * Very important: a uuo_format_misc UUO cannot be all 0.
+ * 14 bits of info in 15:2 (must not be all zero)
+ */
+uuo_format_misc = 0
 
-define(`uuo_error_reg_not_fulltag',`
-        __(hlt #(hlt_code_unary_reg_not_fulltag|(gprval($1)<<3)|$2<<8))
-        ')
-        
-define(`uuo_alloc_trap',`
-        __(hlt #(hlt_code_nullary|(0<<3)))
-        ')
-	
-define(`uuo_error_not_callable',`
-        __(hlt #(hlt_code_unary_misc|(gprval($1)<<3)|(0<<8)))
-        ')
+/*
+ * Non-type single-register errors
+ * reg in 6:2, 9 bits of info in 15:7
+ */
+uuo_format_unary = 1
+  unary_info_not_callable = 0
+  unary_info_no_throw_tag = 1
+  unary_info_unbound = 2
+  unary_info_udf = 3
+  unary_info_udf_call = 4
+  unary_info_tlb_too_small = 5
+  unary_info_slot_unbound = 6
+  unary_info_apply_macro = 7
 
-define(`uuo_error_no_throw_tag',`
-        __(hlt #(hlt_code_unary_misc|(gprval($1)<<3)|(1<<8)))
-        ')
+/*
+ * Two-register errors
+ * ra in 6:2, rb in 11:7, 4 bits of info in 15:12
+ */
+uuo_format_binary = 2
+  binary_info_vector_bounds = 0
+  binary_info_array_bounds = 1
+  binary_info_integer_divide_by_zero = 2
+  binary_info_eep_unresolved = 3
+  binary_info_fpu_exception = 4
+  binary_info_array_rank = 5
+  binary_info_array_flags = 6
+  binary_info_two_registers = 7  // extra register pair for preceding uuo
 
-define(`uuo_tlb_too_small',`
-        __(hlt #(hlt_code_unary_misc|(gprval($1)<<3)|(2<<8)))
-        ')
+/*
+ * All type errors: "this register doesn't hold the expected type"
+ * reg in 6:2, continuable flag in 7, expected type code in 15:8
+ *
+ * The continuable flag means that the handler should attempt to make
+ * the error continuable (by directly updating the register with the
+ * user-supplied new value).
+ *
+ */
+uuo_format_wrong_type = 3
 
-define(`uuo_error_unbound',`
-        __(hlt #(hlt_code_unary_misc|(gprval($1)<<3)|(3<<8)))
-        ')
+// misc format
+.macro uuo_misc info
+        .if \info == 0
+        .error "uuo_misc bits cannot be all 0"
+        .endif
+        udf #((\info) << 2 | uuo_format_misc)
+.endm
 
-define(`uuo_error_reg_not_xtype',`
-        __(hlt #(hlt_code_unary_reg_not_xtype|(gprval($1)<<3)|($2<<8)))
-        ')
+.macro uuo_alloc
+        uuo_misc 1
+.endm
 
-define(`uuo_error_vector_bounds',`
-        __(hlt #(hlt_code_binary|(gprval($1)<<3)|(gprval($2)<<8)|(0<<13)))
-        ')
-        
+.macro uuo_gc_trap
+        uuo_misc 2
+.endm
+
+.macro uuo_debug_trap
+        uuo_misc 3
+.endm
+
+.macro uuo_interrupt_now
+        uuo_misc 4
+.endm
+
+.macro uuo_suspend_now
+        uuo_misc 5
+.endm
+
+.macro uuo_too_few_args
+        uuo_misc 6
+.endm
+
+.macro uuo_too_many_args
+        uuo_misc 7
+.endm
+
+.macro uuo_wrong_number_of_args
+        uuo_misc 8
+.endm
+
+// Only the control stack probes for overflow inline: the value/temp stacks
+// fault on guard pages.  (If we can use sigaltstack, we can use guard
+// pages on arm64, too.)
+// See handler in arm64-exceptions.c uuo_misc_cstack_overflow.
+.macro uuo_error_cstack_overflow
+        uuo_misc 9
+.endm
+
+// unary format
+.macro uuo_unary reg, info
+        udf # ((\info) << 7 | R\reg << 2 | uuo_format_unary)
+.endm
+
+.macro uuo_error_reg_not_callable reg
+        uuo_unary \reg, unary_info_not_callable
+.endm
+
+.macro uuo_error_no_throw_tag reg
+        uuo_unary \reg, unary_info_no_throw_tag
+.endm
+
+.macro uuo_error_unbound reg
+        uuo_unary \reg, unary_info_unbound
+.endm
+
+.macro uuo_error_udf reg
+        uuo_unary \reg, unary_info_udf
+.endm
+
+.macro uuo_error_udf_call reg
+        uuo_unary \reg, unary_info_udf_call
+.endm
+
+.macro uuo_error_tlb_too_small reg
+        uuo_unary \reg, unary_info_tlb_too_small
+.endm
+
+// This is a three-register error. Two extra registers must be
+// encoded in a companion uuo_extra_registers directly following
+// this one.
+.macro uuo_error_slot_unbound slotv
+        uuo_unary \slotv, unary_info_slot_unbound
+.endm
+
+.macro uuo_error_apply_macro reg
+        uuo_unary \reg, unary_info_apply_macro
+.endm
+
+// binary format
+.macro uuo_binary ra, rb, info=0
+        udf # ((\info) << 12 | (R\rb) << 7 | (R\ra) << 2 | uuo_format_binary)
+.endm
+
+.macro uuo_error_vector_bounds ra, rb
+        uuo_binary \ra, \rb, binary_info_vector_bounds
+.endm
+
+.macro uuo_error_array_bounds ra, rb
+        uuo_binary \ra, \rb, binary_info_array_bounds
+.endm
+
+.macro uuo_extra_registers ra, rb
+        uuo_binary \ra, \rb, binary_info_two_registers
+.endm
+
+// wrong_type format
+.macro uuo_wrong_type reg, code, cflag=0
+        udf # (\code << 8 | \cflag << 7 | R\reg << 2 | uuo_format_wrong_type)
+.endm
+
+// Keep these in sync with the values in arm64-arch.lisp.
+xtype_integer  = 0x18
+xtype_s64 = 0x28
+xtype_u64 = 0x38
+xtype_s32 = 0x48
+xtype_u32 = 0x58
+xtype_s16 = 0x68
+xtype_u16 = 0x78
+xtype_s8 = 0x88
+xtype_u8 = 0x98
+xtype_bit = 0xa8
+xtype_rational = 0xb8
+xtype_real = 0xc8
+xtype_number = 0xd8
+xtype_cons = 0xe8
+
+xtype_char_code = 0x10
+xtype_unsigned_byte_24 = 0x20
+xtype_array2d = 0x30
+xtype_array3d = 0x40
+xtype_null = 0x50
+
+.macro uuo_error_reg_not_lisptag reg, lisptag
+        uuo_wrong_type \reg, \lisptag, 0
+.endm
+
+.macro uuo_cerror_reg_not_lisptag reg, lisptag
+        uuo_wrong_type \reg, \lisptag, 1
+.endm
+
+.macro uuo_error_reg_not_fulltag reg, fulltag
+        uuo_wrong_type \reg, \fulltag, 0
+.endm
+
+.macro uuo_cerror_reg_not_fulltag reg, fulltag
+        uuo_wrong_type \reg, \fulltag, 1
+.endm
+
+.macro uuo_error_reg_not_xtype reg, xtype
+        uuo_wrong_type \reg, \xtype, 0
+.endm
+
+.macro uuo_cerror_reg_not_xtype reg, xtype
+        uuo_wrong_type \reg, \xtype, 1
+.endm

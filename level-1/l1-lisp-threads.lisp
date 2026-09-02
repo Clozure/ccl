@@ -618,7 +618,8 @@
                        (%%frame-backlink xcf)))
                    (%current-frame-ptr))
   #+arm-target (or (current-fake-stack-frame)
-                   (%current-frame-ptr)))
+                   (%current-frame-ptr))
+  #+arm64-target (or *fake-stack-frames* (%current-frame-ptr)))
 
 
 

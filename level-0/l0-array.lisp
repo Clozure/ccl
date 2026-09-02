@@ -170,7 +170,68 @@
     (signed-byte 64)
     (unsigned-byte 64)
     double-float))
-    
+
+)
+
+#+arm64-target
+(progn
+(defconstant arm64::*immheader-0-array-types*
+  ;; ivector-class-other-bit
+  #(unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    (complex double-float)
+    (signed-byte 16)
+    (unsigned-byte 16)
+    character
+    (signed-byte 8)
+    (unsigned-byte 8)
+    bit
+    ))
+
+(defconstant arm64::*immheader-1-array-types*
+  ;; ivector-class-32-bit
+  #(unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    character
+    (signed-byte 32)
+    (unsigned-byte 32)
+    single-float))
+
+(defconstant arm64::*immheader-2-array-types*
+  ;; ivector-class-64-bit
+  #(unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    unused
+    (complex single-float)
+    fixnum
+    (signed-byte 64)
+    (unsigned-byte 64)
+    double-float))
 )
 
 #+arm-target
@@ -221,9 +282,17 @@
       #+arm-target
       (svref arm::*immheader-array-types*
              (ash (the fixnum (- subtag arm::min-cl-ivector-subtag)) -3))
+      #+arm64-target
+      (let* ((class (logand subtag arm64::fulltagmask))
+             (idx (ash subtag (- arm64::ntagbits))))
+        (declare (fixnum class idx))
+        (cond ((= class arm64::ivector-class-64-bit)
+               (%svref arm64::*immheader-2-array-types* idx))
+              ((= class arm64::ivector-class-32-bit)
+               (%svref arm64::*immheader-1-array-types* idx))
+              (t
+               (%svref arm64::*immheader-0-array-types* idx))))
       )))
-
-
 
 (defun adjustable-array-p (array)
   "Return T if (ADJUST-ARRAY ARRAY...) would return an array identical
@@ -850,6 +919,38 @@ minimum number of elements to add if it must be extended."
     (declare (fixnum ivector-class element-bit-shift total-bits))
     (ash (the fixnum (+ 7 total-bits)) -3)))
 
+#+arm64-target
+(defun subtag-bytes (subtag element-count)
+  (declare (fixnum subtag element-count))
+  (unless (logbitp (the (mod 16) (logand subtag arm64::fulltagmask))
+                   (logior (ash 1 arm64::fulltag-immheader-0)
+                           (ash 1 arm64::fulltag-immheader-1)
+                           (ash 1 arm64::fulltag-immheader-2)))
+    (error "Not an ivector subtag: ~s" subtag))
+  (let* ((ivector-class (logand subtag arm64::fulltagmask))
+         (element-bit-shift
+           (if (= ivector-class arm64::ivector-class-32-bit)
+             5
+             (if (= ivector-class arm64::ivector-class-64-bit)
+               6
+               (if (= subtag arm64::subtag-bit-vector)
+                 0
+                 (if (= subtag arm64::subtag-complex-double-float-vector)
+                   (return-from subtag-bytes
+                     ;; There's a 64-bit pad at the beginning of the
+                     ;; vector.  Although it is true that
+                     ;; misc-byte-count leaves out the pad word,
+                     ;; %alloc-misc's dnode rounding will account for
+                     ;; it.  The fasl dumper/loader doesn't do any
+                     ;; such rounding.
+                     (+ 8 (ash element-count 4)))
+                   (if (>= subtag arm64::min-8-bit-ivector-subtag)
+                     3
+                     4))))))
+         (total-bits (ash element-count element-bit-shift)))
+    (declare (fixnum ivector-class element-bit-shift total-bits))
+    (ash (the fixnum (+ 7 total-bits)) -3)))
+
 (defun element-type-subtype (type)
   "Convert element type specifier to internal array subtype code"
   (ctype-subtype (specifier-type type)))
@@ -923,7 +1024,7 @@ minimum number of elements to add if it must be extended."
 (defun %misc-set (v i new)
   (%misc-set v i new))
 
-#-ppc-target
+#-(or ppc-target arm64-target)
 (defun %extend-vector (start oldv newsize)
   (declare (fixnum start))
   (let* ((typecode (typecode oldv))

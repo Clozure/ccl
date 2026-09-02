@@ -565,15 +565,15 @@
       (%atomic-incf-node 1 '*spin-lock-timeouts* target::symbol.vcell)
       (yield))))
 
-;;; Freeing a spinlock hands it off, so it must publish every store made
-;;; while the lock was held: on a weakly-ordered target the freeing store
-;;; needs RELEASE ordering.  32-bit ARM defines this as a lap function
-;;; (dmb + str, level-0/ARM/arm-misc.lisp); a plain store is correct on
-;;; TSO targets.  The declaim stays inside eval-when so no load-time
-;;; proclaim call reaches the boot image (proclaim is not yet defined there).
-#-arm-target
+;;; When unlocking a spin lock, the store needs release ordering on
+;;; targets with weakly-ordered memory models.  This is dmb + str on
+;;; both ARM and arm64: see level-0/ARM/arm-misc.lisp or
+;;; ARM64/arm64-misc.lisp for the respective %release-spin-lock LAP
+;;; functions.
+#-(or arm-target arm64-target)
 (progn
   (eval-when (:compile-toplevel :execute)
+    ;; stay inside eval-when: don't want load-time proclaim call in level-0
     (declaim (inline %release-spin-lock)))
   (defun %release-spin-lock (p)
     (setf (%get-natural p 0) 0)))

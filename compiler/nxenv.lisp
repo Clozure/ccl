@@ -393,7 +393,9 @@
      (i386-ff-call  0 :infer)
      ()
      (%double-float-negate  #.(logior operator-acode-subforms-mask operator-assignment-free-mask operator-single-valued-mask) double-float)
-     (%single-float-negate  #.(logior operator-acode-subforms-mask operator-assignment-free-mask operator-single-valued-mask) single-float) )))
+     (%single-float-negate  #.(logior operator-acode-subforms-mask operator-assignment-free-mask operator-single-valued-mask) single-float)
+     (aapcs64-ff-call 0 :infer)
+     )))
 
 (defmacro %nx1-operator (sym)
   (let ((op (assq sym *next-nx-operators*)))

@@ -1234,12 +1234,18 @@ free_tcr_extra_segment(TCR *tcr)
 
 #ifdef ARM
 extern int arm_architecture_version;
+#endif
 
+#if defined(ARM) || defined(ARM64)
 void
 init_arm_tcr_sptab(TCR *tcr)
 {
-  extern LispObj *sptab;
-  extern LispObj *sptab_end;
+#ifdef ARM64
+  /* arm64 sptab is the table itself (no pointer indirection) */
+  extern LispObj sptab[], sptab_end[];
+#else
+  extern LispObj *sptab, *sptab_end;
+#endif
   LispObj *p, *q;
 
   for (p=sptab,q = tcr->sptab;
@@ -1248,7 +1254,7 @@ init_arm_tcr_sptab(TCR *tcr)
     *q = *p;
   }
 }
-#endif       
+#endif
   
   
 
@@ -1278,8 +1284,10 @@ new_tcr(natural vstack_size, natural tstack_size)
   TCR *tcr = allocate_tcr();
 #endif
 
-#ifdef ARM
+#if defined(ARM) || defined(ARM64)
   init_arm_tcr_sptab(tcr);
+#endif
+#ifdef ARM
   tcr->architecture_version = (arm_architecture_version-ARM_ARCHITECTURE_v7) << fixnumshift;
 #endif
 #ifdef X86
@@ -1290,7 +1298,7 @@ new_tcr(natural vstack_size, natural tstack_size)
 #endif
 #endif
 
-#if (WORD_SIZE == 64)
+#if (WORD_SIZE == 64) && !defined(ARM64)
   tcr->single_float_convert.tag = subtag_single_float;
 #endif
   TCR_AUX(tcr)->suspend = new_semaphore(0);
@@ -1543,7 +1551,7 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
   UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
   TCR_AUX(tcr)->cs_area = a;
   a->owner = tcr;
-#ifdef ARM
+#if defined(ARM) || defined(ARM64)
   tcr->last_lisp_frame = (natural)(a->high);
 #endif
   TCR_AUX(tcr)->cs_limit = (LispObj)ptr_to_lispobj(a->softlimit);
@@ -1896,6 +1904,9 @@ get_tcr(Boolean create)
 #ifdef ARM
 #define NSAVEREGS 0
 #endif
+#ifdef ARM64
+#define NSAVEREGS 4
+#endif
     for (i = 0; i < NSAVEREGS; i++) {
       *(--current->save_vsp) = 0;
       current->vs_area->active -= node_size;
@@ -2066,7 +2077,7 @@ suspend_tcr(TCR *tcr)
 #else
 #ifdef DARWIN
 extern ExceptionInformation *
-create_thread_context_frame(mach_port_t, natural *, siginfo_t *, TCR*, native_thread_state_t *);
+create_thread_context_frame(mach_port_t, natural *, siginfo_t **, TCR*, native_thread_state_t *);
 
 Boolean mach_suspend_tcr(TCR *tcr)
 {
@@ -2239,11 +2250,17 @@ Boolean mach_resume_tcr(TCR *tcr)
   mcontext_t mc = UC_MCONTEXT(xp);
 #endif
 
+#ifdef ARM64
+  thread_set_state(thread,
+                   NATIVE_FLOAT_STATE_FLAVOR,
+                   (thread_state_t)&(mc->__ns),
+                   NATIVE_FLOAT_STATE_COUNT);
+#else
   thread_set_state(thread,
                    NATIVE_FLOAT_STATE_FLAVOR,
                    (thread_state_t)&(mc->__fs),
                    NATIVE_FLOAT_STATE_COUNT);
-
+#endif
   thread_set_state(thread,
                    NATIVE_THREAD_STATE_FLAVOR,
                    (thread_state_t)&(mc->__ss),

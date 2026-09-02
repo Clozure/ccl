@@ -17,8 +17,8 @@
     (let ((no (#/addButtonWithTitle: alert (ccl::%make-nsstring "No"))))
           (#/setKeyEquivalent: no (ccl::%make-nsstring "N"))
           (#/setKeyEquivalent: no (ccl::%make-nsstring "n"))
-          (#/setKeyEquivalentModifierMask: no #$NSCommandKeyMask))
-    (eql (#/runModal alert) #$NSAlertFirstButtonReturn)))
+          (#/setKeyEquivalentModifierMask: no +modifier-flag-command+))
+    (eql (#/runModal alert) +alert-first-button-return+)))
 
 (defvar *beepnsleep* t)
 
@@ -41,7 +41,7 @@
   (declare (ignore position))
   (gui::with-autorelease-pool 
     (let* ((panel (dcc (#/sharedColorPanel ns:ns-color-panel)))) ; find or create the NSColorPanel
-      (dcc (#/setPickerMode: ns:ns-color-panel #$NSWheelModeColorPanel))
+      (dcc (#/setPickerMode: ns:ns-color-panel 6 #|NSColorPanelModeWheel|#))
       (dcc (#/setTitle: panel (ccl::%make-nsstring prompt)))
       (dcc (#/addObserver:selector:name:object:                 ; observe yourself close but
        (dcc (#/defaultCenter ns:ns-notification-center))        ; sadly confound OK & CANCEL

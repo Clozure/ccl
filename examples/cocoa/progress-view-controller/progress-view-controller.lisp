@@ -1,5 +1,15 @@
 (require :cocoa)
 
+;;; Fixed ABI values for `static const' AppKit names that interface
+;;; translation cannot record as constants.
+(defconstant +progress-indicator-style-bar+ 0)      ; NSProgressIndicatorStyleBar
+(defconstant +progress-indicator-style-spinning+ 1) ; NSProgressIndicatorStyleSpinning
+(defconstant +control-state-value-on+ 1)            ; NSControlStateValueOn
+(defconstant +button-type-switch+ 3)                ; NSButtonTypeSwitch
+(defconstant +window-style-mask-titled+ 1)          ; NSWindowStyleMaskTitled
+(defconstant +window-style-mask-closable+ 2)        ; NSWindowStyleMaskClosable
+(defconstant +window-style-mask-miniaturizable+ 4)  ; NSWindowStyleMaskMiniaturizable
+
 (defclass progress-example-view (ns:ns-view)
   ((progress-indicator)
    (timer :initform +null-ptr+))
@@ -11,7 +21,7 @@
     (with-slots (progress-indicator) self
       (setf progress-indicator (make-instance 'ns:ns-progress-indicator
                                  :with-frame (ns:make-ns-rect 10 10 280 30)))
-      (setf (#/style progress-indicator) #$NSProgressIndicatorBarStyle)
+      (setf (#/style progress-indicator) +progress-indicator-style-bar+)
       (#/setIndeterminate: progress-indicator nil)
       (#/addSubview: self progress-indicator))
     (let ((start-button (make-instance 'ns:ns-button
@@ -33,11 +43,11 @@
             (#/title reset-button) #@"Reset"
             (#/action reset-button) (objc:@selector #/reset)
             (#/target reset-button) self
-            (#/buttonType indeterminate-checkbox) #$NSSwitchButton
+            (#/buttonType indeterminate-checkbox) +button-type-switch+
             (#/title indeterminate-checkbox) #@"use indeterminate progress indicator"
             (#/action indeterminate-checkbox) (objc:@selector #/toggleIndeterminate:)
             (#/target indeterminate-checkbox) self
-            (#/buttonType spinning-checkbox) #$NSSwitchButton
+            (#/buttonType spinning-checkbox) +button-type-switch+
             (#/title spinning-checkbox) #@"use spinning progress indicator"
             (#/action spinning-checkbox) (objc:@selector #/toggleSpinning:)
             (#/target spinning-checkbox) self)
@@ -84,14 +94,14 @@
 (objc:defmethod (#/toggleIndeterminate: :void) ((self progress-example-view) sender)
   (with-slots (progress-indicator) self
     (#/reset self)
-    (#/setIndeterminate: progress-indicator (eql (#/state sender) #$NSOnState))))
+    (#/setIndeterminate: progress-indicator (eql (#/state sender) +control-state-value-on+))))
 
 (objc:defmethod (#/toggleSpinning: :void) ((self progress-example-view) sender)
   (with-slots (progress-indicator) self
     (setf (#/style progress-indicator)
-          (if (eql (#/state sender) #$NSOnState)
-            #$NSProgressIndicatorSpinningStyle
-            #$NSProgressIndicatorBarStyle))))
+          (if (eql (#/state sender) +control-state-value-on+)
+            +progress-indicator-style-spinning+
+            +progress-indicator-style-bar+))))
 
 (defun show-progress-window ()
   (ccl::with-autorelease-pool
@@ -105,9 +115,9 @@
 (defun make-window (title)
   (let* ((window (make-instance 'ns:ns-window
                    :with-content-rect (ns:make-ns-rect 0 0 300 200)
-                   :style-mask (logior #$NSTitledWindowMask
-                                       #$NSClosableWindowMask
-                                       #$NSMiniaturizableWindowMask)
+                   :style-mask (logior +window-style-mask-titled+
+                                       +window-style-mask-closable+
+                                       +window-style-mask-miniaturizable+)
                    :backing #$NSBackingStoreBuffered
                    :defer t)))
     (#/setTitle: window (ccl::%make-nsstring title))

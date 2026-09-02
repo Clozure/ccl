@@ -69,7 +69,13 @@
     armenv
     arm-asm
     arm-lap
-))
+    ))
+
+(defparameter *arm64-compiler-modules*
+  '(arm64-arch
+    arm64env
+    arm64-asm
+    arm64-lap))
 
 (defparameter *ppc32-compiler-backend-modules*
   '(ppc32-backend ppc32-vinsns))
@@ -94,19 +100,20 @@
 (defparameter *arm-compiler-backend-modules*
   '(arm-backend arm-vinsns arm2))
 
-
-
+(defparameter *arm64-compiler-backend-modules*
+  '(arm64-backend arm64-vinsns arm642))
 
 (defparameter *ppc-xload-modules* '(xppcfasload xfasload heap-image ))
 (defparameter *x8632-xload-modules* '(xx8632fasload xfasload heap-image ))
 (defparameter *x8664-xload-modules* '(xx8664fasload xfasload heap-image ))
 (defparameter *arm-xload-modules* '(xarmfasload xfasload heap-image ))
-
+(defparameter *arm64-xload-modules* '(xarm64fasload xfasload heap-image))
 
 ;;; Not too OS-specific.
 (defparameter *ppc-xdev-modules* '(ppc-lapmacros ))
 (defparameter *x86-xdev-modules* '(x86-lapmacros ))
 (defparameter *arm-xdev-modules* '(arm-lapmacros ))
+(defparameter *arm64-xdev-modules* '(arm64-lapmacros))
 
 (defmacro with-global-optimization-settings ((&key speed
                                                    space
@@ -134,15 +141,18 @@
   (case target
     ((:ppc32 :ppc64) *ppc-xdev-modules*)
     ((:x8632 :x8664) *x86-xdev-modules*)
-    (:arm *arm-xdev-modules*)))
+    (:arm *arm-xdev-modules*)
+    (:arm64 *arm64-xdev-modules*)))
 
 (defun target-xload-modules (&optional (target
-					(backend-target-arch-name *host-backend*)))
+					(backend-target-arch-name
+                                         *host-backend*)))
   (case target
     ((:ppc32 :ppc64) *ppc-xload-modules*)
     (:x8632 *x8632-xload-modules*)
     (:x8664 *x8664-xload-modules*)
-    (:arm *arm-xload-modules*)))
+    (:arm *arm-xload-modules*)
+    (:arm64 *arm64-xload-modules*)))
 
 
 
@@ -161,25 +171,32 @@
 (defun target-env-modules (&optional (target
 				      (backend-name *host-backend*)))
   (append *env-modules*
-          (list
-           (ecase target
-             (:linuxppc32 'ffi-linuxppc32)
-             (:darwinppc32 'ffi-darwinppc32)
-             (:darwinppc64 'ffi-darwinppc64)
-             (:linuxppc64 'ffi-linuxppc64)
-	     (:darwinx8632 'ffi-darwinx8632)
-             (:linuxx8664 'ffi-linuxx8664)
-             (:darwinx8664 'ffi-darwinx8664)
-             (:freebsdx8664 'ffi-freebsdx8664)
-             (:solarisx8664 'ffi-solarisx8664)
-             (:win64 'ffi-win64)
-             (:linuxx8632 'ffi-linuxx8632)
-             (:win32 'ffi-win32)
-             (:solarisx8632 'ffi-solarisx8632)
-             (:freebsdx8632 'ffi-freebsdx8632)
-             (:linuxarm 'ffi-linuxarm)
-             (:androidarm 'ffi-androidarm)
-             (:darwinarm 'ffi-darwinarm)))))
+          (let* ((ffi (ecase target
+                        (:linuxppc32 'ffi-linuxppc32)
+                        (:darwinppc32 'ffi-darwinppc32)
+                        (:darwinppc64 'ffi-darwinppc64)
+                        (:linuxppc64 'ffi-linuxppc64)
+                        (:darwinx8632 'ffi-darwinx8632)
+                        (:linuxx8664 'ffi-linuxx8664)
+                        (:darwinx8664 'ffi-darwinx8664)
+                        (:freebsdx8664 'ffi-freebsdx8664)
+                        (:solarisx8664 'ffi-solarisx8664)
+                        (:win64 'ffi-win64)
+                        (:linuxx8632 'ffi-linuxx8632)
+                        (:win32 'ffi-win32)
+                        (:solarisx8632 'ffi-solarisx8632)
+                        (:freebsdx8632 'ffi-freebsdx8632)
+                        (:linuxarm 'ffi-linuxarm)
+                        (:androidarm 'ffi-androidarm)
+                        (:darwinarm 'ffi-darwinarm)
+                        (:darwinarm64 'ffi-darwinarm64)
+                        (:linuxarm64 'ffi-linuxarm64))))
+            ;; Both arm64 targets delegate to the shared AAPCS64
+            ;; implementation in ffi-arm64; build it alongside the OS
+            ;; module.
+            (if (memq target '(:darwinarm64 :linuxarm64))
+              (list 'ffi-arm64 ffi)
+              (list ffi)))))
 
 
 (defun target-compiler-modules (&optional (target
@@ -199,7 +216,9 @@
                     *x8664-compiler-backend-modules*
                     *x86-compiler-backend-modules*))
     (:arm (append *arm-compiler-modules*
-                  *arm-compiler-backend-modules*))))
+                  *arm-compiler-backend-modules*))
+    (:arm64 (append *arm64-compiler-modules*
+                    *arm64-compiler-backend-modules*))))
 
 (defparameter *other-lib-modules*
   '(streams pathnames backtrace
@@ -216,7 +235,8 @@
 	  (case target
 	    ((:ppc32 :ppc64) '(ppc-backtrace ppc-disassemble))
             ((:x8632 :x8664) '(x86-backtrace x86-disassemble x86-watch))
-            (:arm '(arm-backtrace arm-disassemble)))))
+            (:arm '(arm-backtrace arm-disassemble))
+            (:arm64 '(arm64-backtrace arm64-disassemble)))))
 	  
 
 (defun target-lib-modules (&optional (backend-name
@@ -280,7 +300,10 @@
                x86-threads-utils x86-callback-support))
             ((:linuxarm :darwinarm :androidarm)
              '(arm-error-signal arm-trap-support
-               arm-threads-utils arm-callback-support)))))
+               arm-threads-utils arm-callback-support))
+            ((:darwinarm64 :linuxarm64)
+             '(arm64-error-signal arm64-trap-support
+               arm64-threads-utils arm64-callback-support)))))
 
 
 ;;; Needed to cross-dump an image
@@ -487,7 +510,9 @@
     (:solarisx8632 "sx86-boot32")
     (:freebsdx8632 "fx86-boot32")
     (:linuxarm "arm-boot")
-    (:androidarm "aarm-boot")))
+    (:androidarm "aarm-boot")
+    (:darwinarm64 "arm64-boot.image")
+    (:linuxarm64 "arm64-boot")))
 
 (defun standard-kernel-name (&optional (target (backend-name *host-backend*)))
   (ecase target
@@ -507,7 +532,9 @@
     (:freebsdx8632 "fx86cl")
     (:linuxarm "armcl")
     (:darwinarm "darmcl")
-    (:androidarm "aarmcl")))
+    (:androidarm "aarmcl")
+    (:darwinarm64 "darm64cl")
+    (:linuxarm64 "arm64cl")))
 
 (defun standard-image-name (&optional (target (backend-name *host-backend*)))
   (concatenate 'string (pathname-name (standard-kernel-name target)) ".image"))
@@ -530,7 +557,9 @@
     (:freebsdx8632 "freebsdx8632")
     (:linuxarm "linuxarm")
     (:darwinarm "darwinarm")
-    (:androidarm "androidarm")))
+    (:androidarm "androidarm")
+    (:darwinarm64 "darwinarm64")
+    (:linuxarm64 "linuxarm64")))
 
 ;;; If we distribute (e.g.) 32- and 64-bit versions for the same
 ;;; machine and OS in the same svn directory, return the name of the
@@ -659,6 +688,9 @@ the lisp and run REBUILD-CCL again.")
                                            :type (pathname-type *.fasl-pathname*))
                             "ccl:**;")))
                  (delete-file f)))
+             #+darwinarm64-target
+             (when (fboundp '%enable-darwinarm64-map-jit-fasls)
+               (%enable-darwinarm64-map-jit-fasls))
              (with-global-optimization-settings ()
                (compile-ccl (not (null force)))
                (if force (xload-level-0 :force) (xload-level-0)))
@@ -700,12 +732,12 @@ the lisp and run REBUILD-CCL again.")
                (let* ((old-write-date
                        (or (ignore-errors (file-write-date (standard-image-name)))
                            0)))
-                 (with-input-from-string (cmd (format nil
-                                                "(save-application ~s)"
-                                                (standard-image-name)))
-                   (with-output-to-string (output)
-                     (multiple-value-bind (status exit-code)
-                         (external-process-status
+                 (with-output-to-string (output)
+                   (multiple-value-bind (status exit-code)
+                       (external-process-status
+                        (with-input-from-string
+                            (cmd (format nil "(save-application ~s)"
+                                         (standard-image-name)))
                           (run-program
                            (format nil "./~a" (standard-kernel-name))
                            (list* "--image-name" (standard-boot-image-name)
@@ -714,21 +746,21 @@ the lisp and run REBUILD-CCL again.")
                                   reload-arguments)
                            :input cmd
                            :output output
-                           :error output))
-                       (if (and (eq status :exited)
-                                (eql exit-code 0))
-                         (let* ((write-date (or (ignore-errors (file-write-date (standard-image-name))) 0)))
-                           (unless (and write-date (> write-date old-write-date))
-                             (error "The heap image ~a does not appear to have been written correctly.  This may indicate a problem with the bootstapping image." (standard-image-name)))
-                           (format t "~&;Wrote heap image: ~s"
-                                   (truename (format nil "ccl:~a"
-                                                     (standard-image-name))))
-                           (when verbose
-                             (format t "~&;Reload heap image output:~%~a"
-                                     (get-output-stream-string output))))
-                         (error "Errors (~s ~s) reloading boot image:~&~a"
-                                status exit-code
-                                (get-output-stream-string output))))))))
+                           :error output)))
+                     (if (and (eq status :exited)
+                              (eql exit-code 0))
+                       (let* ((write-date (or (ignore-errors (file-write-date (standard-image-name))) 0)))
+                         (unless (and write-date (> write-date old-write-date))
+                           (error "The heap image ~a does not appear to have been written correctly.  This may indicate a problem with the bootstapping image." (standard-image-name)))
+                         (format t "~&;Wrote heap image: ~s"
+                                 (truename (format nil "ccl:~a"
+                                                   (standard-image-name))))
+                         (when verbose
+                           (format t "~&;Reload heap image output:~%~a"
+                                   (get-output-stream-string output))))
+                       (error "Errors (~s ~s) reloading boot image:~&~a"
+                              status exit-code
+                              (get-output-stream-string output)))))))
              (when exit
                (quit)))
         (setf (current-directory) cd)))))

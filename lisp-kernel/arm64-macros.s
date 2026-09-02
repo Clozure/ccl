@@ -1,608 +1,280 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#include "arm64-constants.h"
+#include "arm64-uuo.s"
+#include "arm64-asm.h"
+#include "arm64-lisp-globals.s"
+
+.macro note_function_start name
+#if !defined(__APPLE__)
+        /* mark the symbol as a function for ELF platforms */
+        .type \name, %function
+#endif
+.endm
+
+.macro note_function_end name
+#if !defined(__APPLE__)
+        /* record function size for ELF platforms */
+        .size \name, . - \name
+#endif
+.endm
+
+.macro spentry name
+        .text
+        .p2align 2
+        .global _SP\name
+        note_function_start _SP\name
+_SP\name:
+.endm
+
+.macro endsp name
+        note_function_end _SP\name
+.endm
+
+/* Load the C global lisp_nil into dest (then usually ldr dest,[dest]).
+ * Darwin/arm64 forbids text relocations from `ldr Rd, =sym`; use ADRP. */
+.macro load_addr_of_lisp_nil dest
+#if defined(__APPLE__)
+        adrp    \dest, C(lisp_nil)@PAGE
+        add     \dest, \dest, C(lisp_nil)@PAGEOFF
+#else
+        ldr     \dest, =C(lisp_nil)
+#endif
+.endm
+
+.macro clear_allocptr_tag
+        bic allocptr, allocptr, #fulltagmask
+.endm
+
+.macro Cons dest, car, cdr
+        sub allocptr, allocptr, #(cons.size - fulltag_cons)
+        cmp allocptr, allocbase
+        b.hi .Linit\@
+        uuo_alloc
+.Linit\@:
+        stur \cdr, [allocptr, #cons.cdr]
+        stur \car, [allocptr, #cons.car]
+        mov \dest, allocptr
+        clear_allocptr_tag
+.endm
+
+// dest: a node register for the newly allocated object
+// header: an unboxed register with the desired header
+// size: an unboxed register with desired size in bytes
+.macro Misc_Alloc dest, header, size
+        sub \size, \size, #fulltag_misc
+        sub allocptr, allocptr, \size
+        cmp allocptr, allocbase
+        b.hi .Linit\@
+        uuo_alloc
+.Linit\@:
+        stur \header, [allocptr, #misc_header_offset]
+        mov \dest, allocptr
+        clear_allocptr_tag
+.endm
+
+.macro Misc_Alloc_Fixed dest, header, sizeconst
+        sub allocptr, allocptr, #(\sizeconst - fulltag_misc)
+        cmp allocptr, allocbase
+        b.hi .Linit\@
+        uuo_alloc
+.Linit\@:
+        stur \header, [allocptr, #misc_header_offset]
+        mov \dest, allocptr
+        clear_allocptr_tag
+.endm
+
 /*
- * Copyright 2012 Clozure Associates
+ * Round src (a register) + extra (a constant expression) up to the
+ * nearest dnode boundary.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * dest = (src + add + dnode_size - 1) & ~(dnode_size - 1)
  */
-define(`gprval',`substr($1,1)')
-define(`gpr32',``w'gprval($1)')
-define(`gpr64',``x'gprval($1)')                        
+.macro dnode_align dest, src, extra=0
+        add \dest, \src, #((\extra) + (dnode_size - 1))
+        and \dest, \dest, #~(dnode_size - 1)
+.endm
 
-/* dnode_align(dest,src,delta) */
-        define(`dnode_align',`
-        __(add $1,$2,#$3+(dnode_size-1))
-        __(bic $1,$1,#((1<<dnode_align_bits)-1))
-')
-
-define(`make_header',`
-        __(mov $1,#($3<<tag_shift))
-        __(add $1,$1,#$2)
-        ')
-        
-/* Load a 16-bit constant into $1 */
-define(`movc16',`
-        __(mov $1,#$2)
-        ')
-
-define(`_clrex',`
-        __(clrex)
-        ')        
-
-define(`extract_tag',`
-        __(lsr $1,$2,#tag_shift)
-        ')
-
-/* Set $1 to $2, with bit 55 sign-sextended into bits 56-63.  If
-   $2 is a fixnum, $1 and $2 will be =. */        
-define(`sign_extend_value',`
-        __(sbfx $2,$1,#0,#56)
-        ')
-define(`extract_signed_byte',`
-        __(sbfx $1,$2,#0,#$3)
-        ')
-
-define(`extract_unsigned_byte',`
-        __(ubfx $1,$2,$0,#$3)
-        ')        
-                
-
-define(`clear_tag',`
-        __(ubfx $2,$1,#0,#56)
-        ')
-              
-        
-        
-        
-/* Set $2 to 0 iff $1 is a fixnum, to an arbitrary bit pattern otherwise. */
-define(`test_fixnum',`
-        __(sign_extend_value($2,$1))
-        __(eor $2,$1,$2)
-        ')
-        
-                        
-define(`branch_if_not_fixnum',`
-        __(test_fixnum($3,$1))
-        __(cbnz $3,$2)
-        ')
-
-define(`branch_if_fixnum',`
-        __(test_fixnum($3,$1))
-        __(cbz $3,$2)
-        ')
-
-define(`branch_if_list',`
-        __(clz $3,$1)
-        __(sub $3,$3,#list_leading_zero_bits)
-        __(cbz $3,$2)
-        ')
-
-define(`branch_if_not_list',`
-        __(clz $3,$1)
-        __(sub $3,$3,#list_leading_zero_bits)
-        __(cbz $3,$2)
-        ')
-                
-                
-define(`branch_if_negative',`
-        __(tbnz $1,#63,$2)
-        ')
-
-define(`branch_if_positive',`
-        __(tbz $1,#63,$2)
-        ')
-        
-define(`lisp_boolean',`
-        __(csel $1,rt,rnil,$2)
-        ')
-                
-define(`test_two_fixnums',`
-        __(test_fixnum($3,$1))
-        __(test_fixnum($4,$2))
-        __(orr $3,$3,$4)
-        ')
-        	
-
-define(`extract_header',`
-	__(ldr $1,[$2,#misc_header_offset])
-	')
-
-
-define(`unbox_character',`
-        __(clear_tag($1,$2))
-        ')
-                
-
-define(`push1',`
-        __(str $1,[$2,#-node_size]!)
-	')
-	
-define(`pop1',`
-        __(ldr $1,[$2],#node_size)
-	')
-	
-define(`vpush1',`
-	__(push1($1,vsp))
-	')
-	
-define(`vpop1',`
-	__(pop1($1,vsp))
-	')
-	
-		
-define(`unlink',`
-	__(ldr($1,0($1)))
- ')
-
-	
-define(`set_nargs',`
-	__(mov nargs,#($1))
-	')
-	
-
-	
-
-define(`vref32',`
-        __(ldr gpr32($1),[$2,#$2<<2])
-	')
-        
-	
-define(`vrefr',`
-        __(vref32($1,$2,$3))
-	')
-
-
-        
-                	
-define(`getvheader',`
-	__(ldr $1,[$2,#vector.header])
-	')
-	
-	
-	/* "Length" is fixnum element count */
-define(`header_length',`
-        __(ubfx $1,$2,#0,#56)
-        ')
-
-define(`header_size',`
-        __(header_length($1,$2))
-        ')
-        
-
-define(`vector_length',`
-	__(getvheader($3,$2))
-	__(header_length($1,$3))
-	')
-
-	
-define(`ref_global',`
-        __(mov $1,#lisp_globals.$2)
-	__(ldr $1,[rnil,$1])
-')
-
-
-define(`ref_nrs_value',`
-	__(ldr $1,[rnil,#((nrs.$2)+(symbol.vcell))])
-')
-
-define(`ref_nrs_function',`
-	__(ldr $1,[rnil,#((nrs.$2)+(symbol.fcell))])
-')
-        
-define(`ref_nrs_symbol',`
-        __(add $1,rnil,#$2)
-        ')
-	
-
-
-	/* vpop argregs - nargs is known to be non-zero */
-define(`vpop_argregs_nz',`
-        new_macro_labels()
-        __(cmp nargs,#2)
-        __(vpop1(arg_z))
-        __(blo macro_label(done))
-        __(vpop1(arg_y))
-        __(beq macro_label(done))
-        __(vpop1(arg_x))
-macro_label(done):              
-        ')
-
-define(`vpop_argregs',`
-        new_macro_labels()
-        __(cbz nargs,macro_label(done))
-        __(vpop_argregs_nz())
-macro_label(done):      
-        ')
-        
-define(`vpush_argregs_nz',`
-        new_macro_labels()
-        __(cmp nargs,#2)
-        __(bls macro_label(notx))
-        __(vpush1(arg_x))
-macro_label(notx):      
-        __(bne macro_label(justz))
-        __(vpush1(arg_y))
-macro_label(justz):
-        __(vpush1(arg_z))
-        ')
-        
-define(`vpush_argregs',`
-	new_macro_labels()
-        __(cbz nargs,macro_label(done))
-        __(vpush_argregs_nz())
-macro_label(done):
-')
-
-define(`vpush_all_argregs',`
-        __(vpush1(arg_x))
-        __(vpush1(arg_y))
-        __(vpush1(arg_z))
-        ')
-
-define(`vpop_all_argregs',`
-        __(vpop1(arg_z))
-        __(vpop1(arg_y))
-        __(vpop1(arg_x))
-        ')
-                        
-                
-
-/* $1 = value for lisp_frame.savevsp */                
-define(`build_lisp_frame',`
-        __(stp ifelse($1,`',vsp,$1),lr,[sp,#-(2*node_size)]!)
-')
-
-define(`restore_lisp_frame',`
-        __(ldp vsp,lr,[sp],#2*node_size)
-        ')
-
-define(`return_lisp_frame',`
-        __(restore_lisp_frame())
-        __(ret)
-        ')
-        
-define(`discard_lisp_frame',`
-	__(add sp,sp,#lisp_frame.size)
-	')
-	
-	
-define(`_car',`
-        __(ldr $1,[$2,#cons.car])
-')
-	
-define(`_cdr',`
-        __(ldr $1,[$2,#cons.cdr])
-	')
-	
-define(`_rplaca',`
-        __(str $2,[$1,#cons.car])
-	')
-	
-define(`_rplacd',`
-        __(str $2,[$1,#cons.cdr])
-	')
-
-
-
-define(`trap_unless_list',`
-        new_macro_labels()
-        __(clz $2,$1)
-        __(cmp $2,#list_leading_zero_bits)
-        __(beq local_label(ok))
-        __(uuo_error_reg_not_lisptag($1,tag_list))
-')
-
-define(`trap_unless_fixnum',`
-        __(new_macro_labels())
-        __(branch_if_fixnum($1,macro_label(ok),$2))
-        __(uuo_error_reg_not_lisptag($1,tag_fixnum))
-macro_label(ok):        
-        ')
-                
-        
-/* "jump" to the code-vector of the function in nfn. */
-define(`jump_nfn',`
-        __(br nfn)
-')
-
-/* "call the  function in nfn. */
-define(`call_nfn',`
-        __(blr nfn)
-')
-	
-
-/* "jump" to the function in fnames function cell. */
-define(`jump_fname',`
-	__(ldr nfn,[fname,#symbol.fcell])
-	__(jump_nfn())
-')
-
-/* call the function in fnames function cell. */
-define(`call_fname',`
-	__(ldr nfn,[fname,#symbol.fcell])
-	__(call_nfn())
-')
-
-define(`funcall_nfn',`
-        new_macro_labels()
-        __(extract_tag(imm0,nfn))
-        __(cmp imm0,#tag_function)
-        __(beq local_label(go))
-        __(cmp imm0,#tag_symbol)
-        __(beq macro_label(symbol))
-        __(uuo_error_not_callable(nfn))
-macro_label(symbol):            
-        __(mov fname,nfn)
-        __(ldr nfn,[fname,#symbol.fcell])
-macro_label(go):      
-        __(jump_nfn())
-
-')
-
-/* Save the non-volatile FPRs (d8-d15) in a stack-allocated vector.
-*/        
-   
-define(`push_foreign_fprs',`
-        __(make_header($1,9,double_float_vector_header))
-        __(stp $1,xzr,[sp,#-10<<3]!)
-        __(stp d8,d9,[sp,#16])
-        __(stp d10,d11,[sp,#32])
-        __(stp d12,d14,[sp,#48])
-        __(stp d14,d15,[sp,#64])
-')
-
-/* Save the lisp non-volatile FPRs. These are exactly the same as the foreign
-   FPRs. */
-define(`push_lisp_fprs',`
-        __(make_header($1,9,double_float_vector_header))
-        __(stp $1,xzr,[sp,#-10<<3]!)
-        __(stp d8,d9,[sp,#16])
-        __(stp d10,d11,[sp,#32])
-        __(stp d12,d14,[sp,#48])
-        __(stp d14,d15,[sp,#64])
-')
-        
-/* Pop the non-volatile FPRs (d8-d15) from the stack-consed vector
-   on top of the stack and discard the vector. */
-define(`pop_foreign_fprs',`
-        __(ldp d8,d9,[sp,#16])
-        __(ldp d10,d11,[sp,#32])
-        __(ldp d12,d14,[sp,#48])
-        __(ldp d14,d15,[sp,#64])
-        __(add sp,sp,#10<<3)
-')
-
-/* Pop the lisp non-volatile FPRs */        
-define(`pop_lisp_fprs',`
-        __(ldp d8,d9,[sp,#16])
-        __(ldp d10,d11,[sp,#32])
-        __(ldp d12,d14,[sp,#48])
-        __(ldp d14,d15,[sp,#64])
-        __(add sp,sp,#10<<3)
-')
-
-/* Reload the non-volatile lisp FPRs (d8-d15) from the stack-consed vector
-   on top of the stack, leaving the vector in place.   */
-define(`restore_lisp_fprs',`
-        __(ldp d8,d9,[sp,#16])
-        __(ldp d10,d11,[sp,#32])
-        __(ldp d12,d14,[sp,#48])
-        __(ldp d14,d15,[sp,#64])
-')                
-
-/* discard the stack-consed vector which contains a set of 8 non-volatile
-   FPRs. */
-define(`discard_lisp_fprs',`
-        __(add sp,sp,#10*8)
-')                        
-        
-define(`mkcatch',`
-        new_macro_labels()
-        __(push_lisp_fprs(imm0))
-	__(build_lisp_frame())
-        __(make_header(imm1,catch_frame.element_count,catch_frame_header))
-        __(mov imm2,#catch_frame.element_count<<word_shift)
-        __(dnode_align(imm2,imm2,node_size))
-        __(stack_allocate_zeroed_vector(imm0,imm1,imm2,#tag_catch_frame))
-        __(ldr temp1,[rcontext,#tcr.last_lisp_frame])
-	__(ldr imm1,[rcontext,#tcr.catch_top])
-        /* imm2 is mvflag */
-        /* arg_z is tag */
-        __(ldr arg_x,[rcontext,#tcr.db_link])
-        __(ldr temp0,[rcontext,#tcr.xframe])
-        __(str arg_z,[imm0,#catch_frame.catch_tag])
-        __(str imm1,[imm0,#catch_frame.link])
-        __(str imm2,[imm0,#catch_frame.mvflag])
-        __(str arg_x,[imm0,#catch_frame.db_link])
-        __(str temp0,[imm0,#catch_frame.xframe])
-        __(stp save0,save1,[imm0,#catch_frame.save0])
-        __(stp save2,save3,[sp,#catch_frame.save2])
-        __(stp save4,save5,[sp,#catch_frame.save4])
-        __(stp save6,save7,[sp,#catch_frame/save6])
-        __(str imm0,[rcontext,#tcr.catch_top])
-        __(add lr,lr,#4)
-')	
-
-
-
-
-define(`stack_align',`((($1)+STACK_ALIGN_MASK)&~STACK_ALIGN_MASK)')
-
-define(`clear_alloc_tag',`
-        __(bic allocptr,allocptr,#dnode_mask)
-')
-
-define(`clear_header_element_count',`
-        __(ubfm $1,$2,#56,#63)
-        ')
-
-        
-        
-define(`Cons',`
-       	new_macro_labels()
-        __(sub allocptr,allocptr,#cons.size-node_size)
-        __(cmp allocptr,allocbase)
-        __(bhi macro_label(ok))
-        __(uuo_alloc_trap())
-macro_label(ok):                
-        __(str $3,[allocptr,#cons.cdr])
-        __(str $2,[allocptr,#cons.car])
-        __(orr $1,allocptr,#tag_cons<<tag_shift)
-	__(clear_alloc_tag())
-')
-
-
-/* This is probably only used once or twice in the entire kernel, but */
-/* I wanted a place to describe the constraints on the mechanism. */
-
-/* Those constaints are (not surprisingly) similar to those which apply */
-/* to cons cells, except for the fact that the header (and any length */
-/* field that might describe large arrays) has to have been stored in */
-/* the object if the trap has succeeded on entry to the GC.  It follows */
-/* that storing the register containing the header must immediately */
-/* follow the allocation trap (and an auxiliary length register must */
-/* be stored immediately after the header.)  Successfully falling */
-/* through the trap must emulate any header initialization: it would */
-/* be a bad idea to have allocptr pointing to a zero header ... */
-
-
-
-/* Parameters: 
-
- $1 = dest reg 
- $2 = header
- $3 = register containing size in bytes.  (We're going to subtract 
- node_size from this; do it in the macro body, rather than force the
- (1 ?) caller to do it. 
- $4 = tag byte
+/*
+ * Temp-stack (tsp) frame allocation.  Always use these macros to
+ * create tsp frames.
+ *
+ * A tsp frame is [backlink][type][data...]; the tstack grows down, so
+ * tsp points at the backlink (lowest address of the frame) and the
+ * data area begins at tsp+tsp_frame.fixed_overhead.
+ *
+ * When the type field is non-zero, that means that the frame contains
+ * raw, unboxed data.  The gc will skip over that data.  When the type
+ * field is 0, the contents of the frame are treated as nodes that the
+ * gc will scan.
+ *
+ * Because the gc walks the temp stack (see mark_tstack_area), it's
+ * essential for the tsp to point to a valid frame at all times: it
+ * can't ever appear half-built.
+ *
+ * We maintain that invariant in two ways.
+ *
+ *   For a fixed-size frame, where the size is specified with an
+ *   immediate value, a single pre-indexed stp writes the backlink and
+ *   a non-zero type and decrements tsp in one instruction -- there is
+ *   no instant where tsp points at an un-formed frame.  (In case you
+ *   were wondering, the transfer register and the base+writeback
+ *   register must differ: stp tsp,tsp,[tsp,...]! is CONSTRAINED
+ *   UNPREDICTABLE.  This is why the old tsp is saved in \tmp first.)
+ *
+ *   For a variable-size frame, where the size is specified with a
+ *   register, we build the whole frame below the still-live tsp
+ *   (invisible to the gc), then make it visible with a single mov
+ *   tsp, scratch.  A GC on either side of that mov sees a complete
+ *   frame; nothing is ever half-published.
+ *
+ * When initializing the type field of a tsp frame, we will sometimes
+ * use the old tsp as a handy non-zero value to mark it as a raw
+ * frame.  There's nothing otherwise special about it.
  */
 
+/*
+ * Allocate a fixed-size tsp frame.  nbytes is a constant specifying
+ * how large the data area in the frame should be, and tmp is a
+ * register to hold a copy of the tsp.  Note that the whole frame
+ * (nbytes + fixed_overhead) has to fit into the pre-index imm range
+ * (<= 504; in other words, nbytes must be <= 488).
+ */
+.macro TSP_Alloc_Fixed_Unboxed nbytes, tmp
+        mov \tmp, tsp
+        // tsp_frame.backlink = tsp
+        // tsp_frame.type = tsp (non-zero value to mark frame as raw)
+        stp \tmp, \tmp, [tsp, #-(\nbytes + tsp_frame.fixed_overhead)]!
+.endm
 
-define(`Misc_Alloc',`
-        new_macro_labels()
-	__(sub $3,$3,#node_size)
-	__(sub allocptr,allocptr,$3)
-        __(cmp allocptr,allocbase)
-        __(bhi macro_label(ok))
-        __(uuo_alloc_trap())
-macro_label(ok):                
-	__(str $2,[allocptr,#misc_header_offset])
-        __(orr $1,allocptr,$4,lsl #tag_shift)
-	__(clear_alloc_tag())
-')
+/*
+ * Mark the current (topmost) tsp frame as boxed, which indicates to
+ * the gc that it should scan the contents of the frame.  Frames are
+ * born raw via the allocators above, so there's no
+ * Set_TSP_Frame_Unboxed counterpart.
+ */
+.macro Set_TSP_Frame_Boxed
+        str xzr, [tsp, #tsp_frame.type] // zero means contains nodes
+.endm
 
-/*  Parameters $1, $2, $4 as above; $3 = physical size constant. */
-define(`Misc_Alloc_Fixed',`
-        new_macro_labels()
-        __(sub allocptr,allocptr,#$3-node_size)
-        __(cmp allocptr,allocbase)
-        __(bhi macro_label(ok))
-        __(uuo_alloc_trap())
-macro_label(ok):                
-	__(str $2,[allocptr,#misc_header_offset])
-        __(orr $1,allocptr,$4,lsl #tag_shift)
-	__(clear_alloc_tag())
-')
+/*
+ * Allocate a small frame for nodes.  nbytes must be a multiple of
+ * node_size; tmp is a scratch register (it holds the old tsp during the
+ * push, then serves as the zeroing cursor).
+ *
+ * This works by allocating a raw frame, zeroing it, and then setting
+ * the type field of the frame to 0 (nodes).
+ */
+#define TSP_FIXED_BOXED_MAX_NODES 8
+.macro TSP_Alloc_Fixed_Boxed nbytes, tmp
+        .if ((\nbytes) % node_size) != 0
+        .error "nbytes must be a multiple of node_size"
+        .endif
+        .if ((\nbytes) / node_size) > TSP_FIXED_BOXED_MAX_NODES
+        .error "frame too large: use TSP_Alloc_Var_Boxed"
+        .endif
+        TSP_Alloc_Fixed_Unboxed \nbytes, \tmp
+        .if ((\nbytes) / node_size) > 0
+        // zero the data area: a cursor walks up from the first data word,
+        // storing xzr with post-indexed addressing (same insn each time)
+        add \tmp, tsp, #tsp_frame.fixed_overhead
+        .rept (\nbytes) / node_size
+        str xzr, [\tmp], #node_size
+        .endr
+        .endif
+        Set_TSP_Frame_Boxed
+.endm
 
-/* Stack-allocate an ivector; $1 = header_lengthder, $2 = dnode-aligned
-   size in bytes. */
-define(`stack_allocate_ivector',`
-        __(str $1,[sp,-$2]!)
-        ')
+/*
+ * Variable-size unboxed frame.  size is a register, which must be dnode
+ * aligned and already include tsp_frame.fixed_overhead.  scratch is a
+ * register which will be clobbered.
+ */
+.macro TSP_Alloc_Var_Unboxed size, scratch
+        sub \scratch, tsp, \size // space for frame
+        stp tsp, tsp, [\scratch] // backlink + raw type, below live tsp
+        mov tsp, \scratch        // publish the finished frame
+.endm
 
-        
+/*
+ * Variable-size boxed frame.  size is a register, which must be dnode
+ * aligned and already include tsp_frame.fixed_overhead; SIZE WILL BE
+ * CLOBBERED.  scratch is another register which will be clobbered too.
+ *
+ * The zeroing is a guarded do-while: a leading test lets the data area
+ * be empty (size == fixed_overhead), and the loop body itself carries
+ * only one branch per word.
+ */
+.macro TSP_Alloc_Var_Boxed size, scratch
+        sub \scratch, tsp, \size // make room
+        stp tsp, xzr, [\scratch] // backlink, boxed type (still not gc visible)
+        // size is now a cursor
+        add \size, \scratch, #tsp_frame.fixed_overhead  // first data word
+        cmp \size, tsp          // empty? (size == fixed_overhead)
+        b.hs .Ldone\@
+.Lloop\@:
+        str xzr, [\size], #node_size
+        cmp \size, tsp
+        b.lo .Lloop\@
+.Ldone\@:
+        mov tsp, \scratch       // make boxed frame visible
+.endm
 
-                        
-                        
-/* Stack-allocate a uvector (other than a smallish ivector) and return
-   a tagged pointer to it in $1.
-   $2 = header, $3 = dnode-aligned size in bytes, $4 = tag).  
-   Both $2 and $3 are modified here. 
-   We need to make sure that the right thing happens if we're
-   interrupted in the middle of the zeroing loop. */
-define(`stack_allocate_zeroed_vector',`
-       new_macro_labels()
-macro_label(loop):              
-        __(subs $3,$3,#dnode_size)
-        __(str vzero,[sp,#-dnode_size]!)
-        __(bne macro_label(loop))
-        __(str $2,[sp,#0])
-        __(add $1,sp,#node_size)
-        __(orr $1,$1,$4)
-        ')
-   
+// Pop the topmost tsp frame.
+.macro TSP_Unlink
+        ldr tsp, [tsp, #tsp_frame.backlink]
+.endm
 
-define(`check_enabled_pending_interrupt',`
-        __(ldr $1,[rcontext,#tcr.interrupt_pending])
-        __(cmp $1,0)
-        __(ble $2)
-        __(uuo_interrupt_now())
-        ')
-        
-define(`check_pending_interrupt',`
-	new_macro_labels()
-        __(ldr $1,[rcontext,#tcr.tlb_pointer])
-	__(ldr $1,[$1,$INTERRUPT_LEVEL_BINDING_INDEX])
-        __(cmp $1,#0)
-        __(blt macro_label(done))
-        __(check_enabled_pending_interrupt($1,macro_label(done)))
-macro_label(done):
-')
+.macro extract_header dest, miscobj
+        ldur \dest, [\miscobj, #misc_header_offset]
+.endm
 
-/* $1 = ndigits.  Assumes 4-byte digits */        
-define(`aligned_bignum_size',`((~(dnode_size-1)&(node_size+(dnode_size-1)+(4*$1))))')
+/*
+ * Check for interrupts.  Clobbers nargs: should use a passed-in scratch reg.
+ */
+.macro check_pending_interrupt
+        ldr nargs, [rcontext, #tcr.tlb_pointer]
+        ldr nargs, [nargs, #INTERRUPT_LEVEL_BINDING_INDEX]
+        cmp nargs, #0
+        b.lt .Ldone\@           // interrupts are disabled
+        b.gt .Ltrap\@           // a deferred interrupt is waiting: take it
+        ldr nargs, [rcontext, #tcr.interrupt_pending]
+        cbz nargs, .Ldone\@     // skip if no interrupt pending
+.Ltrap\@:
+        uuo_interrupt_now
+.Ldone\@:
+.endm
 
-define(`suspend_now',`
-	__(uuo_suspend_now())
-')
+/* value stack push/pop  */
+.macro vpush1 reg
+        str \reg, [vsp, #-node_size]!
+.endm
+.macro vpop1 reg
+        ldr \reg, [vsp], #node_size
+.endm
 
-/* $3 points to a uvector header.  Set $1 to the first dnode-aligned address */
-/* beyond the uvector, using imm regs $1,$2,$4, and $5 as temporaries. */
-define(`skip_stack_vector',`
-        new_macro_labels()
-        __(ldr $1,[$3])
-        __(extract_tag($2,$1))
-        __(header_size($1,$1))
-        __(cmp $2,#min_64_bit_ivector_header)
-        __(bge local_label(bits64))
-        __(cmp $2,#min_32_bit_ivector_header)
-        __(bge local_label(bits32))
-        __(cmp $2,#min_16_bit_ivector_header)
-        __(bge local_label(bits16))
-        __(cmp $2,#min_8_bit_ivector_header)
-        __(bge local_label(bytes))
-        __(add $1,$1,#7)
-        __(lsr $1,$1,#3)
-        __(b local_label(bytes))
-local_label(bits64):    
-        __(lsl $1,$1,#1)
-local_label(bits32):
-        __(lsl $1,$1,#1)
-local_label(bits16):    
-        __(lsl $1,$1,#1)        
-macro_label(bytes):
-        __(dnode_align($1,$1,node_size))
-        __(add $1,$1,$3)
-        ')
+/* n is a plain constant; the macro boxes it as a fixnum into nargs */
+.macro set_nargs n
+        mov nargs, #((\n)<<fixnumshift)
+.endm
 
-/* This may need to be inlined.  $1=link, $2=saved sym idx, $3 = tlb, $4 = value */
-define(`do_unbind_to',`
-        __(ldr $1,[rcontext,#tcr.db_link])
-        __(ldr $3,[rcontext,#tcr.tlb_pointer])
-1:      __(ldr $2,[$1,#binding.sym])
-        __(ldr $4,[$1,#binding.val])
-        __(ldr $1,[$1,#binding.link])
-        __(cmp imm0,$1)
-        __(str $4,[$3,$2])
-        __(bne 1b)
-        __(str $1,[rcontext,#tcr.db_link])
-        ')                
+/*
+ * Build a lisp frame on the control stack, saving the current vsp,
+ * fn, and lr there.  This two-stp sequence is the sole sanctioned way
+ * to build a lisp frame: pc_luser_xp recognizes this sequence so that
+ * if a thread is suspended between the two stps, it will zero the
+ * not-yet-stored savefn and savelr slots in the frame.  Compare with
+ * the save-lisp-context vinsns.
+ *
+ * tmp is a register to contain the lisp frame marker.
+ */
+.macro build_lisp_frame tmp
+        mov \tmp, #lisp_frame_marker
+        stp \tmp, vsp, [sp, #-lisp_frame.size]!
+        stp fn, lr, [sp, #lisp_frame.savefn]
+.endm
 
+/* pop a lisp frame off the control stack */
+.macro discard_lisp_frame
+        add sp, sp, #lisp_frame.size
+.endm

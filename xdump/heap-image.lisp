@@ -103,6 +103,22 @@
         (error "*IMAGE-ABI-VERSION* not defined in ~s" pkg))))
          
 
+;;; The image header's timestamp is informational -- nothing reads it -- but
+;;; writing the wall clock means two builds of identical sources never produce
+;;; the same image, which costs any build system the ability to treat "the
+;;; artifact changed" as evidence that a source change reached it.  Honour
+;;; SOURCE_DATE_EPOCH (seconds since the Unix epoch, the reproducible-builds
+;;; convention) when it is set and parses; otherwise keep the previous
+;;; behaviour exactly.  A malformed value must not break the build, so it
+;;; falls back to the clock rather than signalling.
+(defun image-header-timestamp ()
+  (let* ((epoch (getenv "SOURCE_DATE_EPOCH"))
+         (secs (and epoch
+                    (ignore-errors (parse-integer epoch :junk-allowed nil)))))
+    (if (and (typep secs 'unsigned-byte) (plusp secs))
+      (+ secs unix-to-universal-time)
+      (get-universal-time))))
+
 (defun write-image-file (pathname image-base spaces )
   (let* ((abi-version (target-image-abi-version)))
     (target-setup-image-header-sizes)
@@ -119,7 +135,7 @@
         (image-write-fullword image-sig1 f)
         (image-write-fullword image-sig2 f)
         (image-write-fullword image-sig3 f)
-        (image-write-fullword (get-universal-time) f)
+        (image-write-fullword (image-header-timestamp) f)
         (image-write-fullword (target-word-size-case
                                (32 *xload-image-base-address*)
                                (64 0)) f)

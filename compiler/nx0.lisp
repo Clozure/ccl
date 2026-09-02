@@ -495,7 +495,9 @@ function to the indicated name is true.")
   (declare (ignore vars vals))
   (acode-form-type body (logtest $decl_trustdecls p2decls)))
 
-(def-simple-type-infer infer-ff-call (ff-call eabi-ff-call poweropen-ff-call i386-ff-call) trust-decls (address argspecs argvals resultspec &optional monitor)
+(def-simple-type-infer infer-ff-call
+    (ff-call eabi-ff-call poweropen-ff-call i386-ff-call aapcs64-ff-call)
+    trust-decls (address argspecs argvals resultspec &optional monitor)
   (declare (ignore address argspecs argvals monitor))
   (case resultspec
     (:unsigned-byte '(unsigned-byte 8))

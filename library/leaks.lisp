@@ -170,7 +170,7 @@
                      (typep key 'hash-table-vector)
                      (and (typep key 'slot-vector)
                           (gethash (slot-vector.instance key) found))
-                     #+x8664-target (typep key 'symbol-vector)
+                     #+(or x8664-target arm64-target) (typep key 'symbol-vector)
                      #+x8664-target (typep key 'function-vector)
                      )
               do

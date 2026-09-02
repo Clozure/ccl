@@ -1472,9 +1472,13 @@
 (defxloadfaslop $fasl-symfn (s)
   (let* ((symaddr (%fasl-expr-preserve-epush s))
          (fnobj (xload-%svref symaddr target::symbol.fcell-cell)))
-    (if (and (= *xload-target-fulltag-misc*
+    (if (and (= *xload-target-fulltag-for-functions*
                 (logand fnobj *xload-target-fulltagmask*))
-             (= (type-keyword-code :function) (xload-u8-at-address (+ fnobj *xload-target-misc-subtag-offset*))))
+             (= (type-keyword-code :function)
+                (xload-u8-at-address
+                 (+ (logior *xload-target-fulltag-misc*
+                            (logandc2 fnobj *xload-target-fulltagmask*))
+                    *xload-target-misc-subtag-offset*))))
       (%epushval s fnobj)
       (error "symbol at #x~x is unfbound . " symaddr))))
 
@@ -1655,7 +1659,28 @@
   (xfasl-read-gvector s (xload-target-subtype :simple-vector)))
 
 (defxloadfaslop $fasl-function (s)
-  (xfasl-read-gvector s (xload-target-subtype :function)))
+  ;; On a target whose function tag is a FULLTAG rather than a subtag of
+  ;; fulltag-misc, the pushed/returned value must carry that tag --
+  ;; self-references read during element fill must see the final tag.
+  ;; $fasl-clfun applies the same rule.  x8664 is the only such target
+  ;; (x8664-arch.lisp:349); arm64 is NOT one -- since the fulltag_function
+  ;; removal (patch 0055) an arm64 function is fulltag-misc + header
+  ;; subtag-function, and *xload-target-fulltag-for-functions* derives
+  ;; from :function-tag-is-subtag, so it equals fulltag-misc there.  The
+  ;; form is kept because it is the general one and reduces to the
+  ;; previous behavior on every subtag target.
+  (let* ((n (%fasl-read-count s))
+         (vector (xload-make-gvector (xload-target-subtype :function) n))
+         (function (logior *xload-target-fulltag-for-functions*
+                           (logandc2 vector *xload-target-fulltagmask*))))
+    (%epushval s function)
+    (dotimes (i n)
+      (setf (xload-%svref vector i) (%fasl-expr s)))
+    (target-arch-case
+     (:arm
+      (locally (declare (ftype (function (t) t) xload-arm-set-entrypoint))
+        (xload-arm-set-entrypoint vector))))
+    (setf (faslstate.faslval s) function)))
 
 (defxloadfaslop $fasl-istruct (s)
   (xfasl-read-gvector s (xload-target-subtype :istruct)))

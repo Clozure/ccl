@@ -693,6 +693,22 @@ commands but aren't")
   (list (cons (%fixnum-ref (catch-frame-sp (bt.top-catch bt-info)) target::lisp-frame.savevsp)
               (%fixnum-ref (%fixnum-ref tcr target::tcr.vs-area) target::area.high))))
 
+;;; ARM64 is in PPC's structural position here, not ARM32's: its catch
+;;; frames are misc-tagged temp-stack uvectors with an explicit csp slot
+;;; holding a control-stack lisp_frame pointer
+;;; (compiler/ARM64/arm64-arch.lisp catch-frame, lisp-kernel/
+;;; spentry-C-bind-catch-throw.s _structf catch_frame), exactly as on PPC.
+;;; ARM32's arms exist because ARM32 has no temp stack and stack-conses its
+;;; catch frames, which is why level-1/arm-threads-utils.lisp computes
+;;; CATCH-FRAME-SP by pointer arithmetic where PPC and ARM64 both read the
+;;; csp slot.
+#+arm64-target
+(defun make-vsp-stack-range (tcr bt-info)
+  (list (cons (%fixnum-ref
+               (%svref (bt.top-catch bt-info) target::catch-frame.csp-cell)
+               target::lisp-frame.savevsp)
+              (%fixnum-ref (%fixnum-ref tcr target::tcr.vs-area) target::area.high))))
+
 #+ppc-target
 (defun make-csp-stack-range (tcr bt-info)
   (list (cons (%svref (bt.top-catch bt-info) target::catch-frame.csp-cell)
@@ -717,6 +733,11 @@ commands but aren't")
 #+arm-target
 (defun make-csp-stack-range (tcr bt-info)
   (list (cons (catch-frame-sp (bt.top-catch bt-info))
+              (%fixnum-ref (%fixnum-ref tcr target::tcr.cs-area) target::area.high))))
+
+#+arm64-target
+(defun make-csp-stack-range (tcr bt-info)
+  (list (cons (%svref (bt.top-catch bt-info) target::catch-frame.csp-cell)
               (%fixnum-ref (%fixnum-ref tcr target::tcr.cs-area) target::area.high))))
 
 
@@ -775,6 +796,7 @@ commands but aren't")
                                       #+ppc-target *fake-stack-frames*
                                       #+x86-target (%current-frame-ptr)
                                       #+arm-target (or (current-fake-stack-frame) (%current-frame-ptr))
+                                      #+arm64-target (%current-frame-ptr)
                                       (db-link)
                                       (1+ *break-level*)))
          (*default-integer-command* `(:c 0 ,(1- (length (cdr (bt.restarts context))))))

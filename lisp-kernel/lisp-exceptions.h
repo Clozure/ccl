@@ -143,6 +143,10 @@ exception_fn_name( ExceptionInformation *, int, char *, size_t );
 #include "arm-exceptions.h"
 #endif
 
+#ifdef ARM64
+#include "arm64-exceptions.h"
+#endif
+
 #ifdef DARWIN
 void darwin_exception_init(TCR *tcr);
 #endif
@@ -151,7 +155,7 @@ void thread_signal_setup(void);
 void suspend_other_threads(Boolean);
 void resume_other_threads(Boolean);
 void reset_lisp_process(ExceptionInformation *);
-void terminate_lisp(void);
+void terminate_lisp(void) __attribute__((noreturn));
 
 #endif /* __lisp_exceptions_h__ */
 
