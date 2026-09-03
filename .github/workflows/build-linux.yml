@@ -7,12 +7,15 @@ on:
 env:
   URL: https://github.com/Clozure/ccl/releases/latest/download/linuxx86.tar.gz
 
+permissions:
+  contents: read
+
 jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: ccl
 
@@ -45,7 +48,7 @@ jobs:
           ./lx86cl64 --batch -n </dev/null
 
       - name: Check out tests
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: Clozure/ccl-tests
           path: ccl-tests
@@ -54,5 +57,3 @@ jobs:
         run: |
           cd ccl-tests
           make CCL=../ccl/lx86cl64
-  
-          
