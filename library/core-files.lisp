@@ -520,15 +520,19 @@
          (high4 (ash typecode (- target::ntagbits))))
     (declare (type (unsigned-byte 8) typecode)
              (type (unsigned-byte 4) low4 high4))
-    (cond ((eql low4 x8664::fulltag-immheader-0)
+    ;; The header-class fulltags differ per target (x8664 has
+    ;; fulltag-nodeheader-1 = 6, arm64 has fulltag-nodeheader-0 = 6), so
+    ;; these must be TARGET constants or every header class is filed in
+    ;; the wrong table on any non-x8664 target.
+    (cond ((eql low4 target::fulltag-immheader-0)
            (%svref *immheader-0-types* high4))
-          ((eql low4 x8664::fulltag-immheader-1)
+          ((eql low4 target::fulltag-immheader-1)
            (%svref *immheader-1-types* high4))
-          ((eql low4 x8664::fulltag-immheader-2)
+          ((eql low4 target::fulltag-immheader-2)
            (%svref *immheader-2-types* high4))
-          ((eql low4 x8664::fulltag-nodeheader-0)
+          ((eql low4 target::fulltag-nodeheader-0)
            (%svref *nodeheader-0-types* high4))
-          ((eql low4 x8664::fulltag-nodeheader-1)
+          ((eql low4 target::fulltag-nodeheader-1)
            (%svref *nodeheader-1-types* high4))
           (t 'bogus))))
 
@@ -705,12 +709,19 @@
                 (fixnump obj))
            ;; Assumes we're running on same architecture as core file.
            (type-of (%%raw-obj obj)))
+          ;; TAG-TRA exists only in the x8664 tag model; other targets keep
+          ;; return addresses untagged and have no clause here.
+          #+x8664-target
           ((eq (logand fulltag target::tagmask) target::tag-tra) 'tagged-return-address)
           ((eq fulltag target::fulltag-misc)
            ;; (core-uvtype obj)
            (handler-case (core-uvtype obj) (invalid-core-address () 'unmapped)))
           ((eq fulltag target::fulltag-symbol) 'symbol)
           ;; TODO: Could get hairier based on lfun-bits, but usually don't care.
+          ;; FULLTAG-FUNCTION is also x8664-only.  Where a function is an
+          ;; ordinary uvector (SUBTAG-FUNCTION) it already took the
+          ;; FULLTAG-MISC clause above.
+          #+x8664-target
           ((eq fulltag target::fulltag-function) 'function)
           (t (cerror "treat as ~*~s" "Invalid object tag at #x~x" obj 'bogus)
            'bogus))))

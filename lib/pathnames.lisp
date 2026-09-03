@@ -51,7 +51,7 @@
   (let ((newpath (back-translate-pathname-1 path hosts)))
     (cond ((equalp path newpath)
 	   ;; (fcomp-standard-source path)
-	   (namestring (pathname path)))
+	   (pathname path))
           (t newpath))))
 
 
