@@ -1324,35 +1324,12 @@
   ((:not (:pred = 0 (:apply ldb (byte 16 8) code)))
    (movk dest (:$ (:apply ldb (byte 16 8) code) :lsl 16))))
 
-;;; ============ load-double-float-constant ============
-;;; Donor: vinsn-retrofit-queue.lisp:371; PPC64 ppc64-vinsns.lisp:3425:
-;;;   (stw high -8 sp) (stw low -4 sp) (lfd dest -8 sp)
-;;; Faithful stack bounce with two LE-ordered 32-bit stores: AArch64 is
-;;; little-endian (LOW half at the lower address -- PPC is BE) and has no
-;;; red zone, so reserve 16 bytes explicitly (donor's established
-;;; deviation, kept).  high/low are :u32 (W-width) vregs, so plain STR
-;;; selects the 32-bit template; dest is :double-float so the reload
-;;; selects the D-form LDR (offset 0 is aligned => scaled forms encode).
-(define-arm64-vinsn load-double-float-constant
-    (((dest :double-float))
-     ((high :u32)
-      (low :u32)))
-  (sub sp sp (:$ 16))
-  (str low (:@ sp (:$ 0)))
-  (str high (:@ sp (:$ 4)))
-  (ldr dest (:@ sp (:$ 0)))
-  (add sp sp (:$ 16)))
+(define-arm64-vinsn load-double-float-constant (((dest :double-float))
+                                                ((bits :u64)))
+  (fmov (:d dest) bits))
 
-;;; ============ load-single-float-constant ============
-;;; Donor: vinsn-retrofit-queue.lisp:394; PPC64 ppc64-vinsns.lisp:3433
-;;; bounces through the stack (no GPR->FPR move on PPC).  ARMv8 FMOV
-;;; (general, W->S) is the direct move -- donor's established deviation,
-;;; kept.  src holds the raw IEEE-754 single bits; class t carries no
-;;; width => the W view is forced explicitly, selecting his
-;;; (fmov (:rd :s) (:rn :w)) template.
-(define-arm64-vinsn load-single-float-constant
-    (((dest :single-float))
-     ((src t)))
+(define-arm64-vinsn load-single-float-constant (((dest :single-float))
+                                                ((src t)))
   (fmov dest (:w src)))
 
 ;;; ============ load-vframe-address ============
