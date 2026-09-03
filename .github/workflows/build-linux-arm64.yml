@@ -1,0 +1,60 @@
+name: Build and test (arm64)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [master]
+
+env:
+  URL: https://github.com/Clozure/ccl/releases/download/v1.13-arm64-pre1/linuxarm64.tar.gz
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          path: ccl
+
+      - name: Fetch bootstrapping binaries
+        run: |
+          # be silent, still report errors,
+          # return a non-zero exit code on failure,
+          # follow redirections
+          curl -sSfL -O ${{ env.URL }}
+
+      - name: Install bootstrapping binaries
+        run: |
+          cd ccl
+          tar xf ../linuxarm64.tar.gz
+
+      - name: Compile lisp kernel
+        run: |
+          cd ccl/lisp-kernel/linuxarm64
+          make
+
+      - name: Rebuild CCL
+        run: |
+          cd ccl
+          ./arm64cl --batch --quiet -n -e '(rebuild-ccl :clean t)' </dev/null
+          # Now see if it works to start up the just-compiled lisp.
+          # Note that "git describe" doesn't work in a shallow clone
+          # (because we don't have any tags), so we don't expect to see the
+          # usual version like "Version 1.12.2 (v1.12.2-27-gae44c6ad)" in the
+          # welcome banner.
+          ./arm64cl --batch -n </dev/null
+
+      - name: Check out tests
+        uses: actions/checkout@v7
+        with:
+          repository: Clozure/ccl-tests
+          path: ccl-tests
+
+      - name: Run tests
+        run: |
+          cd ccl-tests
+          make CCL=../ccl/arm64cl
