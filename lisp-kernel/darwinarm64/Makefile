@@ -1,10 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
-# Darwin/arm64 (Apple Silicon) lisp kernel.
-# Modeled on linuxarm64/Makefile + darwinx8664 Darwin link extras.
-# No -pagezero_size / -no_pie: unsupported on arm64 Darwin (see doc/porting/darwin.md).
+# This Makefile needs GNU Make
+
+# capture absolute directory path of this Makefile...
+MAKEFILE_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
+# ...and make sure we're in that directory
+ifneq ($(CURDIR), $(MAKEFILE_DIR))
+$(error You must run this Makefile from its own directory, not from $(CURDIR))
+endif
 
 VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
+# arm64 macOS exists only on Big Sur and later.
 OSVERSION ?= 11.0
 
 VPATH = ../
@@ -25,7 +32,7 @@ PLATFORM_H = platform-darwinarm64.h
 	$(CC) -include ../$(PLATFORM_H) -c $< $(CDEFINES) $(CDEBUG) $(COPT) \
 		$(WFORMAT) -mmacosx-version-min=$(OSVERSION) -o $@
 
-SPOBJ = pad.o arm64-spentry.o
+SPOBJ = arm64-spentry.o
 ASMOBJ = arm64-asmutils.o arm64-imports.o
 
 COBJ = pmcl-kernel.o gc-common.o arm64-gc.o bits.o arm64-exceptions.o \
@@ -47,11 +54,9 @@ KSPOBJ = $(SPOBJ)
 # Binary name matches lib/compile-ccl.lisp (:darwinarm64 "darm64cl")
 all: ../../darm64cl
 
-OSLIBS = -lSystem -ldl
-
 ../../darm64cl: $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
 	$(CC) $(CDEBUG) -mmacosx-version-min=$(OSVERSION) \
-		-o $@ $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ) $(OSLIBS)
+		-o $@ $(KSPOBJ) $(KERNELOBJ) $(DEBUGOBJ)
 
 $(SPOBJ): $(SPINC)
 $(ASMOBJ): $(SPINC)
@@ -60,12 +65,12 @@ $(DEBUGOBJ): $(CHEADERS) lispdcmd.h
 
 mach_exc_server.o: mach_exc_server.c mach_exc.h
 	$(CC) -include ../$(PLATFORM_H) -c mach_exc_server.c $(CDEFINES) \
-		$(CDEBUG) $(COPT) $(WFORMAT) -mmacosx-version-min=$(OSVERSION) -o $@
+	  $(CDEBUG) $(COPT) $(WFORMAT) -mmacosx-version-min=$(OSVERSION) -o $@
 
 mach_exc_server.c: ../mach_exc.defs
 	mig -arch arm64 -header /dev/null -user /dev/null \
-		-sheader mach_exc.h -server mach_exc_server.c \
-		$<
+	  -sheader mach_exc.h -server mach_exc_server.c \
+	  $<
 
 mach_exc.h: mach_exc_server.c
 
@@ -73,7 +78,40 @@ cclean:
 	$(RM) -f $(KERNELOBJ) $(DEBUGOBJ) ../../darm64cl \
 	  mach_exc.h mach_exc_server.c
 
+.PHONY: clean
 clean: cclean
-	$(RM) -f $(SPOBJ)
+	$(RM) -f $(SPOBJ) .asmcheck
 
 arm64-imports.o: ../arm64-imports.s ../arm64-asm.h
+
+# GNU Make: delete any target file if its recipe fails after starting
+# to write it.
+.DELETE_ON_ERROR:
+
+# Preflight check to ensure developer tools are new enough.  We use
+# the GNU-as-style \@ macro-invocation counter to implement
+# per-expansion unique labels in assembler macros.  Complain here
+# instead of leaving the user to figure out what "unexpected token in
+# argument list" means.  Xcode 16.4 or later is known to support \@.
+define ASM_ATSIGN_PROBE
+.macro t\n.Lx\\@:\n b .Lx\\@\n.endm\nt\nt\n
+endef
+
+.PHONY: check-asm
+check-asm:
+	@printf '$(ASM_ATSIGN_PROBE)' \
+	  | $(CC) -x assembler-with-cpp -c -o /dev/null - 2>/dev/null \
+	  || { echo "$(CC) does not support the \\@ macro counter,"; \
+	       echo "which is necessary to build the lisp kernel."; \
+	       echo "Xcode 16.4 or later is known to work."; \
+	       exit 1; }
+
+# Stamp so the check-asm probe only runs once.
+.asmcheck: Makefile
+	@$(MAKE) --no-print-directory check-asm
+	@touch $@
+
+# Prerequisites after '|' are order-only prerequisites.  It means
+# "make sure this is built first, but don't force the targets to be
+# updated."
+$(SPOBJ) $(ASMOBJ): | .asmcheck
