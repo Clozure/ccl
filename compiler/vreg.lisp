@@ -151,6 +151,7 @@
     (:u64const . ,(specifier-type '(unsigned-byte 64)))
     (:s8const . ,(specifier-type '(signed-byte 8)))
     (:s16const . ,(specifier-type '(signed-byte 16)))
+    (:s24const . ,(specifier-type '(signed-byte 24)))
     (:s32const . ,(specifier-type '(signed-byte 32)))
     (:s64const . ,(specifier-type '(signed-byte 64)))
     (:stack-offset . ,(specifier-type '(signed-byte 32)))))

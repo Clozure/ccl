@@ -1887,6 +1887,9 @@
     (let* ((index-known-fixnum (acode-fixnum-form-p index))
            (unscaled-idx nil)
            (src nil))
+      (when index-known-fixnum
+        (unless (>= index-known-fixnum 0)
+          (setq index-known-fixnum nil)))
       (if (or safe (not index-known-fixnum))
         (multiple-value-setq (src unscaled-idx)
           (arm642-two-untargeted-reg-forms seg vector
@@ -2655,6 +2658,9 @@
            (constval (arm642-constant-value-ok-for-type-keyword type-keyword value))
            (needs-memoization (and is-node (arm642-acode-needs-memoization value)))
            (index-known-fixnum (acode-fixnum-form-p index)))
+      (when index-known-fixnum
+        (unless (>= index-known-fixnum 0)
+          (setq index-known-fixnum nil)))
       (let* ((src ($ arm64::arg_x))
              (unscaled-idx ($ arm64::arg_y))
              (result-reg ($ arm64::arg_z)))
@@ -2697,6 +2703,9 @@
            (constval (arm642-constant-value-ok-for-type-keyword type-keyword value))
            (needs-memoization (and is-node (arm642-acode-needs-memoization value)))
            (index-known-fixnum (acode-fixnum-form-p index)))
+      (when index-known-fixnum
+        (unless (>= index-known-fixnum 0)
+          (setq index-known-fixnum nil)))
       (let* ((src ($ arm64::arg_x))
              (unscaled-idx ($ arm64::arg_y))
              (result-reg ($ arm64::arg_z)))
@@ -6711,23 +6720,61 @@
       (! test-fixnums crf x y)
       (! cbranch-false label crf arm64::cond-eq))))
 
+;;; The BOXED value of FORM when FORM is a fixnum literal that cmp or cmn can
+;;; take as an immediate, else NIL.
+;;;
+;;; Deliberately NOT arm642-constant-for-compare-p.  That
+;;; one also admits %unbound-marker and %slot-unbound-marker, which are not
+;;; numbers and must never reach a numeric comparison or its out-of-line
+;;; subprim call.
+;;;
+;;; The 4096 gate is the one arm642-constant-for-compare-p uses, and it is on
+;;; the BOXED value, so the window is |c| < 512 at fixnumshift 3.
+;;; compare-signed-s16const accepts the whole s16
+;;; range -- it has an :lsl 12 leg and movz/movn legs -- but those legs have
+;;; never run: that vinsn is emitted at exactly one site today, with the
+;;; constant 0.  Widening the gate is a separate change with its own control.
+(defun arm642-fixnum-constant-for-compare-p (form)
+  (let* ((val (acode-fixnum-form-p form)))
+    (when val
+      (let* ((boxed (ash val arm64::fixnumshift)))
+        (when (< (abs boxed) 4096)
+          boxed)))))
+
 (defun arm642-inline-numcmp (seg vreg xfer cc name form1 form2)
   (with-arm64-local-vinsn-macros (seg vreg xfer)
     (multiple-value-bind (cr-bit true-p) (acode-condition-to-arm64-cond-bit cc)
-      (let* ((otherform (and (eql cr-bit arm64::cond-eq)
-                             (if (eql (acode-fixnum-form-p form2) 0)
-                               form1
-                               (if (eql (acode-fixnum-form-p form1) 0)
-                                 form2)))))
+      ;; A fixnum literal on EITHER side becomes a cmp/cmn immediate, for every
+      ;; predicate.  Before this, the constant path took only (= x 0):
+      ;; cr-bit had to be cond-eq and the literal had to be exactly 0, so
+      ;; (< i 10) computed 10 into a register and tag-checked both operands.
+      (let* ((const2 (arm642-fixnum-constant-for-compare-p form2))
+             (const1 (unless const2 (arm642-fixnum-constant-for-compare-p form1)))
+             (constval (or const2 const1))
+             (otherform (if const2 form1 (if const1 form2)))
+             ;; Keep the non-constant operand in the register its ORIGINAL
+             ;; position implies.  Then the out-of-line subprim call gets its
+             ;; two arguments in the right order, with no register exchange in
+             ;; either direction.
+             (otherreg (if const2 arm64::arg_y arm64::arg_z))
+             (constreg (if const2 arm64::arg_z arm64::arg_y)))
+        ;; A constant on the LEFT means the compare emits (form2 <op> form1),
+        ;; which is CC with its operands reversed.  cr-bit here is only ever
+        ;; cond-eq, cond-gt or cond-lt, from condition-to-arm64-cond-bit, and
+        ;; true-p carries the negation -- which is exactly the encoding
+        ;; arm642-swap-compare-cond-bit was written for.  It had no caller
+        ;; until now.
+        (when const1
+          (setq cr-bit (arm642-swap-compare-cond-bit cr-bit)))
         (if otherform
-          (arm642-one-targeted-reg-form seg otherform ($ arm64::arg_z))
+          (arm642-one-targeted-reg-form seg otherform ($ otherreg))
           (arm642-two-targeted-reg-forms seg form1 ($ arm64::arg_y) form2 ($ arm64::arg_z)))
         (let* ((out-of-line (backend-get-next-label))
                (done (backend-get-next-label))
                (continue (backend-get-next-label)))
           (if otherform
             (unless (acode-fixnum-form-p otherform)
-              (arm642-branch-unless-arg-fixnum seg ($ arm64::arg_z) (aref *backend-labels* out-of-line)))
+              (arm642-branch-unless-arg-fixnum seg ($ otherreg) (aref *backend-labels* out-of-line)))
             (if (acode-fixnum-form-p form1)
               (arm642-branch-unless-arg-fixnum seg ($ arm64::arg_z) (aref *backend-labels* out-of-line))
               (if (acode-fixnum-form-p form2)
@@ -6735,7 +6782,7 @@
                 (arm642-branch-unless-both-args-fixnums seg ($ arm64::arg_y) ($ arm64::arg_z) (aref *backend-labels* out-of-line)))))
           (with-crf-target () crf
             (if otherform
-              (! compare-signed-s16const crf ($ arm64::arg_z) 0)
+              (! compare-signed-s16const crf ($ otherreg) constval)
               (! compare crf ($ arm64::arg_y) ($ arm64::arg_z)))
             (if (and vreg (eql (hard-regspec-class vreg) hard-reg-class-crf))
               (arm642-branch seg (arm642-cd-merge xfer continue) crf cr-bit true-p)
@@ -6743,8 +6790,12 @@
                 (! cond->boolean ($ arm64::arg_z) (if true-p cr-bit (logxor cr-bit 1)))
                 (-> done))))
           (@ out-of-line)
+          ;; The old code always wrote the constant to arg_y, which put the
+          ;; subprim's arguments in the WRONG ORDER whenever the 0 was form2.
+          ;; That was invisible because = is symmetric, and it is the reason
+          ;; the path could not be extended to < or >.
           (if otherform
-            (arm642-lri seg ($ arm64::arg_y) 0))
+            (arm642-lri seg ($ constreg) constval))
           (let* ((index (arch::builtin-function-name-offset name))
                  (idx-subprim (arm642-builtin-index-subprim index)))
             (! call-subprim-2 ($ arm64::arg_z) idx-subprim ($ arm64::arg_y) ($ arm64::arg_z)))
