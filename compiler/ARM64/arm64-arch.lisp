@@ -252,8 +252,12 @@
       (assert (>= xt #x10))
       (assert (not (member (logand xt fulltagmask) non-fixnum-low-nibbles))))))
 
-(defconstant canonical-nil-value (+ #x13000 fulltag-nil)) ;xxx nil can't be a constant
-(defconstant canonical-t-value (+ #x13020 fulltag-symbol)) ;xxx see above
+;; Static space starts at #x40000000000 (4T), nil = base + 4K + tag
+;; Because nil is kept in rnil, we don't care that this is a large
+;; value (and if we end up relocating static space, nil will end up
+;; being a different value anyway).
+(defconstant canonical-nil-value (+ #x40000001000 fulltag-nil))
+(defconstant canonical-t-value (+ #x40000001020 fulltag-symbol))
 (defconstant misc-bias fulltag-misc)
 (defconstant cons-bias fulltag-cons)
 (defconstant t-offset (- canonical-t-value canonical-nil-value))

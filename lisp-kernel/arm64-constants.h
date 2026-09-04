@@ -52,8 +52,13 @@ DEFCONST(call_arguments_limit, 0x10000)
 DEFCONST(tstack_alloc_limit, 0xffff)
 DEFCONST(heap_segment_size, 0x20000)
 DEFCONST(log2_heap_segment_size, 17)
-// XXX - This is not going to work on macOS
-DEFCONST(STATIC_BASE_ADDRESS, 0x03fff000)
+
+/*
+ * Start of the static area and the offset to nil (meaning the misaligned
+ * cons cell) within it.
+ */
+#define STATIC_BASE_ADDRESS 0x0000040000000000L
+#define STATIC_NIL_OFFSET 0x1000
 
 /* lisp names for registers */
 #ifdef __ASSEMBLER__

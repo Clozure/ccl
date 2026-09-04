@@ -29,15 +29,26 @@
 #include <limits.h>
 #include <time.h>
 
-/* Darwin arm64 OS pages are 16KiB; image sections are only 4KiB-padded.
-   MapFile there commits the OS-page span but must *read* the section
-   payload size only — see memory.c.  Other platforms still pass the
-   OS-page-rounded length to mmap/MapFile. */
+/*
+ * Because darwinarm64 reads image sections into anonymous memory rather
+ * than file mapping then, we need give MapFile (which is misnamed now)
+ * the section payload size rather than a page-rounded length.
+ */
 #if defined(DARWIN) && defined(ARM64)
 #define IMAGE_MAPFILE_NBYTES(mem_size) (mem_size)
 #else
 #define IMAGE_MAPFILE_NBYTES(mem_size) \
   align_to_power_of_2((mem_size), log2_page_size)
+#endif
+
+/*
+ * Align on-disk image sections to this value (64K or 4K).  The
+ * cross-dumper in xdump/heap-image.lisp has to match.
+ */
+#if defined(LINUX) && defined(ARM64)
+#define IMAGE_SECTION_ALIGN_BITS 16
+#else
+#define IMAGE_SECTION_ALIGN_BITS 12
 #endif
 
 
@@ -197,10 +208,10 @@ off_t
 seek_to_next_page(int fd)
 {
   off_t pos = LSEEK(fd, 0, SEEK_CUR);
-  /* Heap image on-disk layout is always 4KiB-aligned (heap-image.lisp
-     image-align-output-position), independent of the OS page size.
-     Apple Silicon Darwin uses 16KiB pages — do not use log2_page_size here. */
-  pos = align_to_power_of_2(pos, 12);
+  /*
+   * Align appropriately: don't use host page size here.
+   */
+  pos = align_to_power_of_2(pos, IMAGE_SECTION_ALIGN_BITS);
   return LSEEK(fd, pos, SEEK_SET);
 }
   
@@ -468,11 +479,6 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 	return 0;
       }
 #ifdef ARM64
-      /*
-       * Establish lisp_nil as soon as possible. On Linux, this is not
-       * so hard in principle.  On Darwin, it's going to take more work.
-       * Note that low + 4K + fulltag_nil = #x1300b
-       */
       if (sect->code == AREA_STATIC) {
         natural saved_base = sect->static_dnodes ? (natural)sect->static_dnodes
                                                  : (natural)STATIC_BASE_ADDRESS;
@@ -482,7 +488,7 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
           saved_static_low = (LispObj)saved_base;
           saved_static_high = (LispObj)(saved_base + (a->active - a->low));
         }
-        image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
+        image_nil = (LispObj)(a->low) + STATIC_NIL_OFFSET + fulltag_nil;
         set_nil(image_nil);
       }
 #endif

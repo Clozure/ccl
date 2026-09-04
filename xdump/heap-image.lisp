@@ -91,9 +91,21 @@
    (32 (image-write-fullword n f))
    (64 (image-write-doubleword n f))))
 
+(defun image-section-alignment ()
+  ;; linuxarm64 dumps 64K-aligned sections so the lisp kernel can
+  ;; file-map them regardless of the OS page size (4K/16K/64K).  Must
+  ;; match IMAGE_SECTION_ALIGN_BITS in lisp-kernel/image.c.
+  ;;
+  ;; xxx -- make this target-arch-case when darwinarm64 also aligns
+  ;; sections to 64K
+  (if (eq (backend-name *target-backend*) :linuxarm64)
+    #x10000
+    #x1000))
+
 (defun image-align-output-position (f)
-  (file-position f (logand (lognot 4095)
-			   (+ 4095 (file-position f)))))
+  (let* ((align (image-section-alignment)))
+    (file-position f (logand (lognot (1- align))
+			     (+ (1- align) (file-position f))))))
 
 
 (defun target-image-abi-version ()
@@ -128,8 +140,9 @@
                        :if-exists :supersede
                        :element-type '(unsigned-byte 8))
       (let* ((nsections (length spaces))
-             (header-pos (- 4096 (+ *image-header-size*
-                                    (* nsections *image-section-size*)))))
+             (header-pos (- (image-section-alignment)
+                            (+ *image-header-size*
+                               (* nsections *image-section-size*)))))
         (file-position f header-pos)
         (image-write-fullword image-sig0 f)
         (image-write-fullword image-sig1 f)

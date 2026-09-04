@@ -1,17 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/*
- * Darwin/arm64 (Apple Silicon) platform header.
- *
- * Low-tag scheme matches linuxarm64 / compiler/ARM64.  Unlike
- * darwinx8664 we cannot reserve low memory with -pagezero_size (see
- * darwin.md).  STATIC_BASE_ADDRESS below is the canonical static base;
- * when the OS rejects it (hardened VM policy: dyld-ro owns that range)
- * the loader maps statics wherever allowed and rebases references
- * (static_space_bias, image.c).  All access is rnil-relative; nil has
- * no fixed VA.  Test knob: CCL_FORCE_STATIC_RELOC=1.
- */
-
 #define WORD_SIZE 64
 #define PLATFORM_OS PLATFORM_OS_DARWIN
 #define PLATFORM_CPU PLATFORM_CPU_ARM64
@@ -44,18 +32,6 @@ typedef ucontext_t ExceptionInformation;
 
 #include "lisptypes.h"
 #include "arm64-constants.h"
-
-/*
- * Low addresses (0x12000 / 0x03fff000) cannot be MAP_FIXED on arm64
- * Darwin (EINVAL).  Use a high address that mmap FIXED RW accepts.
- * Must match xdump/xarm64fasload.lisp *darwinarm64-xload-backend*
- * :static-space-address and the arch nil-value patched in
- * tools/xdarwinarm64.lisp (nil = STATIC_BASE + 4K + fulltag_nil).
- * This is the *canonical* (image/save) base only: the loader relocates
- * statics when the OS refuses this VA (see create_reserved_area).
- */
-#undef STATIC_BASE_ADDRESS
-#define STATIC_BASE_ADDRESS 0x0000000200000000ULL
 
 #ifndef TCR_BIAS
 #define TCR_BIAS (0)

@@ -50,13 +50,7 @@ typedef ucontext_t ExceptionInformation;   /* platform-linuxarm.h:31 */
 #define heap_segment_size 0x00020000L      /* = PPC64 (ppc-constants64.h:305-306) */
 #define log2_heap_segment_size 17L
 #endif
-/* CS_OVERFLOW_FORCE_LIMIT: now provided by his area.h arm64 branch
-   (-(sizeof(lisp_frame)), = our -32).  RECONCILED 556aebe8: dropped. */
-#ifndef STATIC_BASE_ADDRESS
-#define STATIC_BASE_ADDRESS 0x00012000     /* = X86 shape (x86-constants.h:74):
-                                              one page under canonical nil
-                                              (0x13000, arm64-arch.lisp:184) */
-#endif
+
 /* lisp_globals.h grew a real ARM64 branch @ 93d72a0 (nil-anchored:
    nil_value = the runtime lisp_nil, set by set_nil() at image-load
    time) -- the fixed-address shims that lived here are retired.

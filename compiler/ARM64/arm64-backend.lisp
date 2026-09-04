@@ -234,17 +234,6 @@
                 :target-foreign-type-data nil
                 :target-arch arm64::*arm64-target-arch*))
 
-;;; Darwin cannot MAP_FIXED the linux/x8664 static page (#x12000); static
-;;; space lives at #x200000000 (platform-darwinarm64.h).  nil = static+4K+tag.
-;;; Must NOT share *arm64-target-arch* with linux — native xload otherwise
-;;; embeds #x1300b and cold-load faults in %FIND-PKG (read @ #x13010).
-(defconstant +darwinarm64-nil-value+ #x20000100b)
-
-(defvar *darwinarm64-target-arch*
-  (let ((a (copy-structure arm64::*arm64-target-arch*)))
-    (setf (arch::target-nil-value a) +darwinarm64-nil-value+)
-    a))
-
 #+(or darwinarm64-target (not arm64-target))
 (defvar *darwinarm64-backend*
   (make-backend :lookup-opcode #'false
@@ -267,7 +256,7 @@
                 :name :darwinarm64
                 :target-arch-name :arm64
                 :target-foreign-type-data nil
-                :target-arch *darwinarm64-target-arch*))
+                :target-arch arm64::*arm64-target-arch*))
 
 #+(or linuxarm64-target (not arm64-target))
 (pushnew *linuxarm64-backend* *known-arm64-backends*)

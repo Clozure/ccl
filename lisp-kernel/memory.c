@@ -407,8 +407,13 @@ UnProtectMemory(LogicalAddress addr, natural nbytes)
 #endif
 }
 
+/*
+ * XXX -- "MapFile" is misnamed because sometimes it doesn't actually
+ * map the file: it creates anonymous memory and reads the section
+ * into it (Windows, darwinarm64).
+ */
 int
-MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int fd) 
+MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int fd)
 {
 #ifdef WINDOWS
 #if 0
@@ -461,14 +466,18 @@ MapFile(LogicalAddress addr, natural pos, natural nbytes, int permissions, int f
 #endif
 #else
 #if defined(DARWIN) && defined(ARM64)
-  /* arm64 Darwin: file MAP_FIXED fails for nonzero file offsets (EINVAL).
-     Also W^X rejects RWX.  Commit anon RW, then read like the Windows path.
-
-     nbytes is the *section payload* size (image sections are 4KiB-padded).
-     OS pages are 16KiB: commit the page-rounded span, but read ONLY nbytes.
-     Reading a 16KiB OS page from a 4KiB-padded section pulls the next
-     image section / trailer ("nepOILCMegam") into the heap free zone and
-     breaks walk-dynamic-area's zero-cons bridge to the sentinel. */
+  /*
+   * Because image sections are still 4K aligned on darwinarm64, we
+   * can't mmap because of alignment reasons (darwinarm64 uses 16K
+   * pages).
+   *
+   * An additional complication is that it doesn't work to mmap a file
+   * with PROT_READ|PROT_EXEC (we get EPERM).
+   *
+   * Thus, we read the section into anonymous memory (like on
+   * Windows).  Note that nbytes needs to be the exact section payload
+   * size (and not a page-aligned span).
+   */
   {
     ssize_t count;
     size_t total = 0;

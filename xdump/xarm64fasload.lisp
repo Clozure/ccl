@@ -118,15 +118,14 @@
               :initial-contents '(#x23D)))
 
 (defun arm64-initialize-static-space ()
-  ;; x8664-initialize-static-space's shape (the commented-out sketch below
-  ;; was already these two xload-make-cons lines): one page-filling
-  ;; ivector, then the misaligned-cons NIL pun, which lands NIL at
-  ;; canonical-nil-value.
-  (xload-make-ivector *xload-static-space*
-                      (xload-target-subtype :unsigned-64-bit-vector)
-                      (1- (/ 4096 8)))
-  (xload-make-cons *xload-target-nil* 0 *xload-static-space*)
-  (xload-make-cons 0 *xload-target-nil* *xload-static-space*))
+  (let* ((nil-address (logandc2 *xload-target-nil* *xload-target-fulltagmask*))
+         (fill-bytes (- nil-address *xload-static-space-address*)))
+    ;; fill space from start until the misaligned cons for nil
+    (xload-make-ivector *xload-static-space*
+                        (xload-target-subtype :unsigned-64-bit-vector)
+                        (1- (/ fill-bytes 8)))
+    (xload-make-cons *xload-target-nil* 0 *xload-static-space*)
+    (xload-make-cons 0 *xload-target-nil* *xload-static-space*)))
 
 
 
@@ -161,17 +160,11 @@
    :default-startup-file-name "level-1.la64fsl"
    :subdirs '("ccl:level-0;ARM64;")
    :compiler-target-name :linuxarm64
-   ;; x8664's values.  The arch already pins the x8664-style static space
-   ;; (canonical-nil-value = #x13000 + fulltag-nil, and the
-   ;; nilreg-relative-symbol scheme packs symbols above NIL exactly as on
-   ;; x8664), so xdump/xx8664-fasload.lisp is the donor: static space at
-   ;; #x12000 = (+ (ash 1 16) (ash 2 12)), one page-filling ivector, then
-   ;; the two-cons NIL pun at #x13000.
    :image-base-address #x300000000000
    :nil-relative-symbols arm64::*nilreg-relative-symbols*
    :static-space-init-function 'arm64-initialize-static-space
    :purespace-reserve (ash 128 30)
-   :static-space-address (+ (ash 1 16) (ash 2 12))
+   :static-space-address #x40000000000
 ))
 
 (add-xload-backend *linuxarm64-xload-backend*)
@@ -186,14 +179,11 @@
    :default-startup-file-name "level-1.da64fsl"
    :subdirs '("ccl:level-0;ARM64;")
    :compiler-target-name :darwinarm64
-   ;; High addresses: arm64 Darwin rejects MAP_FIXED in low memory and
-   ;; rejects RWX.  Must match STATIC_BASE_ADDRESS / IMAGE_BASE_ADDRESS
-   ;; in lisp-kernel/platform-darwinarm64.h.
    :image-base-address #x300000000000
    :nil-relative-symbols arm64::*nilreg-relative-symbols*
    :static-space-init-function 'arm64-initialize-static-space
    :purespace-reserve (ash 128 30)
-   :static-space-address #x200000000
+   :static-space-address #x40000000000
 ))
 
 (add-xload-backend *darwinarm64-xload-backend*)
