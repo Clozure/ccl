@@ -6,7 +6,7 @@ on:
     branches: [master]
 
 env:
-  URL: https://github.com/Clozure/ccl/releases/download/v1.13-arm64-pre1/linuxarm64.tar.gz
+  URL: https://github.com/Clozure/ccl/releases/download/v1.13-arm64-pre2/linuxarm64.tar.gz
 
 permissions:
   contents: read
