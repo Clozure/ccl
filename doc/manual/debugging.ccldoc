@@ -334,8 +334,10 @@ error is signaled.")
 	")
 		"
 	The following code uses a
-	piece of advice to make foo return zero if any of its
-	arguments is not a number. Using :around advice, you can do
+	piece of advice to make foo return zero if any element of its
+	{code numlist} argument is not a number. The advice's {code arglist}
+	contains all arguments passed to {code foo}, so {code (car arglist)}
+	retrieves {code numlist}. Using :around advice, you can do
 	the following:
 	"
 	  (code-block "
