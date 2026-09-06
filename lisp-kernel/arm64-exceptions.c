@@ -536,8 +536,7 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
     bytes_needed = (nconses << dnode_shift);
   LispObj
     prev = lisp_nil,
-    current,
-    initial = xpGPR(xp,arg_y);
+    current;
 
   if (nconses == 0) {
     /* Silly case */
@@ -556,7 +555,8 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
          nconses;
          prev = current, current+= dnode_size, nconses--) {
       deref(current,0) = prev;      /* cdr */
-      deref(current,1) = initial;   /* car */
+      /* GC may relocate the initial element while allocating the block. */
+      deref(current,1) = xpGPR(xp,arg_y); /* car */
     }
     xpGPR(xp,arg_z) = prev;
     xpGPR(xp,arg_y) = xpGPR(xp,allocptr);
