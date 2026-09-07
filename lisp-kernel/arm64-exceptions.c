@@ -521,13 +521,12 @@ lisp_allocation_failure(ExceptionInformation *xp, TCR *tcr, natural bytes_needed
 }
 
 /*
-  Allocate a large list, where "large" means "large enough to
-  possibly trigger the EGC several times if this was done
-  by individually allocating each CONS."  The number of
-  conses in question is in arg_z; on successful return,
-  the list will be in arg_z.  (ppc-exceptions.c:311-351.)
-*/
-
+ * Allocate a large list, where "large" means "large enough to
+ * possibly trigger the EGC several times if this was done by
+ * individually allocating each CONS."  The number of conses to
+ * allocate is in arg_z; arg_y contains the initial element.  On
+ * successful return, the list will be in arg_z.
+ */
 Boolean
 allocate_list(ExceptionInformation *xp, TCR *tcr)
 {
@@ -546,11 +545,6 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
   }
   update_bytes_allocated(tcr, (void *)(void *) tcr->save_allocptr);
   if (allocate_object(xp,bytes_needed,(-bytes_needed)+fulltag_cons,tcr)) {
-    /* ppc:338-343: after allocate_object, allocptr is tagged fulltag_cons
-       and points (tagged) at the FIRST (lowest-addressed) cons.  Chain
-       upward: deref(current,0) is the CDR (cons.cdr = untag+0 in Matt's
-       layout, arm64-constants.h cons struct — same slot order as PPC64),
-       deref(current,1) the CAR. */
     for (current = xpGPR(xp,allocptr);
          nconses;
          prev = current, current+= dnode_size, nconses--) {

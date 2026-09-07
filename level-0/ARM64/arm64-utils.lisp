@@ -556,47 +556,17 @@
   (mov arg_z rnil)                          ; ppc:511 (li arg_z target-nil)
   (ret))                                    ; ppc:512 (blr)
 
-;;; =====================================================================
-;;; %allocate-list — PPC64 line-port of ppc-utils.lisp:602 (16m48).
-;;; PROMOTED from drafts/arm64-utils.lisp with both of the corrections the
-;;; drafting protocol names, each now a LIVE facility rather than a DECIDE:
-;;;
-;;;   * the draft's `(brk (:$ #xf012))' placeholder becomes the real
-;;;     `(uuo-interr arch::error-allocate-list)'.  The lapmacro is defined
-;;;     (drafts/arm64-lapmacros-additions.lisp:660) and already carries two
-;;;     PROMOTED callers in arm64-misc.lisp:598/604 (%suspend-other-threads,
-;;;     %resume-other-threads), so the misc-format interr encoding is proven
-;;;     end to end; the kernel decodes error_allocate_list (=18,
-;;;     compiler/arch.lisp:68) at arm64-exceptions.c:1664 and services it
-;;;     with allocate_list() at :522, which builds the whole list — GCing at
-;;;     most once — and returns it in arg_z.
-;;;   * `(call-subprim .SPnvalret)' becomes `(jump-subprim .SPnvalret)'.
-;;;     PPC's `ba' is a TAIL branch, and every donor agrees: ARM32 spjump
-;;;     (arm-utils.lisp:337), x86-64 jmp-subprim (x86-utils.lisp:469).
-;;;     .SPnvalret is in Matt's own subprim table (arm64-arch.lisp:447).
-;;;     This was the 29th and last entry in tools/draft-tail-subprim-lint.py.
-;;;
-;;; WHY IT MATTERS: l0-aprims.lisp:222 routes MAKE-LIST here for
-;;; (>= size (ash 1 16)) — 65536 — and nothing smaller.  Undefined, that is
-;;; a CCL::UNDEFINED-FUNCTION-CALL naming CCL::%ALLOCATE-LIST, which is
-;;; exactly what LENGTH.LIST.3 `(length (make-list 200000))' signalled; the
-;;; measured 16m48 size ladder puts the cliff between 50000 and 100000,
-;;; straddling 65536.  One test in 21679 reaches it, which is why a whole
-;;; missing definition survived this long.
-;;;
-;;; Two values are returned and the caller keeps one — l0-aprims wraps the
-;;; call in (values ...).  Faithful to every donor: PPC pushes arg_z then
-;;; arg_y, ARM32 the same, x86-64 pushes arg_z then allocptr.  PPC64 is our
-;;; donor, so arg_y it is.
-;;; =====================================================================
+;;; Make a list.  This can be faster than calling cons repeatedly,
+;;; because that might trigger the GC several times when nconses is
+;;; large.
 (defarm64lapfunction %allocate-list ((initial-element arg_y) (nconses arg_z))
-  (check-nargs 2)                             ; ppc:603
-  (save-lisp-context)                         ; ppc:604
-  (uuo-interr arch::error-allocate-list)      ; ppc:605 uuo_interr ... rzero
-  (vpush arg_z)                               ; ppc:606 (the list)
-  (vpush arg_y)                               ; ppc:607
-  (set-nargs 2)                               ; ppc:608
-  (jump-subprim .SPnvalret))                  ; ppc:609 (ba — TAIL branch)
+  (check-nargs 2)
+  (save-lisp-context)
+  (uuo-interr arch::error-allocate-list) ;not really an error
+  (vpush arg_z)                          ;the new list
+  (vpush arg_y)
+  (set-nargs 2)
+  (jump-subprim .SPnvalret))
 
 ;;; =====================================================================
 ;;; 16m48h promotion batch — the GC-control / area-predicate / macptr-slot
