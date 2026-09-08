@@ -2758,53 +2758,125 @@ argument lisp string."
 	    (install-foreign-objc-class classptr nil)
 	    (objc-private-class-id classptr)))))))
 
-;;; Apple invented tags in 10.7, in which the CF version number was 635.0d0
-(defloadvar  *objc-runtime-uses-tags*
-  (>= #&kCFCoreFoundationVersionNumber 635.0d0))
+;;; The Objective-C runtime exposes the parameters of its
+;;; tagged-pointer and non-pointer-isa encodings as _objc_debug_*
+;;; symbols.  Core Foundation and lldb, for example, consult these
+;;; symbols.  See:
+;;; https://github.com/apple-oss-distributions/objc4/blob/main/runtime/objc-gdb.h
+;;;
+;;; So, we will do the same.  This lets us avoid hard-coding any of
+;;; these values and lets us pick up the correct x86_64 / arm64 /
+;;; arm64e values (as well as the per-process pointer obfuscation)
+;;; with no architecture conditionals of our own.
 
+(defun %objc-debug-word (name)
+  (let* ((addr (foreign-symbol-address name)))
+    (when addr (%get-natural addr 0))))
+
+(defloadvar *objc-tagged-pointer-mask*
+    (%objc-debug-word "_objc_debug_taggedpointer_mask"))
+;;; The obfuscator is randomized per process, so don't try to save it.
+(defloadvar *objc-tagged-pointer-obfuscator*
+    (or (%objc-debug-word "_objc_debug_taggedpointer_obfuscator") 0))
+(defloadvar *objc-tagged-pointer-slot-shift*
+    (%objc-debug-word "_objc_debug_taggedpointer_slot_shift"))
+(defloadvar *objc-tagged-pointer-slot-mask*
+    (%objc-debug-word "_objc_debug_taggedpointer_slot_mask"))
+(defloadvar *objc-tagged-pointer-ext-slot-shift*
+    (%objc-debug-word "_objc_debug_taggedpointer_ext_slot_shift"))
+(defloadvar *objc-tagged-pointer-ext-slot-mask*
+    (%objc-debug-word "_objc_debug_taggedpointer_ext_slot_mask"))
+
+;;; A non-zero tagged pointer mask means the runtime uses tagged pointers.
+;;; Apple introduced them in 10.7 / CFCoreFoundationVersionNumber 635.
+(defloadvar *objc-runtime-uses-tags*
+    (let* ((mask *objc-tagged-pointer-mask*))
+      (and mask (not (zerop mask)))))
+
+;;; On the Apple 64-bit runtime (both arm64 and x86-64) the isa field
+;;; of an object is not a plain pointer: the Class pointer is packed
+;;; into a subset of the bits alongside flags and an inline retain
+;;; count.
+;;;
+;;; Use this mask to extract the Class pointer.
+;;;
+;;; It's supposed to be OBJC_AVAILABLE since 10.10, so if it's not
+;;; there, something is seriously wrong.
+#+apple-objc-2.0
+(defloadvar *objc-isa-class-mask*
+    (or (%objc-debug-word "_objc_debug_isa_class_mask")
+        (error "_objc_debug_isa_class_mask not found")))
+
+;;; Return an opaque, process-stable per-tag-class cache key if p is
+;;; an Objective-C tagged pointer.  Otherwise return nil.
+;;;
+;;; The returned value is only used as a key into
+;;; *tagged-instance-class-indices*; it is not otherwise meaningful.
 (defun tagged-objc-instance-p (p)
-  "Return a cache-key tag if P is an ObjC tagged pointer, else NIL.
-
-Apple's encoding differs by arch (objc4 objc-internal.h):
-  - x86_64 macOS: tag in low nibble, bit0 set (_OBJC_TAG_MASK = 1)
-  - arm64: MSB set (_OBJC_TAG_MASK = 1<<63); basic tag in low 3 bits,
-    value 7 selects an extended tag in the high bits.
-
-The old low-nibble-only test made arm64 tagged NSStrings
-(e.g. short literals from initWithUTF8String:) look untagged; we then
-safe-get-ptr'd the payload address (not a real isa) and recognize failed
-— the substringWithRange heisenbug."
-  (when *objc-runtime-uses-tags*
-    (let* ((raw (%ptr-to-int p)))
-      #+arm64-target
-      (when (logbitp 63 raw)
-        (let* ((basic (logand raw #x7)))
-          (declare (fixnum basic))
-          (if (eql basic 7)
-            ;; Extended tag — keep cache keys out of 0..6.
-            (logior #x100 (ldb (byte 8 55) raw))
-            basic)))
-      #-arm64-target
-      (let* ((tag (logand (the natural raw) #xf)))
-        (declare (fixnum tag))
-        (if (logbitp 0 tag)
-          tag)))))
+  (let* ((mask *objc-tagged-pointer-mask*))
+    ;; The bits that indicate whether a pointer is tagged are exempt from
+    ;; obfuscation, so we can test them directly.
+    (when (and mask (eql (logand (%ptr-to-int p) mask) mask))
+      ;; De-obfuscate the other bits now that we know we have a tagged
+      ;; pointer.
+      (let* ((bits (logxor (%ptr-to-int p) *objc-tagged-pointer-obfuscator*))
+             (slot (logand (ash bits (- *objc-tagged-pointer-slot-shift*))
+                           *objc-tagged-pointer-slot-mask*)))
+        (declare (fixnum slot))
+        ;; The slot is an index into a table of tagged classes: it is
+        ;; encoded into a small number of bits in the pointer.  If
+        ;; those bits are all set, we need to look at an extended set
+        ;; of bits elsewhere in the pointer.
+        (if (eql slot *objc-tagged-pointer-slot-mask*)
+          ;; A saturated basic slot selects an extended tag; keep extended
+          ;; keys disjoint from the basic ones by logior-ing in an extra
+          ;; bit.
+          (logior (ash 1 32)
+                  (logand (ash bits (- *objc-tagged-pointer-ext-slot-shift*))
+                          *objc-tagged-pointer-ext-slot-mask*))
+          slot)))))
 
 (defun %objc-instance-class-index (p)
   (unless (%null-ptr-p p)
     (let* ((tag (tagged-objc-instance-p p)))
       (if tag
 	(objc-tagged-instance-class-index p tag)
-	(if (with-macptrs (q)
-	      (safe-get-ptr p q)
-              (not (%null-ptr-p q)))
-	  (with-macptrs ((parent (#_object_getClass p)))
-            (or
-             (objc-class-id parent)
-             (objc-private-class-id parent)
-             #+(or apple-objc-2.0 apple-objc)
-             (objc-hidden-class-id parent))))))))
-
+        (with-macptrs (q)
+          (safe-get-ptr p q)             ;read isa pointer, safely
+          (unless (%null-ptr-p q)
+            (with-macptrs ((parent
+                            ;; If p is an Objective-C object, we now
+                            ;; have its isa field in q.  (But if p is
+                            ;; some other pointer, q also will be
+                            ;; arbitrary data.)
+                            ;;
+                            ;; On Apple's 64-bit runtime, the isa
+                            ;; field is not an actual pointer.
+                            ;; Extract the Class part of the isa
+                            ;; field, and then use the subsequent
+                            ;; registry lookups to guess whether the
+                            ;; extracted Class looks legit.
+                            ;;
+                            ;; On x86-64, #_object_getClass appears to
+                            ;; be tolerant of an input pointer that
+                            ;; isn't an object.  On arm64, a
+                            ;; non-object pointer will cause a fault,
+                            ;; which is why we do the direct bit
+                            ;; manipulation here.
+                            ;;
+                            ;; On other runtimes (GNU, Cocotron), isa
+                            ;; is a normal pointer, so they keep using
+                            ;; #_object_getClass (and hope that it
+                            ;; doesn't choke on non-object pointers).
+                            #+apple-objc-2.0
+                            (%int-to-ptr (logand (%ptr-to-int q)
+                                                 *objc-isa-class-mask*))
+                            #-apple-objc-2.0
+                            (#_object_getClass p)))
+              (or (objc-class-id parent)
+                  (objc-private-class-id parent)
+                  #+(or apple-objc-2.0 apple-objc)
+                  (objc-hidden-class-id parent)))))))))
 
 ;;; If an instance, return (values :INSTANCE <class>)
 ;;; If a class, return (values :CLASS <class>).
