@@ -2942,10 +2942,19 @@
           ;; arguments pushes value-stack words and moves vsp below
           ;; the save area, so the restore reads relative to the
           ;; PRE-spread snapshot in temp1, as PPC64 does.
+          ;; All three restores belong under the same tail-p guard.  Only
+          ;; the caller's own epilogue may tear down the number frame and the
+          ;; non-volatile registers; a spread call in an ordinary value
+          ;; position is running INSIDE the frame it would be releasing.
+          ;; Unguarded, (apply f x list) in a loop popped the enclosing
+          ;; function's number frame on every iteration, so a single-float
+          ;; local homed there was read back from a dead slot -- yielding a
+          ;; denormal, a raw pointer, or fname -- and the C stack was left
+          ;; unbalanced, faulting later somewhere unrelated.
           (when tail-p
-            (arm642-restore-nvrs seg nil arm64::temp1))
-          (arm642-restore-non-volatile-fprs seg)
-          (! restore-nfp))
+            (arm642-restore-nvrs seg nil arm64::temp1)
+            (arm642-restore-non-volatile-fprs seg)
+            (! restore-nfp)))
         (if nargs
           (unless known-fixed-nargs (arm642-set-nargs seg nargs))
           (! pop-argument-registers)))
