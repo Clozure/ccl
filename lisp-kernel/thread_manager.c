@@ -403,9 +403,9 @@ recursive_lock_trylock(RECURSIVE_LOCK m, TCR *tcr, int *was_free)
     m->count++;
     if (was_free) {
       *was_free = 0;
-      RELEASE_SPINLOCK(m->spinlock);
-      return 0;
     }
+    RELEASE_SPINLOCK(m->spinlock);
+    return 0;
   }
   if (store_conditional((natural*)&(m->avail), 0, 1) == 0) {
     m->owner = tcr;
@@ -430,8 +430,8 @@ recursive_lock_trylock(RECURSIVE_LOCK m, TCR *tcr, int *was_free)
     m->count++;
     if (was_free) {
       *was_free = 0;
-      return 0;
     }
+    return 0;
   }
   if (store_conditional((natural*)&(m->avail), 0, 1) == 0) {
     m->owner = tcr;
