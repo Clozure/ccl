@@ -881,12 +881,14 @@ the lisp and run REBUILD-CCL again.")
 	      ,@body)
 	 (cwd ,wd)))))
 
-(defparameter *ccl-tests-directory* (make-pathname :directory
-                                                   (append (pathname-directory
-                                                            (translate-logical-pathname #P"ccl:"))
-                                                           '(:up "ccl-tests"))))
+(defloadvar *ccl-tests-directory*
+    (make-pathname :directory
+                   (append (pathname-directory
+                            (translate-logical-pathname #P"ccl:"))
+                           '(:up "ccl-tests"))))
 
-(defparameter *ansi-tests-directory* (merge-pathnames  "ansi-tests/" *ccl-tests-directory*))
+(defloadvar *ansi-tests-directory*
+    (merge-pathnames  "ansi-tests/" *ccl-tests-directory*))
 
 (defun ensure-tests-loaded (&key force update ansi ccl (load t))
   (unless (and (find-package "REGRESSION-TEST") (not force))
