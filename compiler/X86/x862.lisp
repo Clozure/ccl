@@ -5769,10 +5769,10 @@
                  (progn
                    (x862-one-targeted-reg-form seg val ($ *x862-arg-z*))
                    (progn
-                       (if intval
-                         (x862-lri seg *x862-imm0* intval)
-                         (! deref-macptr *x862-imm0* *x862-arg-z*))
-                       (values *x862-imm0* *x862-arg-z*)))
+                     (if intval
+                       (x862-lri seg *x862-imm0* intval)
+                       (! deref-macptr *x862-imm0* *x862-arg-z*))
+                     (values *x862-imm0* *x862-arg-z*)))
                  (values (x862-macptr-arg-to-reg seg val ($ *x862-imm0* :mode :address)) nil))))
         (unless (typep offval '(signed-byte 32))
           (setq offval nil))
@@ -5799,9 +5799,14 @@
 			     (32 (! mem-set-constant-fullword intval ptr-reg offsetreg))
 			     (64 (! mem-set-constant-doubleword intval ptr-reg offsetreg))))))))
                (if for-value
-                 (with-imm-target () (val-reg (target-word-size-case (32 :s32) (64 :s64)))
+                 (let* ((val-reg (make-unwired-lreg
+                                  (available-imm-temp
+                                   *available-backend-imm-temps*
+                                   (target-word-size-case (32 :s32)
+                                                          (64 :s64))))))
                    (x862-lri seg val-reg intval)
-                   (<- (set-regspec-mode val-reg (gpr-mode-name-value :address))))))
+                   (<- (set-regspec-mode val-reg (gpr-mode-name-value
+                                                  :address))))))
               (offval
                ;; Still simpler than the general case
                (with-imm-target () (ptr-reg :address)
