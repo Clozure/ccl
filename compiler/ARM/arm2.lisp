@@ -1797,6 +1797,9 @@
     (let* ((index-known-fixnum (acode-fixnum-form-p index))
            (unscaled-idx nil)
            (src nil))
+      (when index-known-fixnum
+        (unless (>= index-known-fixnum 0)
+          (setq index-known-fixnum nil)))
       (if (or safe (not index-known-fixnum))
         (multiple-value-setq (src unscaled-idx)
           (arm2-two-untargeted-reg-forms seg vector arm::arg_y index arm::arg_z))
@@ -2550,6 +2553,9 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
            (constval (arm2-constant-value-ok-for-type-keyword type-keyword value))
            (needs-memoization (and is-node (arm2-acode-needs-memoization value)))
            (index-known-fixnum (acode-fixnum-form-p index)))
+      (when index-known-fixnum
+        (unless (>= index-known-fixnum 0)
+          (setq index-known-fixnum nil)))
       (let* ((src ($ arm::arg_x))
              (unscaled-idx ($ arm::arg_y))
              (result-reg ($ arm::arg_z)))
@@ -2592,6 +2598,9 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
            (constval (arm2-constant-value-ok-for-type-keyword type-keyword value))
            (needs-memoization (and is-node (arm2-acode-needs-memoization value)))
            (index-known-fixnum (acode-fixnum-form-p index)))
+      (when index-known-fixnum
+        (unless (>= index-known-fixnum 0)
+          (setq index-known-fixnum nil)))
       (let* ((src ($ arm::arg_x))
              (unscaled-idx ($ arm::arg_y))
              (result-reg ($ arm::arg_z)))
