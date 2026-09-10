@@ -1119,6 +1119,14 @@
    ;; each size would otherwise be a separate template.
    (def addv ((:rd :b) (:rn :varr)) #x0e31b800 #xbffffc00)
 
+   ;; Advanced SIMD three same (FP): whole-vector FADD/FSUB, The
+   ;; :vfarr arrangement supplies Q@30 and the sz bit@22 (single vs
+   ;; double); bit 23 is the add/sub opcode selector, so unlike :varr
+   ;; this class must not write a 2-bit size over it.  Bases are the
+   ;; Q=0,sz=0 (.2s) forms.
+   (def fadd ((:rd :vfarr) (:rn :vfarr) (:rm :vfarr)) #x0e20d400 #xbfa0fc00)
+   (def fsub ((:rd :vfarr) (:rn :vfarr) (:rm :vfarr)) #x0ea0d400 #xbfa0fc00)
+
    ;; round to integral value (frintN/P/M/Z/A/X/I)
    (def frintn ((:rd :s) (:rn :s)) #x1e244000 $fp-dp1src-mask)
    (def frintn ((:rd :d) (:rn :d)) #x1e644000 $fp-dp1src-mask)
@@ -1274,6 +1282,7 @@
     :elt5          ;a vector lane Vn.Ts[i] whose size+index encode into imm5
     :elt4          ;a vector lane Vn.Ts[i] whose index encodes into imm4
     :varr          ;a whole vector Vn.<T> (arrangement -> Q @ 30, size @ 23:22)
+    :vfarr         ;a whole vector Vn.<T> for FP three-same (Q @ 30, size @ 22)
     :aimm          ;uimm12, maybe shifted left 12 bits
     :limm-x        ;logical bitmask immediate, 64-bit
     :limm-w        ;logical bitmask immediate, 32-bit (replicated to 64, N=0)
@@ -2111,20 +2120,33 @@
 ;;; vector-arrangement-operand: the role's register field takes the number,
 ;;; and the arrangement drives the Q and size bits.
 (defun vector-arrangement-class-p (class)
-  (eq class :varr))
+  (or (eq class :varr) (eq class :vfarr)))
 
-(defun encode-vector-arrangement-operand (insn operand role)
+(defun encode-vector-arrangement-operand (insn operand role class)
   (set-field-value insn (register-field role)
                    (register-number (vector-arrangement-operand-register operand)))
-  (destructuring-bind (q . size)
-      (arrangement-q+size (vector-arrangement-operand-arrangement operand))
-    (set-field-value insn (byte 1 30) q)
-    (set-field-value insn (byte 2 22) size)))
+  (let ((arrangement (vector-arrangement-operand-arrangement operand)))
+    (destructuring-bind (q . size) (arrangement-q+size arrangement)
+      (set-field-value insn (byte 1 30) q)
+      (ecase class
+        ;; General SIMD: element size is the full 2-bit field at 23:22.
+        (:varr (set-field-value insn (byte 2 22) size))
+        ;; FP three-same: only sz @ 22 (0=single/1=double); bit 23 is the
+        ;; opcode's add/sub selector and must be left alone.  size is 2 for
+        ;; the single arrangements (2s/4s) and 3 for the double one (2d).
+        (:vfarr
+         (assert (member arrangement '(:2s :4s :2d)) ()
+                 "~s is not a floating-point vector arrangement" arrangement)
+         (set-field-value insn (byte 1 22) (- size 2)))))))
 
-(defun decode-vector-arrangement-operand (word role)
+(defun decode-vector-arrangement-operand (word role class)
   (make-vector-arrangement-operand
    :register (fpr-ref (extract-register word role) 128)
-   :arrangement (q+size-arrangement (ldb (byte 1 30) word) (ldb (byte 2 22) word))))
+   :arrangement (ecase class
+                  (:varr (q+size-arrangement (ldb (byte 1 30) word)
+                                             (ldb (byte 2 22) word)))
+                  (:vfarr (q+size-arrangement (ldb (byte 1 30) word)
+                                              (+ 2 (ldb (byte 1 22) word)))))))
 
 (defparameter *immediate-field-specs*
   `((:simm9 ,(byte 9 12) :signed t)
@@ -2430,7 +2452,8 @@
     ((and (consp spec) (vector-element-class-p (second spec)))
      (encode-vector-element-operand insn operand (first spec) (second spec)))
     ((and (consp spec) (vector-arrangement-class-p (second spec)))
-     (encode-vector-arrangement-operand insn operand (first spec)))
+     (encode-vector-arrangement-operand insn operand (first spec)
+                                        (second spec)))
     ((consp spec) (encode-register-operand insn operand (first spec)
                                            (second spec)))))
 
@@ -2445,7 +2468,7 @@
     ((and (consp spec) (vector-element-class-p (second spec)))
      (decode-vector-element-operand word (first spec) (second spec)))
     ((and (consp spec) (vector-arrangement-class-p (second spec)))
-     (decode-vector-arrangement-operand word (first spec)))
+     (decode-vector-arrangement-operand word (first spec) (second spec)))
     ((consp spec) (decode-register-operand word (first spec) (second spec)))))
 
 (defun encode-operands (insn)
