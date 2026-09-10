@@ -410,7 +410,7 @@
 (define-arm-vinsn (misc-ref-c-node :predicatable)
     (((dest :lisp))
      ((v :lisp)
-      (idx :s16const))
+      (idx :u32const))
      ())
   (ldr dest (:@ v (:$ (:apply + arm::misc-data-offset (:apply ash idx 2))))))
 
@@ -427,7 +427,7 @@
     (()
      ((val :lisp)
       (v :lisp)
-      (idx :s16const))
+      (idx :u32const))
      ())
   (str val (:@ v (:$ (:apply + arm::misc-data-offset (:apply ash idx 2))))))
 

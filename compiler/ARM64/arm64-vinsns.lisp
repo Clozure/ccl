@@ -10,10 +10,13 @@
 
 (define-arm64-vinsn misc-ref-c-node (((dest :lisp))
                                      ((v :lisp)
-                                      (idx :s16const))
+                                      (idx :u8const))
                                      ())
-  ;; this range is limited
-  (ldur dest (:@ v (:$ (:apply + arm64::misc-data-offset (:apply ash idx 3))))))
+  ;; The offset here is never 8-byte-aligned, so we always have to
+  ;; use the limited-range unscaled encoding.  (Users check
+  ;; max-64-bit-constant-index before emitting this vinsn.)
+  (ldur dest (:@ v (:$ (:apply + arm64::misc-data-offset
+                               (:apply ash idx 3))))))
 
 (define-arm64-vinsn check-exact-nargs (()
                                        ((n :u16const)))
@@ -1370,20 +1373,14 @@
   (bic allocptr allocptr (:$ arm64::fulltagmask))
   (stur closed (:@ dest (:$ arm64::misc-data-offset))))
 
-;;; ============ misc-set-c-node ============
-;;; Donor: vinsn-retrofit-queue.lisp:469; PPC64 ppc64-vinsns.lisp:440:
-;;; (std val (+ misc-data-offset (ash idx 3)) v).  Offset = 8*idx - 4 == 4
-;;; (mod 8) -- never 8-aligned => STUR (unscaled simm9; mirror of his
-;;; misc-ref-c-node's ldur).  simm9 bounds idx <= 31 (4+8*31 = 252 <= 255);
-;;; larger indices fail loudly at expand time via his range check (same
-;;; reach story as the additions file's ref-constant flag).
-;;; No GC write barrier here, faithfully to PPC64 (emit sites use it for
-;;; initializing stores / non-memoized cells).
+;;; This should only be used for initialization (when the value being
+;;; stored is known to be older than the vector v).
 (define-arm64-vinsn misc-set-c-node (()
                                      ((val :lisp)
                                       (v :lisp)
-                                      (idx :s16const))
+                                      (idx :u8const))
                                      ())
+  ;; stur/simm9, as misc-ref-c-node: node offset is never 8-aligned.
   (stur val (:@ v (:$ (:apply + arm64::misc-data-offset
                               (:apply ash idx 3))))))
 
@@ -2008,7 +2005,7 @@
 ;;; zero-extends through the full X register architecturally.
 (define-arm64-vinsn misc-ref-c-u8 (((dest :u8))
                                    ((v :lisp)
-                                    (idx :u32const))
+                                    (idx :u16const))
                                    ())
   ((:pred < idx 4)
    (ldurb dest (:@ v (:$ (:apply + arm64::misc-data-offset idx)))))
@@ -2023,7 +2020,7 @@
 ;;; ldrsb (32-bit extension only).
 (define-arm64-vinsn misc-ref-c-s8 (((dest :s8))
                                    ((v :lisp)
-                                    (idx :u32const))
+                                    (idx :u16const))
                                    ())
   ((:pred < idx 4)                      ;disp < 0 (see -c-u8): unscaled
    (ldursb (:x dest) (:@ v (:$ (:apply + arm64::misc-data-offset idx)))))
@@ -2037,7 +2034,7 @@
 ;;; for k >= 2; max index gated by the handler.
 (define-arm64-vinsn misc-ref-c-u16 (((dest :u16))
                                     ((v :lisp)
-                                     (idx :u32const))
+                                     (idx :u16const))
                                     ())
   ((:pred < idx 2)
    (ldurh dest (:@ v (:$ (:apply + arm64::misc-data-offset
@@ -2051,7 +2048,7 @@
 ;;; to 64.  LDRSH X-form; (:x dest) load-bearing (U7a).
 (define-arm64-vinsn misc-ref-c-s16 (((dest :s16))
                                     ((v :lisp)
-                                     (idx :u32const))
+                                     (idx :u16const))
                                     ())
   ((:pred < idx 2)                      ;disp < 0 (see -c-u16): unscaled
    (ldursh (:x dest) (:@ v (:$ (:apply + arm64::misc-data-offset
@@ -2069,7 +2066,7 @@
 ;;; falls out of his width-by-class design.  W write zero-extends.
 (define-arm64-vinsn misc-ref-c-u32 (((dest :u32))
                                     ((v :lisp)
-                                     (idx :u32const))
+                                     (idx :u16const))
                                     ())
   ((:pred < idx 1)
    (ldur dest (:@ v (:$ arm64::misc-data-offset))))
@@ -2083,7 +2080,7 @@
 ;;; load-bearing (U7a).
 (define-arm64-vinsn misc-ref-c-s32 (((dest :s32))
                                     ((v :lisp)
-                                     (idx :u32const))
+                                     (idx :u16const))
                                     ())
   ((:pred < idx 1)                      ;disp < 0 (see -c-u32): unscaled
    (ldursw (:x dest) (:@ v (:$ arm64::misc-data-offset))))
@@ -2099,7 +2096,7 @@
 ;;; precedent exactly.
 (define-arm64-vinsn misc-ref-c-u64 (((dest :u64))
                                     ((v :lisp)
-                                     (idx :u32const)) ; sic (PPC64 comment)
+                                     (idx :u8const))
                                     ())
   (ldur dest (:@ v (:$ (:apply + arm64::misc-data-offset
                                (:apply ash idx arm64::word-shift))))))
@@ -2109,7 +2106,7 @@
 ;;; needs no extension; the s64/u64 split is allocator bookkeeping).
 (define-arm64-vinsn misc-ref-c-s64 (((dest :s64))
                                     ((v :lisp)
-                                     (idx :u32const)) ; sic
+                                     (idx :u8const))
                                     ())
   (ldur dest (:@ v (:$ (:apply + arm64::misc-data-offset
                                (:apply ash idx arm64::word-shift))))))
@@ -2121,7 +2118,7 @@
 ;;; reuse the uoff2/simm9 classes).
 (define-arm64-vinsn misc-ref-c-single-float (((dest :single-float))
                                              ((v :lisp)
-                                              (idx :u32const))
+                                              (idx :u16const))
                                              ())
   ((:pred < idx 1)
    (ldur dest (:@ v (:$ arm64::misc-data-offset))))
@@ -2137,7 +2134,7 @@
 ;;; lapmacro / w1 get-double precedent); k <= 31 handler-gated.
 (define-arm64-vinsn misc-ref-c-double-float (((dest :double-float))
                                              ((v :lisp)
-                                              (idx :u32const))
+                                              (idx :u8const))
                                              ())
   (ldur dest (:@ v (:$ (:apply + arm64::misc-dfloat-offset
                                (:apply ash idx arm64::word-shift))))))
@@ -2158,7 +2155,7 @@
 (define-arm64-vinsn misc-ref-c-complex-single-float
     (((dest :complex-single-float))
      ((v :lisp)
-      (idx :u32const))
+      (idx :u8const))
      ())
   (ldur dest (:@ v (:$ (:apply + arm64::complex-single-float.realpart
                                (:apply ash idx 3))))))
@@ -2178,7 +2175,7 @@
 (define-arm64-vinsn misc-ref-c-complex-double-float
     (((dest :complex-double-float))
      ((v :lisp)
-      (idx :u32const))
+      (idx :u8const))
      ((dtemp :double-float)))
   (ldur (:d dest) (:@ v (:$ (:apply + arm64::complex-double-float.realpart
                                     (:apply ash idx 4)))))
@@ -2326,7 +2323,7 @@
 ;;; for k >= 4 (same split as misc-ref-c-u8).
 (define-arm64-vinsn misc-set-c-u8 (((val :u8))
                                    ((v :lisp)
-                                    (idx :u32const))
+                                    (idx :u16const))
                                    ())
   ((:pred < idx 4)
    (sturb val (:@ v (:$ (:apply + arm64::misc-data-offset idx)))))
@@ -2338,7 +2335,7 @@
 ;;; time, the store is the same byte store.
 (define-arm64-vinsn misc-set-c-s8 (((val :s8))
                                    ((v :lisp)
-                                    (idx :u32const))
+                                    (idx :u16const))
                                    ())
   ((:pred < idx 4)                      ;disp < 0 (see -c-u8): unscaled
    (sturb val (:@ v (:$ (:apply + arm64::misc-data-offset idx)))))
@@ -2351,7 +2348,7 @@
 ;;; scaled STRH for k >= 2 (same split as misc-ref-c-u16).
 (define-arm64-vinsn misc-set-c-u16 (((val :u16))
                                     ((v :lisp)
-                                     (idx :u32const))
+                                     (idx :u16const))
                                     ())
   ((:pred < idx 2)
    (sturh val (:@ v (:$ (:apply + arm64::misc-data-offset
@@ -2364,7 +2361,7 @@
 ;;; PPC64 ppc64-vinsns.lisp:338: (sth ...) -- same store as -c-u16.
 (define-arm64-vinsn misc-set-c-s16 (((val :s16))
                                     ((v :lisp)
-                                     (idx :u32const))
+                                     (idx :u16const))
                                     ())
   ((:pred < idx 2)                      ;disp < 0 (see -c-u16): unscaled
    (sturh val (:@ v (:$ (:apply + arm64::misc-data-offset
@@ -2383,7 +2380,7 @@
 (define-arm64-vinsn misc-set-c-u32 (()
                                     ((val :u32)
                                      (v :lisp)
-                                     (idx :u32const)))
+                                     (idx :u16const)))
   ((:pred < idx 1)
    (stur val (:@ v (:$ arm64::misc-data-offset))))
   ((:not (:pred < idx 1))
@@ -2395,7 +2392,7 @@
 (define-arm64-vinsn misc-set-c-s32 (()
                                     ((val :s32)
                                      (v :lisp)
-                                     (idx :u32const)))
+                                     (idx :u16const)))
   ((:pred < idx 1)                      ;disp < 0 (see -c-u32): unscaled
    (stur val (:@ v (:$ arm64::misc-data-offset))))
   ((:not (:pred < idx 1))
@@ -2409,7 +2406,7 @@
 (define-arm64-vinsn misc-set-c-u64 (()
                                     ((val :u64)
                                      (v :lisp)
-                                     (idx :u32const)))
+                                     (idx :u8const)))
   (stur val (:@ v (:$ (:apply + arm64::misc-data-offset
                               (:apply ash idx 3))))))
 
@@ -2418,7 +2415,7 @@
 (define-arm64-vinsn misc-set-c-s64 (()
                                     ((val :s64)
                                      (v :lisp)
-                                     (idx :u32const)))
+                                     (idx :u8const)))
   (stur val (:@ v (:$ (:apply + arm64::misc-data-offset
                               (:apply ash idx 3))))))
 
@@ -2427,7 +2424,7 @@
 ;;; (ash idx 2)) v).  S-form STR/STUR, k=0 split as -c-u32.
 (define-arm64-vinsn misc-set-c-single-float (((val :single-float))
                                              ((v :lisp)
-                                              (idx :u32const)))
+                                              (idx :u16const)))
   ((:pred < idx 1)
    (stur val (:@ v (:$ arm64::misc-data-offset))))
   ((:not (:pred < idx 1))
@@ -2439,7 +2436,7 @@
 ;;; (ash idx 3)) v).  disp = 8k - 4 unaligned => D-form STUR, k <= 31.
 (define-arm64-vinsn misc-set-c-double-float (((val :double-float))
                                              ((v :lisp)
-                                              (idx :u32const)))
+                                              (idx :u8const)))
   (stur val (:@ v (:$ (:apply + arm64::misc-dfloat-offset
                               (:apply ash idx arm64::word-shift))))))
 
@@ -2451,7 +2448,7 @@
 (define-arm64-vinsn misc-set-c-complex-single-float
     (((val :complex-single-float))
      ((v :lisp)
-      (idx :u32const)))
+      (idx :u8const)))
   (stur val (:@ v (:$ (:apply + arm64::complex-single-float.realpart
                               (:apply ash idx 3))))))
 
@@ -2465,7 +2462,7 @@
 (define-arm64-vinsn misc-set-c-complex-double-float
     (((val :complex-double-float))
      ((v :lisp)
-      (idx :u32const))
+      (idx :u8const))
      ((dtemp :double-float)))
   (stur (:d val) (:@ v (:$ (:apply + arm64::complex-double-float.realpart
                                    (:apply ash idx 4)))))
@@ -2645,7 +2642,7 @@
 ;;; ensuring-node-target at the same emit site.
 (define-arm64-vinsn misc-ref-c-bit-fixnum (((dest :imm))
                                            ((v :lisp)
-                                            (idx :u32const))
+                                            (idx :u16const))
                                            ((temp :u32)))
   ((:pred < idx 32)
    (ldur temp (:@ v (:$ (:apply + arm64::misc-data-offset
