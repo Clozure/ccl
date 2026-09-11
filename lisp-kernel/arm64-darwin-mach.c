@@ -114,6 +114,17 @@ typedef struct {
   exception_behavior_t behaviors[NUM_LISP_EXCEPTIONS_HANDLED];
   thread_state_flavor_t flavors[NUM_LISP_EXCEPTIONS_HANDLED];
   natural saved_last_lisp_frame;
+  /*
+   * Imitate a sigaltstack-flavored per-thread exception stack.  We
+   * will build a synthetic signal frame here when the control stack
+   * has no room (i.e., hard overflow or a fault taken while already
+   * handling one).
+   *
+   * This is malloc'd and freed along with the TCR.
+   */
+  BytePtr exception_stack_low;
+  BytePtr exception_stack_high;
+  natural exception_stack_size;
 } MACH_foreign_exception_state;
 
 extern void pseudo_sigreturn(void);
@@ -134,63 +145,92 @@ void fatal_mach_error(char *format, ...);
 
 #define ts_pc(t) ((t)->__pc)
 
-/* Emergency scratch for signal frames when the faulting SP is already
- * in/near the OS or CCL stack guard.  Without this, setup_signal_frame's
- * memmove into the guard kills the Mach exception thread and the process
- * beachballs / SIGSEGVs with a useless secondary crash.
- *
- * Lifecycle: the flag is set when a frame is placed in the scratch buffer
- * and cleared in do_pseudo_sigreturn when that frame's context is torn
- * down.  A second deep fault while the buffer is occupied is fatal —
- * aliasing the buffer would silently corrupt the first frame. */
-static uint8_t darwin_arm64_exc_frame_scratch[8192]
-  __attribute__((aligned(16)));
-static int darwin_arm64_exc_frame_scratch_used = 0;
+/* Size of the altstack-style per-thread exception stack */
+#define DARWIN_ARM64_EXCEPTION_STACK_SIZE (64 << 10)
 
 static Boolean
-darwin_arm64_in_exc_scratch(natural addr)
+on_exception_stack(MACH_foreign_exception_state *fxs, natural addr)
 {
-  return (addr >= (natural)darwin_arm64_exc_frame_scratch &&
-          addr < ((natural)darwin_arm64_exc_frame_scratch
-                  + sizeof(darwin_arm64_exc_frame_scratch)));
+  return (fxs != NULL &&
+          fxs->exception_stack_high != NULL &&
+          addr > (natural)fxs->exception_stack_low &&
+          addr <= (natural)fxs->exception_stack_high);
 }
 
+/*
+ * Choose where to build the synthetic signal frame by examining the
+ * passed-in stack pointer.  In effect we're imitating the sigaltstack
+ * scheme by hand: a Mach exception is serviced on a separate server
+ * thread, so it never lands on the faulting thread's sigaltstack, and
+ * we have to pick the frame's stack ourselves.
+ */
 static LispObj *
-find_foreign_sp(LispObj sp, area *foreign_area, TCR *tcr)
+choose_exception_frame_sp(LispObj sp, area *cs_area, TCR *tcr)
 {
+  MACH_foreign_exception_state *fxs =
+    (MACH_foreign_exception_state *)tcr->native_thread_info;
   BytePtr bsp;
   natural need = sizeof(siginfo_t) + sizeof(ExceptionInformation)
     + 1024 /* mcontext + slop */ + C_REDZONE_LEN + 64;
 
-  /* ARM64 TCR has no foreign_sp (x86); last_lisp_frame is the cstack
-   * boundary recorded by ff-call spentries when SP is off the lisp stack. */
-  if (((BytePtr)sp < foreign_area->low) ||
-      ((BytePtr)sp > foreign_area->high)) {
+  /*
+   * We were already running a handler on our special per-thread
+   * exception stack.  Stay on the exception stack.  We test this case
+   * first, before the cstack range check below, since the per-thread
+   * exception stack is also outside of the cstack range.
+   */
+  if (on_exception_stack(fxs, (natural)sp)) {
+    bsp = (BytePtr)((sp - C_REDZONE_LEN) & ~(LispObj)(C_STK_ALIGN - 1));
+    if ((natural)bsp >= (natural)fxs->exception_stack_low + need)
+      return (LispObj *)bsp;
+    Fatal("Mach exception",
+          "exception stack exhausted (deep nested faults)");
+  }
+
+  /*
+   * If the stack pointer is pointing outside the cstack area, it is
+   * presumably referring to a foreign stack (or to the per-thread
+   * exception stack, but we already checked for that just above).
+   * The top of the cstack is saved in last_lisp_frame.
+   */
+  if (((BytePtr)sp < cs_area->low) ||
+      ((BytePtr)sp > cs_area->high)) {
     sp = (LispObj)(tcr->last_lisp_frame);
   }
   bsp = (BytePtr)((sp - C_REDZONE_LEN) & ~(LispObj)(C_STK_ALIGN - 1));
 
-  /* If the frame would land at/below softlimit (or the area has no room),
-   * use the process-wide scratch buffer. */
-  if ((natural)bsp < (natural)foreign_area->softlimit + need
-      || (natural)bsp < (natural)foreign_area->low + need) {
-    if (darwin_arm64_exc_frame_scratch_used) {
-      Fatal("Mach exception",
-            "nested deep-stack exception frame: scratch buffer in use");
-    }
-    darwin_arm64_exc_frame_scratch_used = 1;
+  /*
+   * Normal case: build the exception frame on the control stack itself,
+   * provided it would remain above the hard guard.
+   */
+  if ((natural)bsp >= (natural)cs_area->hardlimit + need
+      && (natural)bsp >= (natural)cs_area->low + need)
+    return (LispObj *)bsp;
+
+  /*
+   * There's no more room on the control stack (the stack pointer is in
+   * or below the hard guard, or maybe a fault was taken while the stack
+   * was already deep).  Build a frame at the top of the per-thread
+   * exception stack.
+   */
+  if (fxs && fxs->exception_stack_high) {
     if (darwin_arm64_debug_wx()) {
       fprintf(dbgout,
-              "\n[darwinarm64] signal frame: SP 0x%lx near/below softlimit "
-              "0x%lx — using scratch\n",
-              (unsigned long)sp, (unsigned long)(natural)foreign_area->softlimit);
+              "\n[darwinarm64] signal frame: SP 0x%lx at/below hardlimit "
+              "0x%lx — using exception stack [0x%lx,0x%lx)\n",
+              (unsigned long)sp, (unsigned long)(natural)cs_area->hardlimit,
+              (unsigned long)(natural)fxs->exception_stack_low,
+              (unsigned long)(natural)fxs->exception_stack_high);
       fflush(dbgout);
     }
-    bsp = (BytePtr)darwin_arm64_exc_frame_scratch
-      + sizeof(darwin_arm64_exc_frame_scratch);
-    bsp = (BytePtr)((natural)bsp & ~(natural)(C_STK_ALIGN - 1));
+    bsp = (BytePtr)((natural)fxs->exception_stack_high & ~(natural)(C_STK_ALIGN - 1));
+    if ((natural)bsp >= (natural)fxs->exception_stack_low + need)
+      return (LispObj *)bsp;
   }
-  return (LispObj *)bsp;
+
+  Fatal("Mach exception",
+        "no room for exception frame (control and exception stacks full)");
+  return NULL;                    /* unreached; silence -Wreturn-type */
 }
 
 TCR *
@@ -253,8 +293,6 @@ do_pseudo_sigreturn(mach_port_t thread, TCR *tcr, native_thread_state_t *out)
     tcr->valence = TCR_STATE_LISP;
     if (fxs)
       tcr->last_lisp_frame = fxs->saved_last_lisp_frame;
-    if (darwin_arm64_in_exc_scratch((natural)xp))
-      darwin_arm64_exc_frame_scratch_used = 0;
     restore_mach_thread_state(thread, xp, out);
     if ((TCR_INTERRUPT_LEVEL(tcr) >= 0) && tcr->interrupt_pending)
       pthread_kill((pthread_t)(tcr->osid), SIGNAL_FOR_PROCESS_INTERRUPT);
@@ -277,7 +315,7 @@ create_thread_context_frame(mach_port_t thread,
   natural stackp;
   kern_return_t kret;
 
-  stackp = (LispObj)find_foreign_sp(ts->__sp, tcr->cs_area, tcr);
+  stackp = (LispObj)choose_exception_frame_sp(ts->__sp, tcr->cs_area, tcr);
   stackp = TRUNC_DOWN(stackp, sizeof(siginfo_t), C_STK_ALIGN);
   if (info_ptr)
     *info_ptr = (siginfo_t *)stackp;
@@ -720,6 +758,18 @@ darwin_exception_init(TCR *tcr)
 
   fxs = calloc(1, sizeof(MACH_foreign_exception_state));
   tcr->native_thread_info = (void *)fxs;
+
+  /*
+   * Allocate the per-thread exception stack (see choose_exception_frame_sp).
+   * The memory from malloc is 16-byte aligned, and it doesn't
+   * need execute permission.  If malloc fails, just leave it NULL,
+   * and we'll fall back to using the control stack alone.
+   */
+  fxs->exception_stack_size = DARWIN_ARM64_EXCEPTION_STACK_SIZE;
+  fxs->exception_stack_low = malloc(fxs->exception_stack_size);
+  if (fxs->exception_stack_low)
+    fxs->exception_stack_high = fxs->exception_stack_low + fxs->exception_stack_size;
+
   if ((kret = setup_mach_exception_handling(tcr)) != KERN_SUCCESS) {
     fprintf(dbgout, "Couldn't setup exception handler - error = %d\n", kret);
     terminate_lisp();
@@ -730,10 +780,12 @@ void
 darwin_exception_cleanup(TCR *tcr)
 {
   mach_port_t exception_port;
-  void *fxs = tcr->native_thread_info;
+  MACH_foreign_exception_state *fxs = tcr->native_thread_info;
 
   if (fxs) {
     tcr->native_thread_info = NULL;
+    if (fxs->exception_stack_low)
+      free(fxs->exception_stack_low);
     free(fxs);
   }
   exception_port = TCR_TO_EXCEPTION_PORT(tcr);
