@@ -6148,41 +6148,24 @@
                                       (index :s64)))
   (ldr (:x dest) (:@ src (:x index))))
 
-;;; ============ w11 vinsn tail (level-1 broad map, final 4+1) ============
-
-;;; unbox-u64 -- PPC64 LINE-PORT (ppc64-vinsns.lisp:1306): value = a
-;;; non-negative fixnum, a non-negative two-digit bignum, or a
-;;; three-digit bignum whose top digit is zero; else
-;;; error-object-not-unsigned-byte-64.  The CHECK skeleton is verbatim
-;;; our gate-proven require-u64 (w3b:535, same donor family ppc64:1242)
-;;; -- same fixnummask TST, fulltag-misc test, header LDUR at
-;;; misc-header-offset (-12 post-8b1ed24), two/three-digit-bignum-header
-;;; compares (all constants resolve in his arch via w3b) -- with the
-;;; value produced in dest along the way.  ARM64-DEVIATION (carried
-;;; from require-u64 / x8664:3596): PPC's (rotldi dest 32) digit-swizzle
-;;; is BIG-ENDIAN-only; on LE the two 32-bit digits at misc-data-offset
-;;; (-4) read as ONE little-endian 64-bit word ARE the u64 -- plain
-;;; LDUR, no swizzle.  asr between TST and b.eq doesn't touch NZCV
-;;; (require-u64's mov-slot note).  (:x dest) views per the w10
-;;; mem-ref-c-doubleword / w1 ubfm precedents.  NOT v2's high-tag
-;;; unbox-u64 (arm64-vinsns.lisp:2227) -- wrong layout for this tree.
+;;; An (unsigned-byte 64) is a non-negative fixnum, a non-negative
+;;; two-digit bignum, or a three-digit bignum whose top digit is 0.
 (define-arm64-vinsn unbox-u64 (((dest :u64))
-                               ((src :lisp))
-                               ((tag :s64)))
+                               ((src :lisp)))
   :again
   (tst src (:$ arm64::fixnummask))
   (asr (:x dest) src (:$ arm64::fixnumshift))
   (b.eq :ok-if-non-negative)
-  (and tag src (:$ arm64::fulltagmask))
-  (cmp tag (:$ arm64::fulltag-misc))
+  (and dest src (:$ arm64::fulltagmask))
+  (cmp dest (:$ arm64::fulltag-misc))
   (b.ne :bad)
-  (ldur tag (:@ src (:$ arm64::misc-header-offset)))
-  (cmp tag (:$ arm64::two-digit-bignum-header))
+  (ldur dest (:@ src (:$ arm64::misc-header-offset)))
+  (cmp dest (:$ arm64::two-digit-bignum-header))
   (b.eq :two-digit)
-  (cmp tag (:$ arm64::three-digit-bignum-header))
+  (cmp dest (:$ arm64::three-digit-bignum-header))
   (b.ne :bad)
-  (ldur (:w tag) (:@ src (:$ (+ arm64::misc-data-offset 8))))
-  (cmp (:w tag) (:$ 0))
+  (ldur (:w dest) (:@ src (:$ (+ arm64::misc-data-offset 8))))
+  (cmp (:w dest) (:$ 0))
   (b.ne :bad)
   (ldur (:x dest) (:@ src (:$ arm64::misc-data-offset)))
   (b :got-it)
@@ -6196,40 +6179,18 @@
   (b :again)
   :got-it)
 
-;;; unbox-s64 -- PPC64 LINE-PORT (ppc64-vinsns.lisp:1339).  Demanded by
-;;; level-1/l1-streams.lisp, which failed to cross-compile with "Unknown
-;;; vinsn: CCL::UNBOX-S64" (16m33): his arm64-vinsns.lisp:339 has a draft
-;;; but it sits inside a #| ... |# block, so nothing defines it, and the
-;;; draft's trap is the aspirational (uuo-error-reg-not-type ...) whose
-;;; template his assembler does not have yet (Uw3b-1).
-;;;
-;;; An object is (SIGNED-BYTE 64) iff it is a fixnum or a two-digit
-;;; bignum.  CHECK skeleton = verbatim our gate-proven require-s64
-;;; (w3b:510, same donor family ppc64:1223), with the value produced in
-;;; dest along the way:
-;;;   fixnum      -> dest = src >> fixnumshift        (ASR, signed)
-;;;   two-digit   -> dest = the data word at misc-data-offset
-;;; ARM64-DEVIATION (identical to unbox-u64 above, carried from
-;;; x8664:3596): PPC's (rotldi dest dest 32) digit-swizzle is
-;;; BIG-ENDIAN-only -- on LE the two 32-bit digits read as ONE
-;;; little-endian 64-bit word ARE the value, so plain LDUR, no swizzle.
-;;; ASR between the TST and the b.eq does not touch NZCV (the require-u64
-;;; note).  dest is :s64 so (:x dest) views per the w1 UBFM precedent.
-;;; Trap = this lane's ratified placeholder brk #xf0NN (w3b header) since
-;;; his tree still has no type-error uuo mnemonic; retry via :again so a
-;;; handler that fixes the value can resume, as require-s64 does.
+;;; A (signed-byte 64) is a fixnum or a two-digit bignum.
 (define-arm64-vinsn unbox-s64 (((dest :s64))
-                               ((src :lisp))
-                               ((tag :u64)))
+                               ((src :lisp)))
   :again
   (tst src (:$ arm64::fixnummask))
   (asr (:x dest) src (:$ arm64::fixnumshift))
   (b.eq :got-it)
-  (and tag src (:$ arm64::fulltagmask))
-  (cmp tag (:$ arm64::fulltag-misc))
+  (and dest src (:$ arm64::fulltagmask))
+  (cmp dest (:$ arm64::fulltag-misc))
   (b.ne :bad)
-  (ldur tag (:@ src (:$ arm64::misc-header-offset)))
-  (cmp tag (:$ arm64::two-digit-bignum-header))
+  (ldur dest (:@ src (:$ arm64::misc-header-offset)))
+  (cmp dest (:$ arm64::two-digit-bignum-header))
   (b.ne :bad)
   (ldur (:x dest) (:@ src (:$ arm64::misc-data-offset)))
   (b :got-it)
