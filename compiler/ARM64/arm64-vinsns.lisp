@@ -7656,38 +7656,19 @@
   (fmov (:s result) rr)
   (ins (:s result 1) (:s ri 0)))
 
-;;; ============ save-nvrs / restore-nvrs ============
-;;; PPC64 canon: ppc64-vinsns.lisp:3327 (save-nvrs) pushes save0 FIRST
-;;; (stdu -8 vsp), so the LAST-pushed register ends at [vsp+0]; :3348
-;;; (restore-nvrs) loads that last-saved register from offset 0 and
-;;; walks back toward save0 at increasing 8-byte offsets, touching VSP
-;;; in NEITHER body.  Operand convention (the question patches/0099
-;;; left open, settled by P2.4 -- comms/VINSN-UNRESOLVED-16m63.md):
-;;; PPC passes FIRST, an encoded register number (save0=r31 counting
-;;; DOWN); his arm64 emitters pass N, a COUNT of the first N pool
-;;; registers (arm642-save-nvrs emits `(! save-nvrs n)`;
-;;; arm642-restore-nvrs emits `(! restore-nvrs n basereg)` after
-;;; folding PPC's separate byte-offset operand into BASEREG -- vsp
-;;; itself, or a computed node/imm temp, so that operand is class T
-;;; with an explicit (:x) view, the fixnum-add convention).  The pool
-;;; is save0..save3 ONLY: x18 is the AAPCS64 platform register and
-;;; x23..x28 are dedicated (rnil/tsp/vsp/allocptr/allocbase/rcontext),
-;;; so N <= 4 by construction.  For N=4 the vstack reads, from VSP up:
-;;; save3 save2 save1 save0.  Attributes are PPC64's on both.
-;;; Both are INERT until *arm642-nvrs* (arm642.lisp:206) is populated;
-;;; the pool and these definitions must land in that order, not the
-;;; reverse, or the first NVR allocation dies with "Unknown vinsn".
-
 (define-arm64-vinsn (save-nvrs :push :node :vsp :multiple)
     (()
      ((n :u8const)))
-  (str save0 (:@! vsp (:$ (- arm64::node-size))))
-  ((:pred >= n 2)
-   (str save1 (:@! vsp (:$ (- arm64::node-size)))))
-  ((:pred >= n 3)
-   (str save2 (:@! vsp (:$ (- arm64::node-size)))))
-  ((:pred >= n 4)
-   (str save3 (:@! vsp (:$ (- arm64::node-size))))))
+  ((:pred = n 1)
+   (str save0 (:@! vsp (:$ (- arm64::node-size)))))
+  ((:pred = n 2)
+   (stp save1 save0 (:@! vsp (:$ (* -2 arm64::node-size)))))
+  ((:pred = n 3)
+   (str save0 (:@! vsp (:$ (- arm64::node-size))))
+   (stp save2 save1 (:@! vsp (:$ (* -2 arm64::node-size)))))
+  ((:pred = n 4)
+   (stp save1 save0 (:@! vsp (:$ (* -2 arm64::node-size))))
+   (stp save3 save2 (:@! vsp (:$ (* -2 arm64::node-size))))))
 
 (define-arm64-vinsn (restore-nvrs :pop :node :vsp :multiple)
     (()
@@ -7696,17 +7677,13 @@
   ((:pred = n 1)
    (ldr save0 (:@ (:x basereg) (:$ 0))))
   ((:pred = n 2)
-   (ldr save1 (:@ (:x basereg) (:$ 0)))
-   (ldr save0 (:@ (:x basereg) (:$ 8))))
+   (ldp save1 save0 (:@ (:x basereg) (:$ 0))))
   ((:pred = n 3)
-   (ldr save2 (:@ (:x basereg) (:$ 0)))
-   (ldr save1 (:@ (:x basereg) (:$ 8)))
-   (ldr save0 (:@ (:x basereg) (:$ 16))))
+   (ldp save2 save1 (:@ (:x basereg) (:$ 0)))
+   (ldr save0 (:@ (:x basereg) (:$ (* 2 arm64::node-size)))))
   ((:pred = n 4)
-   (ldr save3 (:@ (:x basereg) (:$ 0)))
-   (ldr save2 (:@ (:x basereg) (:$ 8)))
-   (ldr save1 (:@ (:x basereg) (:$ 16)))
-   (ldr save0 (:@ (:x basereg) (:$ 24)))))
+   (ldp save3 save2 (:@ (:x basereg) (:$ 0)))
+   (ldp save1 save0 (:@ (:x basereg) (:$ (* 2 arm64::node-size))))))
 
 ;;; ============ clear-pending-fpu-exceptions ============
 ;;; No PPC64 analog EXISTS (checked before consulting ARM32): PPC
