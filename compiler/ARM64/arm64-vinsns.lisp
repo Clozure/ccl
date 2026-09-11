@@ -7619,10 +7619,12 @@
                                               (yi :double-float)))
   (dup xi (:d x 1))
   (dup yi (:d y 1))
+  (fmul rr (:d x) (:d y))               ;xr*yr
   (fmul ri xi yi)                       ;xi*yi
-  (fnmsub rr (:d x) (:d y) ri)          ;realpart = xr*yr - xi*yi
+  (fsub rr rr ri)                       ;realpart
   (fmul xi xi (:d y))                   ;xi*yr
-  (fmadd ri (:d x) yi xi)               ;imagpart = xr*yi + xi*yr
+  (fmul yi yi (:d x))                   ;yi*xr
+  (fadd ri xi yi)                       ;imagpart
   (fmov (:d result) rr)
   (ins (:d result 1) (:d ri 0)))
 
@@ -7645,10 +7647,12 @@
                                               (yi :single-float)))
   (dup xi (:s x 1))
   (dup yi (:s y 1))
+  (fmul rr (:s x) (:s y))               ;xr*yr
   (fmul ri xi yi)                       ;xi*yi
-  (fnmsub rr (:s x) (:s y) ri)          ;realpart = xr*yr - xi*yi
+  (fsub rr rr ri)                       ;realpart
   (fmul xi xi (:s y))                   ;xi*yr
-  (fmadd ri (:s x) yi xi)               ;imagpart = xr*yi + xi*yr
+  (fmul yi yi (:s x))                   ;yi*xr
+  (fadd ri xi yi)                       ;imagpart
   (fmov (:s result) rr)
   (ins (:s result 1) (:s ri 0)))
 
