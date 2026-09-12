@@ -2674,35 +2674,34 @@ _spentry(bind_interrupt_level)
 /* any interrupt polling  */
          
 _spentry(unbind_interrupt_level)
-        __(ldr imm0,[rcontext,#tcr.flags])
+        /* Restore the outer binding of *INTERRUPT-LEVEL* BEFORE polling for
+           a suspend request that arrived while the old level deferred
+           suspension: a poll that runs first can read the flags, then lose a
+           request that lands before the level is restored, and the thread
+           that requested the suspension waits forever.  Deliver a pending
+           suspend only when the restored level no longer defers suspension;
+           when it still does, the enclosing deferral delivers it.  Poll for a
+           pending interrupt when the level goes from negative to
+           non-negative. */
         __(ldr temp2,[rcontext,#tcr.tlb_pointer])
-        __(tst imm0,#1<<TCR_FLAG_BIT_PENDING_SUSPEND)
         __(ldr imm0,[rcontext,#tcr.db_link])
-        __(ldr temp0,[temp2,#INTERRUPT_LEVEL_BINDING_INDEX])
-        __(bne 5f)
-0:      
-        __(ldr temp1,[imm0,#binding.val])
+        __(ldr temp0,[temp2,#INTERRUPT_LEVEL_BINDING_INDEX])   /* old level */
+        __(ldr temp1,[imm0,#binding.val])                      /* new level */
         __(ldr imm0,[imm0,#binding.link])
-        __(str temp1,[temp2,#INTERRUPT_LEVEL_BINDING_INDEX])
+        __(str temp1,[temp2,#INTERRUPT_LEVEL_BINDING_INDEX])   /* restore first */
         __(str imm0,[rcontext,#tcr.db_link])
-        __(cmp temp0,#0)
-        __(bxge lr)
-        __(cmp temp1,#0)
-        __(bxlt lr)
-        __(check_enabled_pending_interrupt(imm0,1f))
-1:              
-        __(bx lr)
-5:       /* Missed a suspend request; force suspend now if we're restoring
-          interrupt level to -1 or greater */
-        __(cmp temp0,#-2<<fixnumshift)
-        __(bne 0b)
-        __(ldr imm0,[imm1,#binding.val])
-        __(cmp imm0,temp0)
-        __(beq 0b)
-        __(mov imm0,#1<<fixnumshift)
-        __(str imm0,[temp2,INTERRUPT_LEVEL_BINDING_INDEX])
+        __(cmp temp1,#-2<<fixnumshift)
+        __(ble 1f)                      /* restored level still defers */
+        __(ldr imm0,[rcontext,#tcr.flags])                     /* poll after restore */
+        __(tst imm0,#1<<TCR_FLAG_BIT_PENDING_SUSPEND)
+        __(beq 1f)
         __(suspend_now())
-        __(b 0b)
+1:      __(cmp temp0,#0)
+        __(bxge lr)                     /* old >= 0: no interrupt poll */
+        __(cmp temp1,#0)
+        __(bxlt lr)                     /* new < 0: no interrupt poll */
+        __(check_enabled_pending_interrupt(imm0,2f))
+2:      __(bx lr)
  
  
 /* arg_x = array, arg_y = i, arg_z = j. Typecheck everything.
