@@ -3688,32 +3688,33 @@ _endsubp(bind_interrupt_level)
 /* non-negative, check for pending interrupts.    */
 	
 _spentry(unbind_interrupt_level)
-        __(btq $TCR_FLAG_BIT_PENDING_SUSPEND,rcontext(tcr.flags))
+        /* Restore the outer binding of *INTERRUPT-LEVEL* BEFORE polling
+           for a suspend request that arrived while the old level
+           deferred suspension: a poll that runs first can read the
+           flags, then lose a request that lands before the level is
+           restored, and the thread that requested the suspension waits
+           forever.  Deliver a pending suspend only when the restored
+           level no longer defers suspension; when it still does, the
+           enclosing deferral delivers it. */
 	__(movq rcontext(tcr.db_link),%imm1)
 	__(movq rcontext(tcr.tlb_pointer),%arg_x)
 	__(movq INTERRUPT_LEVEL_BINDING_INDEX(%arg_x),%imm0)
-        __(jc 5f)
-0:      __(testq %imm0,%imm0)
 	__(movq binding.val(%imm1),%temp0)
 	__(movq binding.link(%imm1),%imm1)
 	__(movq %temp0,INTERRUPT_LEVEL_BINDING_INDEX(%arg_x))
  	__(movq %imm1,rcontext(tcr.db_link))
+        __(cmpq $-2<<fixnumshift,%temp0)
+        __(jle 0f)              /* restored level still defers */
+        __(btq $TCR_FLAG_BIT_PENDING_SUSPEND,rcontext(tcr.flags))
+        __(jnc 0f)
+        __(suspend_now())
+0:      __(testq %imm0,%imm0)
 	__(js 3f)
 2:	__(ret)
 3:	__(testq %temp0,%temp0)
 	__(js 2b)
 	__(check_pending_enabled_interrupt(4f))
 4:	__(ret)
-5:       /* Missed a suspend request; force suspend now if we're restoring
-          interrupt level to -1 or greater */
-        __(cmpq $-2<<fixnumshift,%imm0)
-        __(jne 0b)
-	__(movq binding.val(%imm1),%temp0)
-        __(cmpq %imm0,%temp0)
-        __(je 0b)
-        __(movq $-1<<fixnumshift,INTERRUPT_LEVEL_BINDING_INDEX(%arg_x))
-        __(suspend_now())
-        __(jmp 0b)
 _endsubp(unbind_interrupt_level)
 
 	

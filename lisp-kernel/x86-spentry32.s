@@ -3927,33 +3927,34 @@ _endsubp(bind_interrupt_level)
 /* Unbind CCL::*INTERRUPT-LEVEL*.  If the value changes from negative to */
 /* non-negative, check for pending interrupts. */
 _spentry(unbind_interrupt_level)
-	__(btl $TCR_FLAG_BIT_PENDING_SUSPEND,rcontext(tcr.flags))
+	/* Restore the outer binding of *INTERRUPT-LEVEL* before polling for a
+	   suspend request that arrived while the old level deferred suspension:
+	   a poll that runs first can read the flags, then lose a request that
+	   lands before the level is restored, and the thread that requested the
+	   suspension waits forever.  Deliver a pending suspend only when the
+	   restored level no longer defers suspension.  Register pressure is real
+	   here (no imm1; temp1 is nargs), so db_link moves through one balanced
+	   stack slot ahead of the poll rather than a register, while old and new
+	   level stay in imm0 and temp0 across it. */
 	__(movl rcontext(tcr.tlb_pointer),%arg_y)
-	__(movl INTERRUPT_LEVEL_BINDING_INDEX(%arg_y),%imm0)
-	__(jc 5f)
+	__(movl INTERRUPT_LEVEL_BINDING_INDEX(%arg_y),%imm0)	/* old level */
+	__(movl rcontext(tcr.db_link),%temp0)
+	__(pushl binding.link(%temp0))				/* restored db_link */
+	__(movl binding.val(%temp0),%temp0)			/* restored level */
+	__(movl %temp0,INTERRUPT_LEVEL_BINDING_INDEX(%arg_y))	/* restore first */
+	__(popl rcontext(tcr.db_link))
+	__(cmpl $-2<<fixnumshift,%temp0)
+	__(jle 0f)						/* restored level still defers */
+	__(btl $TCR_FLAG_BIT_PENDING_SUSPEND,rcontext(tcr.flags))
+	__(jnc 0f)
+	__(suspend_now())
 0:	__(test %imm0,%imm0)
-	__(movl rcontext(tcr.db_link),%imm0)
-	__(movl binding.val(%imm0),%temp0)
-	__(movl binding.link(%imm0),%imm0)
-	__(movl %temp0,INTERRUPT_LEVEL_BINDING_INDEX(%arg_y))
-	__(movl %imm0,rcontext(tcr.db_link))
 	__(js 3f)
 2:	__(ret)
 3:	__(test %temp0,%temp0)
 	__(js 2b)
 	__(check_pending_enabled_interrupt(4f))
 4:	__(ret)
-5:       /* Missed a suspend request; force suspend now if we're restoring
-          interrupt level to -1 or greater */
-        __(cmpl $-2<<fixnumshift,%imm0)
-        __(jne 0b)
-	__(movl rcontext(tcr.db_link),%temp0)
-	__(movl binding.val(%temp0),%temp0)
-        __(cmpl %imm0,%temp0)
-        __(je 0b)
-        __(movl $-1<<fixnumshift,INTERRUPT_LEVEL_BINDING_INDEX(%arg_y))
-        __(suspend_now())
-        __(jmp 0b)
 _endsubp(unbind_interrupt_level)
 
 _spentry(progvrestore)

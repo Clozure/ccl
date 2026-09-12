@@ -3408,40 +3408,37 @@ endsp bind_interrupt_level
 /* ported from ppc-spentry.s:7018-7047 (PPC64 branch) */
 /* Unbind *INTERRUPT-LEVEL*; check for pending interrupt if transitioning negative->non-negative */
 spentry unbind_interrupt_level
-        /* ppc:7019-7047.  Unbind *INTERRUPT-LEVEL*; poll for a pending interrupt
-           if the level goes from negative to non-negative.  nargs is often live,
-           so save/restore it around any poll. */
-        ldr imm0, [rcontext, #tcr.flags]                    /* ppc:7019 */
-        ldr imm2, [rcontext, #tcr.tlb_pointer]              /* ppc:7020 */
-        tst imm0, #(1<<TCR_FLAG_BIT_PENDING_SUSPEND)        /* ppc:7021 andi. cr0 */
-        ldr imm1, [rcontext, #tcr.db_link]                  /* ppc:7022 */
-        ldr temp1, [imm2, #INTERRUPT_LEVEL_BINDING_INDEX]   /* ppc:7023 old level */
-        b.ne 3f                         /* ppc:7024 bne -> missed-suspend path */
-1:      /* ppc:7025 (PPC label 0).  temp1=old level, imm1=binding, imm2=tlb_ptr. */
-        mov temp0, temp1                /* preserve old level for the cr1 test  */
-        ldr temp1, [imm1, #binding.val] /* ppc:7026 restored (new) level         */
-        ldr imm1, [imm1, #binding.link] /* ppc:7027 new db_link                  */
-        str temp1, [imm2, #INTERRUPT_LEVEL_BINDING_INDEX]   /* ppc:7029 */
-        str imm1, [rcontext, #tcr.db_link]                  /* ppc:7030 */
-        cmp temp0, #0                   /* ppc:7025 cmpri(cr1,old,0), adjacent    */
-        b.ge 2f                         /* ppc:7031 bgelr cr1: old>=0 -> return   */
-        cmp temp1, #0                   /* ppc:7028 cmpri(cr0,new,0), adjacent    */
-        b.lt 2f                         /* ppc:7032 bltlr cr0: new<0 -> return     */
-        mov imm2, nargs                 /* ppc:7033 save nargs across the poll     */
-        check_pending_interrupt         /* ppc:7034 check_pending_interrupt(cr1)   */
-        mov nargs, imm2                 /* ppc:7035 restore nargs                  */
-2:      ret                             /* ppc:7036 blr                            */
-3:      /* ppc:7037 (PPC label 5).  Missed a suspend; force suspend now if we are
-           restoring interrupt level to -1 or greater. */
-        cmp temp1, #(-2<<fixnumshift)   /* ppc:7039 cmpri(old,-2<<fixnumshift)     */
-        b.ne 1b                         /* ppc:7040 bne 0b                          */
-        ldr imm0, [imm1, #binding.val]  /* ppc:7041 restored value                 */
-        cmp imm0, temp1                 /* ppc:7042 cmpr(restored,old)              */
-        b.eq 1b                         /* ppc:7043 beq 0b                          */
-        mov imm0, #(1<<fixnumshift)     /* ppc:7044 li imm0,1<<fixnumshift          */
-        str imm0, [imm2, #INTERRUPT_LEVEL_BINDING_INDEX]    /* ppc:7045 */
-        uuo_suspend_now                 /* ppc:7046 (his misc 4) */
-        b 1b                            /* ppc:7047 b 0b                            */
+        /* Unbind *INTERRUPT-LEVEL*.  Restore the outer binding BEFORE
+           polling for a suspend request that arrived while the old level
+           deferred suspension: a poll that runs first can read the flags,
+           then lose a request that lands before the level is restored,
+           and the thread that requested the suspension waits forever.
+           Deliver a pending suspend only when the restored level no
+           longer defers suspension; when it still does, the enclosing
+           deferral delivers it.  Poll for a pending interrupt when the
+           level goes from negative to non-negative.  nargs is often
+           live, so save/restore it around that poll. */
+        ldr imm2, [rcontext, #tcr.tlb_pointer]
+        ldr imm1, [rcontext, #tcr.db_link]
+        ldr temp0, [imm2, #INTERRUPT_LEVEL_BINDING_INDEX]   /* old level */
+        ldr temp1, [imm1, #binding.val]                     /* new level */
+        ldr imm1, [imm1, #binding.link]
+        str temp1, [imm2, #INTERRUPT_LEVEL_BINDING_INDEX]   /* restore first */
+        str imm1, [rcontext, #tcr.db_link]
+        cmp temp1, #(-2<<fixnumshift)
+        b.le 1f                         /* restored level still defers */
+        ldr imm0, [rcontext, #tcr.flags]                    /* poll after restore */
+        tst imm0, #(1<<TCR_FLAG_BIT_PENDING_SUSPEND)
+        b.eq 1f
+        uuo_suspend_now
+1:      cmp temp0, #0
+        b.ge 2f                         /* old >= 0: no interrupt poll */
+        cmp temp1, #0
+        b.lt 2f                         /* new < 0: no interrupt poll */
+        mov imm2, nargs                 /* save nargs across the poll */
+        check_pending_interrupt
+        mov nargs, imm2                 /* restore nargs */
+2:      ret
 endsp unbind_interrupt_level
 
 /*
