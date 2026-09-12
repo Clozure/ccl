@@ -1671,6 +1671,92 @@ restart_allocation(ExceptionInformation *xp)
   }
 }
 
+natural
+allocptr_adjustment_amount(ExceptionInformation *xp, opcode instr)
+{
+  if (IS_SUB_RM_FROM_ALLOCPTR(instr)) {
+    return xpGPR(xp, RM_field(instr));
+  }
+
+  if (IS_SUB_LO_FROM_ALLOCPTR(instr)) {
+    return instr & 0xff;
+  }
+
+  if (IS_SUB_FROM_ALLOCPTR(instr)) {
+    return ror(instr & 0xff, (instr & 0xf00) >> 7);
+  }
+
+  return 0;
+}
+
+Boolean
+normalize_allocation_to_trap(ExceptionInformation *xp, TCR *tcr)
+{
+  pc current = xpPC(xp), start = NULL, trap = NULL, p;
+  LispObj cur_allocptr = xpGPR(xp, allocptr), original_allocptr, adjusted_allocptr;
+  natural already_adjusted = 0, total_adjustment = 0, adjustment;
+  int i;
+
+  for (i = 0; i < 6; i++) {
+    p = current - i;
+    if (allocptr_adjustment_amount(xp, *p)) {
+      start = p;
+      while ((start > (current - 6)) &&
+             allocptr_adjustment_amount(xp, start[-1])) {
+        start--;
+      }
+      break;
+    }
+  }
+
+  if (!start) {
+    return false;
+  }
+
+  for (i = 0, p = start; i < 8; i++, p++) {
+    opcode instr = *p;
+
+    adjustment = allocptr_adjustment_amount(xp, instr);
+    if (adjustment) {
+      total_adjustment += adjustment;
+      if (p < current) {
+        already_adjusted += adjustment;
+      }
+      continue;
+    }
+
+    if (IS_LOAD_RD_FROM_ALLOCBASE(instr) ||
+        IS_COMPARE_ALLOCPTR_TO_RM(instr) ||
+        IS_BRANCH_AROUND_ALLOC_TRAP(instr)) {
+      continue;
+    }
+
+    if (IS_ALLOC_TRAP(instr)) {
+      trap = p;
+      break;
+    }
+
+    return false;
+  }
+
+  if ((!trap) || (current > trap)) {
+    return false;
+  }
+
+  original_allocptr = cur_allocptr + already_adjusted;
+  adjusted_allocptr = original_allocptr - total_adjustment;
+
+  if ((fulltag_of(original_allocptr) != tag_fixnum) ||
+      (fulltag_of(adjusted_allocptr) == tag_fixnum)) {
+    return false;
+  }
+
+  update_bytes_allocated(tcr, (void *)ptr_from_lispobj(original_allocptr));
+  xpGPR(xp, allocptr) = adjusted_allocptr;
+  xpPC(xp) = trap;
+  return true;
+}
+
 
 void
 pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
@@ -1752,6 +1838,9 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     return;
   }
 
+  if ((!alloc_disp) && normalize_allocation_to_trap(xp, tcr)) {
+    return;
+  }
 
   
   if (allocptr_tag != tag_fixnum) {
