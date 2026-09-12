@@ -26,6 +26,29 @@
 #endif
 #endif
 
+/* SUPPORT_PRAGMA_UNUSED guards the `#pragma unused(...)' annotations in
+   {arm,arm64,ppc}-exceptions.c, which record that a parameter forced on a
+   function by a handler-dispatch signature is deliberately not used.  Nothing
+   in the tree has ever defined it, so those annotations have never reached a
+   compiler.
+
+   #pragma unused is a Metrowerks/MPW-lineage extension: clang implements it,
+   gcc does not.  Measured on the real do_hard_stack_overflow shape, with
+   -Wall -Wextra, gcc 11.5.0 and clang 15.0.7:
+
+     clang   both `unused parameter' warnings gone; no diagnostic at all;
+             -Werror still exits 0.
+     gcc     `ignoring #pragma unused [-Wunknown-pragmas]' AND both `unused
+             parameter' warnings still present -- one diagnostic added, none
+             removed; -Werror goes from 2 errors to 3.
+
+   Hence clang only.  Everywhere else this changes nothing and the annotations
+   stay dormant; suppressing the warnings there is a build flag's job
+   (-Wno-unused-parameter).  */
+#if defined(__clang__)
+#define SUPPORT_PRAGMA_UNUSED 1
+#endif
+
 #ifndef LOWMEM_BIAS
 #define LOWMEM_BIAS (0)
 #endif
