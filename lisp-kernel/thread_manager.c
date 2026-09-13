@@ -248,12 +248,58 @@ get_spin_lock(signed_natural *p, TCR *tcr)
 #endif
   }
 }
+
+/*
+  A thread must not stop for a suspend request while it holds one of
+  the spin locks that guard lock structures: the thread that requested
+  the suspension may need the same spin lock in order to make progress,
+  and a suspended holder never releases it.  Raise the deferral that
+  WITH-DEFERRED-GC uses (at an interrupt-level of -2 or below,
+  suspend_resume_handler records a pending suspend and returns instead
+  of stopping the thread), then deliver any suspend request that
+  arrived in the meantime once the spin lock has been released.
+  The level is restored before the pending-suspend check, so a suspend
+  that lands between the two acts on the restored level; the re-raise
+  is skipped when the restored level still defers suspension, and the
+  enclosing deferral delivers the suspend when it exits.
+*/
+static signed_natural
+defer_thread_suspension(TCR *tcr)
+{
+  signed_natural old_level = 0;
+
+  /* A TCR without thread-local bindings (mid-creation, or an early
+     bootstrap thread) has no interrupt level to defer and cannot be
+     the target of a suspend request yet. */
+  if (tcr && tcr->tlb_pointer) {
+    old_level = TCR_INTERRUPT_LEVEL(tcr);
+    TCR_INTERRUPT_LEVEL(tcr) = -(2 << fixnumshift);
+  }
+  return old_level;
+}
+
+static void
+allow_thread_suspension(TCR *tcr, signed_natural old_level)
+{
+  if (tcr && tcr->tlb_pointer) {
+    TCR_INTERRUPT_LEVEL(tcr) = old_level;
+    if ((old_level > -(2 << fixnumshift)) &&
+        (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_SUSPEND))) {
+      CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_PENDING_SUSPEND);
+#ifndef WINDOWS
+      pthread_kill(pthread_self(), thread_suspend_signal);
+#endif
+    }
+  }
+}
+
 #endif
 
 #ifndef USE_FUTEX
 int
 lock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
 {
+  signed_natural old_level;
 
   if (tcr == NULL) {
     tcr = get_tcr(true);
@@ -263,15 +309,18 @@ lock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
     return 0;
   }
   while (1) {
+    old_level = defer_thread_suspension(tcr);
     LOCK_SPINLOCK(m->spinlock,tcr);
     ++m->avail;
     if (m->avail == 1) {
       m->owner = tcr;
       m->count = 1;
       RELEASE_SPINLOCK(m->spinlock);
+      allow_thread_suspension(tcr, old_level);
       break;
     }
     RELEASE_SPINLOCK(m->spinlock);
+    allow_thread_suspension(tcr, old_level);
     SEM_WAIT_FOREVER(m->signal);
   }
   return 0;
@@ -328,6 +377,7 @@ int
 unlock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
 {
   int ret = EPERM, pending;
+  signed_natural old_level;
 
   if (tcr == NULL) {
     tcr = get_tcr(true);
@@ -336,6 +386,7 @@ unlock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
   if (m->owner == tcr) {
     --m->count;
     if (m->count == 0) {
+      old_level = defer_thread_suspension(tcr);
       LOCK_SPINLOCK(m->spinlock,tcr);
       m->owner = NULL;
       pending = m->avail-1 + m->waiting;     /* Don't count us */
@@ -347,6 +398,7 @@ unlock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
         m->waiting = 0;
       }
       RELEASE_SPINLOCK(m->spinlock);
+      allow_thread_suspension(tcr, old_level);
       if (pending >= 0) {
 	SEM_RAISE(m->signal);
       }
@@ -397,15 +449,18 @@ int
 recursive_lock_trylock(RECURSIVE_LOCK m, TCR *tcr, int *was_free)
 {
   TCR *owner = m->owner;
+  signed_natural old_level;
 
+  old_level = defer_thread_suspension(tcr);
   LOCK_SPINLOCK(m->spinlock,tcr);
   if (owner == tcr) {
     m->count++;
     if (was_free) {
       *was_free = 0;
-      RELEASE_SPINLOCK(m->spinlock);
-      return 0;
     }
+    RELEASE_SPINLOCK(m->spinlock);
+    allow_thread_suspension(tcr, old_level);
+    return 0;
   }
   if (store_conditional((natural*)&(m->avail), 0, 1) == 0) {
     m->owner = tcr;
@@ -414,10 +469,12 @@ recursive_lock_trylock(RECURSIVE_LOCK m, TCR *tcr, int *was_free)
       *was_free = 1;
     }
     RELEASE_SPINLOCK(m->spinlock);
+    allow_thread_suspension(tcr, old_level);
     return 0;
   }
 
   RELEASE_SPINLOCK(m->spinlock);
+  allow_thread_suspension(tcr, old_level);
   return EBUSY;
 }
 #else
@@ -430,8 +487,8 @@ recursive_lock_trylock(RECURSIVE_LOCK m, TCR *tcr, int *was_free)
     m->count++;
     if (was_free) {
       *was_free = 0;
-      return 0;
     }
+    return 0;
   }
   if (store_conditional((natural*)&(m->avail), 0, 1) == 0) {
     m->owner = tcr;
@@ -2481,18 +2538,23 @@ int
 rwlock_rlock(rwlock *rw, TCR *tcr, struct timespec *waitfor)
 {
   int err = 0;
-  
+  signed_natural old_level;
+
+  old_level = defer_thread_suspension(tcr);
   LOCK_SPINLOCK(rw->spin, tcr);
 
   if (rw->writer == tcr) {
     RELEASE_SPINLOCK(rw->spin);
+    allow_thread_suspension(tcr, old_level);
     return EDEADLK;
   }
 
   while (rw->blocked_writers || (rw->state > 0)) {
     rw->blocked_readers++;
     RELEASE_SPINLOCK(rw->spin);
+    allow_thread_suspension(tcr, old_level);
     err = semaphore_maybe_timedwait(rw->reader_signal,waitfor);
+    old_level = defer_thread_suspension(tcr);
     LOCK_SPINLOCK(rw->spin,tcr);
     rw->blocked_readers--;
     if (err == EINTR) {
@@ -2500,11 +2562,13 @@ rwlock_rlock(rwlock *rw, TCR *tcr, struct timespec *waitfor)
     }
     if (err) {
       RELEASE_SPINLOCK(rw->spin);
+      allow_thread_suspension(tcr, old_level);
       return err;
     }
   }
   rw->state--;
   RELEASE_SPINLOCK(rw->spin);
+  allow_thread_suspension(tcr, old_level);
   return err;
 }
 #else
@@ -2552,18 +2616,23 @@ int
 rwlock_wlock(rwlock *rw, TCR *tcr, struct timespec *waitfor)
 {
   int err = 0;
+  signed_natural old_level;
 
+  old_level = defer_thread_suspension(tcr);
   LOCK_SPINLOCK(rw->spin,tcr);
   if (rw->writer == tcr) {
     rw->state++;
     RELEASE_SPINLOCK(rw->spin);
+    allow_thread_suspension(tcr, old_level);
     return 0;
   }
 
   while (rw->state != 0) {
     rw->blocked_writers++;
     RELEASE_SPINLOCK(rw->spin);
+    allow_thread_suspension(tcr, old_level);
     err = semaphore_maybe_timedwait(rw->writer_signal, waitfor);
+    old_level = defer_thread_suspension(tcr);
     LOCK_SPINLOCK(rw->spin,tcr);
     rw->blocked_writers--;
     if (err == EINTR) {
@@ -2571,12 +2640,14 @@ rwlock_wlock(rwlock *rw, TCR *tcr, struct timespec *waitfor)
     }
     if (err) {
       RELEASE_SPINLOCK(rw->spin);
+      allow_thread_suspension(tcr, old_level);
       return err;
     }
   }
   rw->state = 1;
   rw->writer = tcr;
   RELEASE_SPINLOCK(rw->spin);
+  allow_thread_suspension(tcr, old_level);
   return err;
 }
 
@@ -2617,7 +2688,9 @@ int
 rwlock_try_wlock(rwlock *rw, TCR *tcr)
 {
   int ret = EBUSY;
+  signed_natural old_level;
 
+  old_level = defer_thread_suspension(tcr);
   LOCK_SPINLOCK(rw->spin,tcr);
   if (rw->writer == tcr) {
     rw->state++;
@@ -2630,6 +2703,7 @@ rwlock_try_wlock(rwlock *rw, TCR *tcr)
     }
   }
   RELEASE_SPINLOCK(rw->spin);
+  allow_thread_suspension(tcr, old_level);
   return ret;
 }
 #else
@@ -2659,13 +2733,16 @@ int
 rwlock_try_rlock(rwlock *rw, TCR *tcr)
 {
   int ret = EBUSY;
+  signed_natural old_level;
 
+  old_level = defer_thread_suspension(tcr);
   LOCK_SPINLOCK(rw->spin,tcr);
   if (rw->state <= 0) {
     --rw->state;
     ret = 0;
   }
   RELEASE_SPINLOCK(rw->spin);
+  allow_thread_suspension(tcr, old_level);
   return ret;
 }
 #else
@@ -2693,7 +2770,9 @@ rwlock_unlock(rwlock *rw, TCR *tcr)
 
   int err = 0;
   natural blocked_readers = 0;
+  signed_natural old_level;
 
+  old_level = defer_thread_suspension(tcr);
   LOCK_SPINLOCK(rw->spin,tcr);
   if (rw->state > 0) {
     if (rw->writer != tcr) {
@@ -2713,6 +2792,7 @@ rwlock_unlock(rwlock *rw, TCR *tcr)
   }
   if (err) {
     RELEASE_SPINLOCK(rw->spin);
+    allow_thread_suspension(tcr, old_level);
     return err;
   }
   
@@ -2727,6 +2807,7 @@ rwlock_unlock(rwlock *rw, TCR *tcr)
     }
   }
   RELEASE_SPINLOCK(rw->spin);
+  allow_thread_suspension(tcr, old_level);
   return 0;
 }
 #else

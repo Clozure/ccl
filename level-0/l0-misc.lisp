@@ -578,6 +578,33 @@
   (defun %release-spin-lock (p)
     (setf (%get-natural p 0) 0)))
 
+;;; Take the spin word at P with thread suspension deferred, so a
+;;; world-stop cannot park this thread while it holds the word: a
+;;; suspended holder never releases it, and a thread that then needs
+;;; the word spins forever.  An *INTERRUPT-LEVEL* of -2 defers
+;;; suspension, exactly as WITH-DEFERRED-GC does.  The deferral covers
+;;; only each batch of atomic attempts; failed batches deliver any
+;;; pending suspend and yield at the enclosing WITHOUT-INTERRUPTS
+;;; level, because YIELD dispatches and makes a foreign call.  Returns
+;;; with *INTERRUPT-LEVEL* -2 and the word held; the caller restores
+;;; the level immediately after releasing the word and then calls
+;;; %CHECK-DEFERRED-GC, before any wait, error, semaphore post or
+;;; nested lock operation.
+#-futex
+(defun %get-spin-lock-deferring-suspension (p)
+  (let* ((self (%current-tcr))
+         (n *spin-lock-tries*))
+    (declare (fixnum n))
+    (loop
+      (setq *interrupt-level* -2)
+      (dotimes (i n)
+        (when (eql 0 (%ptr-store-fixnum-conditional p 0 self))
+          (return-from %get-spin-lock-deferring-suspension t)))
+      (setq *interrupt-level* -1)
+      (%check-deferred-gc)
+      (%atomic-incf-node 1 '*spin-lock-timeouts* target::symbol.vcell)
+      (yield))))
+
 (eval-when (:compile-toplevel :execute)
   (declaim (inline note-lock-wait note-lock-held note-lock-released)))
 
@@ -604,15 +631,19 @@
          (when flag
            (setf (lock-acquisition.status flag) t))
          (return t))
-       (%get-spin-lock spin)
+       (%get-spin-lock-deferring-suspension spin)
        (when (eql 1 (incf (%get-natural ptr target::lockptr.avail)))
          (setf (%get-ptr ptr target::lockptr.owner) p
                (%get-natural ptr target::lockptr.count) 1)
          (%release-spin-lock spin)
+         (setq *interrupt-level* -1)
+         (%check-deferred-gc)
          (if flag
            (setf (lock-acquisition.status flag) t))
          (return t))
-       (%release-spin-lock spin))
+       (%release-spin-lock spin)
+       (setq *interrupt-level* -1)
+       (%check-deferred-gc))
       (%process-wait-on-semaphore-ptr signal 1 0 (recursive-lock-whostate lock)))))
 
 #+futex
@@ -718,12 +749,14 @@
               t)
              (t
               (let* ((win nil))
-                (%get-spin-lock spin)
+                (%get-spin-lock-deferring-suspension spin)
                 (when (setq win (eql 1 (incf (%get-natural ptr target::lockptr.avail))))
                   (setf (%get-ptr ptr target::lockptr.owner) p
                         (%get-natural ptr target::lockptr.count) 1)
                   (if flag (setf (lock-acquisition.status flag) t)))
                 (%release-spin-lock spin)
+                (setq *interrupt-level* -1)
+                (%check-deferred-gc)
                 win)))))))
 
 
@@ -762,7 +795,7 @@
     (without-interrupts
      (when (eql 0 (decf (the fixnum
                           (%get-natural ptr target::lockptr.count))))
-       (%get-spin-lock spin)
+       (%get-spin-lock-deferring-suspension spin)
        (setf (%get-ptr ptr target::lockptr.owner) (%null-ptr))
        (let* ((pending (+ (the fixnum
                             (1- (the fixnum (%get-fixnum ptr target::lockptr.avail))))
@@ -771,6 +804,8 @@
          (setf (%get-natural ptr target::lockptr.avail) 0
                (%get-natural ptr target::lockptr.waiting) 0)
          (%release-spin-lock spin)
+         (setq *interrupt-level* -1)
+         (%check-deferred-gc)
          (dotimes (i pending)
            (%signal-semaphore-ptr signal)))))
     nil))
@@ -878,11 +913,13 @@
            (tcr (%current-tcr)))
       (declare (fixnum tcr))
       (without-interrupts
-       (%get-spin-lock ptr)               ;(%get-spin-lock (%inc-ptr ptr target::rwlock.spin))
+       (%get-spin-lock-deferring-suspension ptr)
        (if (eq (%get-object ptr target::rwlock.writer) tcr)
          (progn
            (incf (%get-signed-natural ptr target::rwlock.state))
            (%release-spin-lock ptr)
+           (setq *interrupt-level* -1)
+           (%check-deferred-gc)
            (if flag
              (setf (lock-acquisition.status flag) t))
            t)
@@ -891,15 +928,19 @@
                ;; That wasn't so bad, was it ?  We have the spinlock now.
                (setf (%get-signed-natural ptr target::rwlock.state) 1)
                (%release-spin-lock ptr)
+               (setq *interrupt-level* -1)
+               (%check-deferred-gc)
                (%set-object ptr target::rwlock.writer tcr)
                (if flag
                  (setf (lock-acquisition.status flag) t))
                t)
            (incf (%get-natural ptr target::rwlock.blocked-writers))
            (%release-spin-lock ptr)
+           (setq *interrupt-level* -1)
+           (%check-deferred-gc)
            (let* ((*interrupt-level* level))
                   (%process-wait-on-semaphore-ptr write-signal 1 0 (rwlock-write-whostate lock)))
-           (%get-spin-lock ptr)))))))
+           (%get-spin-lock-deferring-suspension ptr)))))))
 #+futex
 (defun %write-lock-rwlock-ptr (ptr lock &optional flag)
   (with-macptrs ((write-signal (%INC-ptr ptr target::rwlock.writer-signal)) )
@@ -952,10 +993,12 @@
            (tcr (%current-tcr)))
       (declare (fixnum tcr))
       (without-interrupts
-       (%get-spin-lock ptr)             ;(%get-spin-lock (%inc-ptr ptr target::rwlock.spin))
+       (%get-spin-lock-deferring-suspension ptr)
        (if (eq (%get-object ptr target::rwlock.writer) tcr)
          (progn
            (%release-spin-lock ptr)
+           (setq *interrupt-level* -1)
+           (%check-deferred-gc)
            (error 'deadlock :lock lock))
          (do* ((state
                 (%get-signed-natural ptr target::rwlock.state)
@@ -965,15 +1008,19 @@
                (setf (%get-signed-natural ptr target::rwlock.state)
                      (the fixnum (1- state)))
                (%release-spin-lock ptr)
+               (setq *interrupt-level* -1)
+               (%check-deferred-gc)
                (if flag
                  (setf (lock-acquisition.status flag) t))
                t)
            (declare (fixnum state))
            (incf (%get-natural ptr target::rwlock.blocked-readers))
            (%release-spin-lock ptr)
+           (setq *interrupt-level* -1)
+           (%check-deferred-gc)
            (let* ((*interrupt-level* level))
              (%process-wait-on-semaphore-ptr read-signal 1 0 (rwlock-read-whostate lock)))
-           (%get-spin-lock ptr)))))))
+           (%get-spin-lock-deferring-suspension ptr)))))))
 
 #+futex
 (defun %read-lock-rwlock-ptr (ptr lock &optional flag) 
@@ -1023,19 +1070,26 @@
   (with-macptrs ((reader-signal (%get-ptr ptr target::rwlock.reader-signal))
                  (writer-signal (%get-ptr ptr target::rwlock.writer-signal)))
     (without-interrupts
-     (%get-spin-lock ptr)
+     (%get-spin-lock-deferring-suspension ptr)
      (let* ((state (%get-signed-natural ptr target::rwlock.state))
             (tcr (%current-tcr)))
        (declare (fixnum state tcr))
        (cond ((> state 0)
               (unless (eql tcr (%get-object ptr target::rwlock.writer))
                 (%release-spin-lock ptr)
+                (setq *interrupt-level* -1)
+                (%check-deferred-gc)
                 (error 'not-lock-owner :lock lock))
               (decf state))
              ((< state 0) (incf state))
              (t (%release-spin-lock ptr)
+                (setq *interrupt-level* -1)
+                (%check-deferred-gc)
                 (error 'not-locked :lock lock)))
        (setf (%get-signed-natural ptr target::rwlock.state) state)
+       (let* ((nwriters 0)
+              (nreaders 0))
+         (declare (fixnum nwriters nreaders))
        (when (zerop state)
          ;; We want any thread waiting for a lock semaphore to
          ;; be able to wait interruptibly.  When a thread waits,
@@ -1058,19 +1112,27 @@
          ;; are cleared here (they can't be changed from another thread
          ;; until this thread releases the spinlock.)
          (setf (%get-signed-natural ptr target::rwlock.writer) 0)
-         (let* ((nwriters (%get-natural ptr target::rwlock.blocked-writers))
-                (nreaders (%get-natural ptr target::rwlock.blocked-readers)))
-           (declare (fixnum nreaders nwriters))
-           (when (> nwriters 0)
-             (setf (%get-natural ptr target::rwlock.blocked-writers) 0)
-             (dotimes (i nwriters)
-               (%signal-semaphore-ptr writer-signal)))
-           (when (> nreaders 0)
-             (setf (%get-natural ptr target::rwlock.blocked-readers) 0)
-             (dotimes (i nreaders)
-               (%signal-semaphore-ptr reader-signal)))))
+         (setq nwriters (%get-natural ptr target::rwlock.blocked-writers)
+               nreaders (%get-natural ptr target::rwlock.blocked-readers))
+         (when (> nwriters 0)
+           (setf (%get-natural ptr target::rwlock.blocked-writers) 0))
+         (when (> nreaders 0)
+           (setf (%get-natural ptr target::rwlock.blocked-readers) 0)))
+       ;; The semaphore posts move after the spin-word release and the
+       ;; level restore: they make foreign calls, and the word must not
+       ;; stay held across them.  The blocked counts were captured and
+       ;; cleared while the word was held, so the posts cannot be lost;
+       ;; posting more often than necessary is the documented intent.
        (%release-spin-lock ptr)
-       t))))
+       (setq *interrupt-level* -1)
+       (%check-deferred-gc)
+       (when (> nwriters 0)
+         (dotimes (i nwriters)
+           (%signal-semaphore-ptr writer-signal)))
+       (when (> nreaders 0)
+         (dotimes (i nreaders)
+           (%signal-semaphore-ptr reader-signal)))
+       t)))))
 
 #+futex
 (defun %unlock-rwlock-ptr (ptr lock)
@@ -1131,7 +1193,7 @@
        #+futex
        (%lock-futex ptr level lock nil)
        #-futex
-       (%get-spin-lock ptr)
+       (%get-spin-lock-deferring-suspension ptr)
        (let* ((state (%get-signed-natural ptr target::rwlock.state)))
          (declare (fixnum state))
          (cond ((> state 0)
@@ -1139,11 +1201,22 @@
                   #+futex
                   (%unlock-futex ptr)
                   #-futex
+                  (progn
+                    (%release-spin-lock ptr)
+                    (setq *interrupt-level* -1)
+                    (%check-deferred-gc))
+                  (error :not-lock-owner :lock lock))
+                #-futex
+                (progn
                   (%release-spin-lock ptr)
-                  (error :not-lock-owner :lock lock)))
+                  (setq *interrupt-level* -1)
+                  (%check-deferred-gc)))
                ((= state 0)
                 #+futex (%unlock-futex ptr)
-                #-futex (%release-spin-lock ptr)
+                #-futex (progn
+                          (%release-spin-lock ptr)
+                          (setq *interrupt-level* -1)
+                          (%check-deferred-gc))
                 (error :not-locked :lock lock))
                (t
                 (if (= state -1)
@@ -1153,7 +1226,10 @@
                     #+futex
                     (%unlock-futex ptr)
                     #-futex
-                    (%release-spin-lock ptr)
+                    (progn
+                      (%release-spin-lock ptr)
+                      (setq *interrupt-level* -1)
+                      (%check-deferred-gc))
                     (if flag
                       (setf (lock-acquisition.status flag) t))
                     t)
@@ -1161,7 +1237,10 @@
                     #+futex
                     (%unlock-futex ptr)
                     #-futex
-                    (%release-spin-lock ptr)
+                    (progn
+                      (%release-spin-lock ptr)
+                      (setq *interrupt-level* -1)
+                      (%check-deferred-gc))
                     (%unlock-rwlock-ptr ptr lock)
                     (let* ((*interrupt-level* level))
                       (%write-lock-rwlock-ptr ptr lock flag)))))))))))
