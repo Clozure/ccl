@@ -395,13 +395,13 @@ sprint_vector(LispObj o, int depth)
 }
 
 static void
-sprint_lisp_object(LispObj o, int depth)  /* arm_print.c:415-491 */
+sprint_lisp_object(LispObj o, int depth)
 {
   if (--depth < 0) {
     add_char('#');
   } else {
     switch (fulltag_of(o)) {
-    case fulltag_even_fixnum:           /* arm_print.c:422-424 */
+    case fulltag_even_fixnum:
     case fulltag_odd_fixnum:
       sprint_signed_decimal(unbox_fixnum(o));
       break;
