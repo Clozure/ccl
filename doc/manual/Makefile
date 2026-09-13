@@ -20,3 +20,12 @@ ccl.html: *.ccldoc style.css
 	 -e '(ccldoc:output-html *d* "ccl.html" :stylesheet "ccl:doc;manual;style.css")' \
 	 -e '(quit)'
 
+.PHONY: check
+check:
+	@corrected="$$(grep -F -c "(some #'(lambda (n) (not (numberp n))) (car arglist))" debugging.ccldoc)"; \
+	 buggy="$$(grep -F -c "(some #'(lambda (n) (not (numberp n))) arglist)" debugging.ccldoc)"; \
+	 test "$$corrected" -eq 2 && test "$$buggy" -eq 0 || { \
+	   printf '%s\n' 'Both ADVISE examples must inspect (car arglist), not arglist' >&2; \
+	   exit 1; \
+	 }
+
