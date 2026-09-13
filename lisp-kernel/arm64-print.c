@@ -8,16 +8,16 @@
 #include "arm64-constants.h"
 #include "lisp_globals.h"
 
-void sprint_lisp_object(LispObj, int);
+static void sprint_lisp_object(LispObj, int);
 
 #define PBUFLEN 252
 
-char printbuf[PBUFLEN + 4];
-int bufpos = 0;
+static char printbuf[PBUFLEN + 4];
+static int bufpos = 0;
 
-jmp_buf escape;
+static jmp_buf escape;
 
-void
+static void
 add_char(char c)
 {
   if (bufpos >= PBUFLEN) {
@@ -27,7 +27,7 @@ add_char(char c)
   }
 }
 
-void
+static void
 add_string(char *s, int len)
 {
   while (len--) {
@@ -35,7 +35,7 @@ add_string(char *s, int len)
   }
 }
 
-void
+static void
 add_lisp_base_string(LispObj str)
 {
   lisp_char_code *src = (lisp_char_code *)(ptr_from_lispobj(str +
@@ -47,36 +47,36 @@ add_lisp_base_string(LispObj str)
   }
 }
 
-void
+static void
 add_c_string(char *s)
 {
   add_string(s, strlen(s));
 }
 
-char numbuf[64];
+static char numbuf[64];
 
-void
+static void
 sprint_signed_decimal(int64_t n)
 {
   snprintf(numbuf, sizeof(numbuf), "%" PRId64, n);
   add_c_string(numbuf);
 }
 
-void
+static void
 sprint_unsigned_decimal(uint64_t n)
 {
   snprintf(numbuf, sizeof(numbuf), "%" PRIu64, n);
   add_c_string(numbuf);
 }
 
-void
+static void
 sprint_unsigned_hex(uint64_t n)
 {
   snprintf(numbuf, sizeof(numbuf), "#x%016" PRIx64, n);
   add_c_string(numbuf);
 }
 
-void
+static void
 sprint_list(LispObj o, int depth)
 {
   LispObj the_cdr;
@@ -106,7 +106,7 @@ sprint_list(LispObj o, int depth)
  * Print a list of method specializers, using the class name instead
  * of the class object.
  */
-void
+static void
 sprint_specializers_list(LispObj o, int depth)
 {
   LispObj the_cdr, the_car;
@@ -151,7 +151,7 @@ sprint_specializers_list(LispObj o, int depth)
   add_char(')');
 }
 
-char *
+static char *
 vector_subtag_name(unsigned subtag)
 {
   switch (subtag) {
@@ -203,7 +203,7 @@ vector_subtag_name(unsigned subtag)
   }
 }
 
-void
+static void
 sprint_random_vector(LispObj o, unsigned subtag, natural elements)
 {
   add_c_string("#<");
@@ -217,7 +217,7 @@ sprint_random_vector(LispObj o, unsigned subtag, natural elements)
   add_c_string(")>");
 }
 
-void
+static void
 sprint_symbol(LispObj o)
 {
   lispsymbol *rawsym = (lispsymbol *)ptr_from_lispobj(untag(o));
@@ -233,7 +233,7 @@ sprint_symbol(LispObj o)
   add_lisp_base_string(pname);
 }
 
-void
+static void
 sprint_function(LispObj o, int depth)
 {
   LispObj lfbits, header, name = lisp_nil;
@@ -286,7 +286,7 @@ sprint_function(LispObj o, int depth)
   add_char('>');
 }
 
-void
+static void
 sprint_gvector(LispObj o, int depth)
 {
   LispObj header = header_of(o);
@@ -342,7 +342,7 @@ sprint_gvector(LispObj o, int depth)
   }
 }
 
-void
+static void
 sprint_ivector(LispObj o)
 {
   LispObj header = header_of(o);
@@ -382,7 +382,7 @@ sprint_ivector(LispObj o)
   }
 }
 
-void
+static void
 sprint_vector(LispObj o, int depth)
 {
   LispObj header = header_of(o);
@@ -394,7 +394,7 @@ sprint_vector(LispObj o, int depth)
   }
 }
 
-void
+static void
 sprint_lisp_object(LispObj o, int depth)  /* arm_print.c:415-491 */
 {
   if (--depth < 0) {
