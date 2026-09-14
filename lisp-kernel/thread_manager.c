@@ -250,6 +250,81 @@ get_spin_lock(signed_natural *p, TCR *tcr)
 }
 #endif
 
+/*
+ * A thread must not honor a suspend request while it holds the spin lock
+ * inside EXCEPTION_LOCK:  this is because the thread that requested
+ * the suspension may need that very spin lock in order to progress, and
+ * a suspended holder will never release it.
+ *
+ * By raising the interrupt level to -2 (as done by with-deferred-gc),
+ * we cause suspend_resume_handler to record a pending suspend and return
+ * instead of stopping the thread.
+ */
+static signed_natural
+defer_suspension_request(TCR *tcr)
+{
+  signed_natural old_level = 0;
+
+  /*
+   * A TCR without thread-local bindings (mid-creation, or an early
+   * bootstrap thread) has no interrupt level to defer and cannot be
+   * the target of a suspend request yet.
+   */
+  if (tcr && tcr->tlb_pointer) {
+    old_level = TCR_INTERRUPT_LEVEL(tcr);
+    TCR_INTERRUPT_LEVEL(tcr) = -(2 << fixnumshift);
+  }
+  return old_level;
+}
+
+/*
+ * EXCEPTION_LOCK's spin lock has been released.  Restore the interrupt
+ * level and deliver any suspend request that arrived while we were
+ * deferring.
+ *
+ * Note that we restore the interrupt level before testing the pending
+ * suspend flag.  If we didn't do this, we could lose a suspend:
+ *
+ *     test flag   -- clear, so we decide not to re-raise
+ *     <suspend arrives: the level is still -2, so the handler merely
+ *      records PENDING_SUSPEND and returns>
+ *     restore the level      -- and we return, never having seen the flag
+ *
+ * The flag is then set with nobody around to act on it, and the
+ * thread that requested the suspension waits until this thread
+ * happens to reach some other delivery point, if it ever does.
+ * (unbind_interrupt_level had this very bug.)
+ *
+ * Restoring first avoids the race condition.  A suspend arriving
+ * before the restore is deferred and recorded in the flag, which the
+ * test below then finds; one arriving after it sees the restored
+ * level and is taken by the handler on the spot.  The compiler
+ * barrier keeps the store ahead of the load: they are different
+ * objects, so nothing else prevents the compiler from sinking the
+ * store past the test.
+ *
+ * Skip the re-raise when the restored level still defers suspension,
+ * i.e., when this deferral was nested inside another.  Re-raising
+ * would only make the handler record the flag again.  Leave the flag
+ * set and let the enclosing deferral deliver it on exit.  Only the
+ * outermost restore, the one that lands above -2, actually delivers.
+ */
+static void
+accept_suspension_request(TCR *tcr, signed_natural old_level)
+{
+  if (tcr && tcr->tlb_pointer) {
+    TCR_INTERRUPT_LEVEL(tcr) = old_level;
+    asm volatile("" ::: "memory"); /* compiler barrier */
+    if ((old_level > -(2 << fixnumshift)) &&
+        (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_SUSPEND))) {
+      CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_PENDING_SUSPEND);
+#ifndef WINDOWS
+      pthread_kill(pthread_self(), thread_suspend_signal);
+#endif
+    }
+  }
+}
+
 #ifndef USE_FUTEX
 int
 lock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
@@ -272,6 +347,36 @@ lock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
       break;
     }
     RELEASE_SPINLOCK(m->spinlock);
+    SEM_WAIT_FOREVER(m->signal);
+  }
+  return 0;
+}
+
+int
+lock_recursive_lock_deferring_suspension(RECURSIVE_LOCK m, TCR *tcr)
+{
+  signed_natural old_interrupt_level;
+
+  if (tcr == NULL) {
+    tcr = get_tcr(true);
+  }
+  if (m->owner == tcr) {
+    m->count++;
+    return 0;
+  }
+  while (1) {
+    old_interrupt_level = defer_suspension_request(tcr);
+    LOCK_SPINLOCK(m->spinlock,tcr);
+    ++m->avail;
+    if (m->avail == 1) {
+      m->owner = tcr;
+      m->count = 1;
+      RELEASE_SPINLOCK(m->spinlock);
+      accept_suspension_request(tcr, old_interrupt_level);
+      break;
+    }
+    RELEASE_SPINLOCK(m->spinlock);
+    accept_suspension_request(tcr, old_interrupt_level);
     SEM_WAIT_FOREVER(m->signal);
   }
   return 0;
@@ -355,6 +460,42 @@ unlock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
   }
   return ret;
 }
+
+int
+unlock_recursive_lock_deferring_suspension(RECURSIVE_LOCK m, TCR *tcr)
+{
+  int ret = EPERM, pending;
+  signed_natural old_interrupt_level;
+
+  if (tcr == NULL) {
+    tcr = get_tcr(true);
+  }
+
+  if (m->owner == tcr) {
+    --m->count;
+    if (m->count == 0) {
+      old_interrupt_level = defer_suspension_request(tcr);
+      LOCK_SPINLOCK(m->spinlock,tcr);
+      m->owner = NULL;
+      pending = m->avail-1 + m->waiting;     /* Don't count us */
+      m->avail = 0;
+      --pending;
+      if (pending > 0) {
+        m->waiting = pending;
+      } else {
+        m->waiting = 0;
+      }
+      RELEASE_SPINLOCK(m->spinlock);
+      accept_suspension_request(tcr, old_interrupt_level);
+      if (pending >= 0) {
+	SEM_RAISE(m->signal);
+      }
+    }
+    ret = 0;
+  }
+  return ret;
+}
+
 #else /* USE_FUTEX */
 int
 unlock_recursive_lock(RECURSIVE_LOCK m, TCR *tcr)
@@ -390,6 +531,17 @@ destroy_recursive_lock(RECURSIVE_LOCK m)
   If we're already the owner (or if the lock is free), lock it
   and increment the lock count; otherwise, return EBUSY without
   waiting.
+
+  Nothing calls this.  There are no callers in the kernel, and none in
+  lisp either: lisp rolls its own %TRY-RECURSIVE-LOCK-OBJECT in
+  level-0/l0-misc.lisp rather than going through here.  The function is
+  merely reachable, by way of its kernel-import slot.
+
+  That is also why there is no recursive_lock_trylock_deferring_suspension
+  to go with lock_recursive_lock_deferring_suspension: with no caller, this
+  can never be the one holding a suspend-critical lock's spin lock when a
+  suspend request arrives.  Should a caller ever appear, and should it lock
+  EXCEPTION_LOCK or TCR_AREA_LOCK, it will need the deferring treatment too.
 */
 
 #ifndef USE_FUTEX
@@ -2366,6 +2518,57 @@ free_freed_tcrs ()
   freed_tcrs = NULL;
 }
 
+/*
+ * Since EXCEPTION_LOCK gets special treatment (namely being aware
+ * that the running thread might be suspended, and guarding the
+ * internal spin lock accordingly), one might ask whether
+ * TCR_AREA_LOCK needs the same.
+ *
+ * A lock needs to be suspension-aware if a thread can be suspended
+ * while holding the lock's internal spin lock and the stop-the-world
+ * thread afterwards needs that same spin lock.  EXCEPTION_LOCK is
+ * such a lock: the XUUO_SUSPEND_ALL handler returns with the world
+ * still stopped, so unlock_exception_lock_in_handler runs, and
+ * attempts to take the spin lock, while other threads are frozen.
+ *
+ * TCR_AREA_LOCK does not need to be special for two reasons:
+ *
+ * 1. We acquire the lock below before suspending anyone, and
+ *    resume_other_threads resumes everyone before it releases.  So a
+ *    thread frozen holding this spin lock is always running again by
+ *    the time the stopper wants the lock: normal lock contention,
+ *    not deadlock.  Nothing acquires TCR_AREA_LOCK while the world
+ *    is stopped.
+ *
+ * 2. More fundamentally, owning TCR_AREA_LOCK already excludes being
+ *    suspended.  Suspending anyone requires first acquiring this
+ *    lock, so a thread that holds it cannot be the target of a
+ *    suspend request.
+ *
+ * In fact, making TCR_AREA_LOCK suspension-aware would be harmful,
+ * not merely redundant. A deferring acquire delivers any pending
+ * suspend as it restores the interrupt level---which here is just
+ * after we take the lock, and before we have suspended anybody:
+ *
+ *     LOCK_TCR_AREA_LOCK(current)
+ *       defer_suspension_request()    level now -2
+ *       <spin lock, bookkeeping>      we now own TCR_AREA_LOCK
+ *       accept_suspension_request()   level restored; PENDING_SUSPEND
+ *                                     was set, so re-raise -- we park
+ *     ... parked, owning TCR_AREA_LOCK, having suspended no one ...
+ *
+ * and nothing can get us out of that: resuming a thread means being the
+ * stop-the-world thread, and becoming that means acquiring TCR_AREA_LOCK,
+ * which we are holding while parked.
+ *
+ * It's not clear we could even get in that state: a thread requesting
+ * us to suspend would already hold TCR_AREA_LOCK while it waits for
+ * us to ack, so we'd block acquiring it long before we ever got in
+ * this situation.  But the point is that TCR_AREA_LOCK doesn't need
+ * this extra subtlety: the whole interrupt/suspend logic is already
+ * difficult to follow.  We're already in possession of all the
+ * subtlety we require.
+ */
 void
 suspend_other_threads(Boolean for_gc)
 {
@@ -2428,6 +2631,14 @@ resume_other_threads(Boolean for_gc)
     }
   }
   free_freed_tcrs();
+  /*
+    Resume before unlocking, not after.  Releasing TCR_AREA_LOCK takes its
+    spin lock, and if any thread were still frozen holding that spin lock we
+    would spin here forever.  Thawing first guarantees the holder is running
+    again.  This ordering is one of the things that lets TCR_AREA_LOCK be
+    taken with plain LOCK()/UNLOCK(); see the comment on
+    suspend_other_threads before reordering these two lines.
+  */
   UNLOCK(lisp_global(TCR_AREA_LOCK), current);
 }
 

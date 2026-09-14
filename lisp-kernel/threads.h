@@ -176,12 +176,30 @@ typedef struct
 
 int lock_recursive_lock(RECURSIVE_LOCK, TCR *);
 int unlock_recursive_lock(RECURSIVE_LOCK, TCR *);
+int lock_recursive_lock_deferring_suspension(RECURSIVE_LOCK, TCR *);
+int unlock_recursive_lock_deferring_suspension(RECURSIVE_LOCK, TCR *);
 RECURSIVE_LOCK new_recursive_lock(void);
 void destroy_recursive_lock(RECURSIVE_LOCK);
 int recursive_lock_trylock(RECURSIVE_LOCK, TCR *, int *);
 
 #define LOCK(m, t) lock_recursive_lock((RECURSIVE_LOCK)ptr_from_lispobj(m), (TCR *)t)
 #define UNLOCK(m, t) unlock_recursive_lock((RECURSIVE_LOCK)ptr_from_lispobj(m), (TCR *)t)
+
+/*
+ * EXCEPTION_LOCK is suspend-critical: the thread that stops the world must
+ * itself touch its bookkeeping while other threads are frozen, so its spin
+ * lock may never be held across a suspension.  Take and release it only
+ * through these, never through plain LOCK()/UNLOCK().
+ *
+ * TCR_AREA_LOCK, on the other hand, is not in the same position.  See
+ * the comment on suspend_other_threads for why.
+ */
+#define LOCK_EXCEPTION_LOCK(t)                                          \
+  lock_recursive_lock_deferring_suspension                              \
+    ((RECURSIVE_LOCK)ptr_from_lispobj(lisp_global(EXCEPTION_LOCK)), (TCR *)t)
+#define UNLOCK_EXCEPTION_LOCK(t)                                        \
+  unlock_recursive_lock_deferring_suspension                            \
+    ((RECURSIVE_LOCK)ptr_from_lispobj(lisp_global(EXCEPTION_LOCK)), (TCR *)t)
 
 /* Hmm.  This doesn't look like the MacOS Thread Manager ... */
 LispObj current_thread_osid(void);
