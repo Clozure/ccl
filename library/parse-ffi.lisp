@@ -609,10 +609,25 @@
 (defun process-ffi-enum (form)
   (declare (ignore form)))
 
+(defun ffi-var-static-p (form)
+  ;; (var source name type [storage]) — storage is (static) or (extern).
+  ;; After the keyword-package read that becomes (:static) / (:extern).
+  (let* ((storage (car (cddddr form))))
+    (or (eq storage :static)
+        (eq storage 'static)
+        (and (consp storage)
+             (or (eq (car storage) :static)
+                 (eq (car storage) 'static))))))
+
 (defun process-ffi-var (form)
-  (let* ((name (caddr form))
-         (type (cadddr form)))
-    (cons name (reference-ffi-type type))))
+  ;; `static const` has internal linkage — not a dyld symbol.  Recording
+  ;; it in vars.cdb makes #$ fall through to resolve-foreign-variable
+  ;; ("Can't resolve foreign symbol NSOffState").  Skip; numeric aliases
+  ;; belong in constants.cdb (enum-ident / inject).
+  (unless (ffi-var-static-p form)
+    (let* ((name (caddr form))
+           (type (cadddr form)))
+      (cons name (reference-ffi-type type)))))
 
 (defun process-ffi-enum-ident (form)
   (cons (caddr form) (cadddr form)))
@@ -799,7 +814,8 @@
                             (setf (gethash (string (ffi-macro-name m)) argument-macros) args)
                             (push m defined-macros))))
                 (:type (push (process-ffi-typedef form) defined-types))
-                (:var (push (process-ffi-var form) defined-vars))
+                (:var (let ((v (process-ffi-var form)))
+                        (when v (push v defined-vars))))
                 (:enum-ident (push (process-ffi-enum-ident form) defined-constants))
                 (:enum (process-ffi-enum form))
                 (:union (push (process-ffi-union form) defined-types))

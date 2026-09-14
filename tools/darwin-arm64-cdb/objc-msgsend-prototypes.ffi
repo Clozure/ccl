@@ -1,0 +1,30 @@
+;; Historical ObjC messaging prototypes for CCL's #_ reader.
+;;
+;; Modern SDKs force OBJC_OLD_DISPATCH_PROTOTYPES=0 (objc-api.h), so
+;; message.h declares `void objc_msgSend(void)` — cast-before-call.
+;; ffigen records empty arglists; #%objc_msgSend then rejects args
+;; ("Extra arguments").  Clozure's x86 cocoa CDBs still have the old
+;; `id objc_msgSend(id, SEL, ...)` shape with a trailing void = variadic.
+;;
+;; Parsed in KEYWORD package.  Install as zzz-*.ffi so it wins over
+;; message.ffi during parse-standard-ffi-files.
+(function ("" 0)
+ "objc_msgSend"
+ (function
+  ((typedef "id") (typedef "SEL") (void ()))
+  (typedef "id")) (extern))
+(function ("" 0)
+ "objc_msgSendSuper"
+ (function
+  ((pointer (struct-ref "objc_super")) (typedef "SEL") (void ()))
+  (typedef "id")) (extern))
+(function ("" 0)
+ "method_invoke"
+ (function
+  ((typedef "id") (typedef "SEL") (void ()))
+  (typedef "id")) (extern))
+(function ("" 0)
+ "_objc_msgForward"
+ (function
+  ((typedef "id") (typedef "SEL") (void ()))
+  (typedef "id")) (extern))
