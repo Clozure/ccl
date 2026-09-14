@@ -1286,9 +1286,9 @@ callback_to_lisp (LispObj callback_macptr, ExceptionInformation *xp,
      will push lr/fn & pc/nfn stack frames for backtrace.
   */
   callback_ptr = ((macptr *)ptr_from_lispobj(untag(callback_macptr)))->address;
-  UNLOCK(lisp_global(EXCEPTION_LOCK), tcr);
+  UNLOCK_EXCEPTION_LOCK(tcr);
   delta = ((int (*)())callback_ptr) (xp, arg1, arg2, fnreg, offset);
-  LOCK(lisp_global(EXCEPTION_LOCK), tcr);
+  LOCK_EXCEPTION_LOCK(tcr);
 
   if (bumpP) {
     *bumpP = delta;
@@ -1375,7 +1375,7 @@ wait_for_exception_lock_in_handler(TCR *tcr,
 				   xframe_list *xf)
 {
 
-  LOCK(lisp_global(EXCEPTION_LOCK), tcr);
+  LOCK_EXCEPTION_LOCK(tcr);
   xf->curr = context;
   xf->prev = tcr->xframe;
   tcr->xframe =  xf;
@@ -1389,7 +1389,7 @@ unlock_exception_lock_in_handler(TCR *tcr)
   tcr->pending_exception_context = tcr->xframe->curr;
   tcr->xframe = tcr->xframe->prev;
   tcr->valence = TCR_STATE_EXCEPTION_RETURN;
-  UNLOCK(lisp_global(EXCEPTION_LOCK),tcr);
+  UNLOCK_EXCEPTION_LOCK(tcr);
 }
 
 /* 

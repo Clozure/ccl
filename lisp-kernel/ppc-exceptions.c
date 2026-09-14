@@ -1520,9 +1520,9 @@ callback_to_lisp (LispObj callback_macptr, ExceptionInformation *xp,
 #ifdef DEBUG
   fprintf(dbgout, "0x%x releasing exception lock for callback\n", tcr);
 #endif
-  UNLOCK(lisp_global(EXCEPTION_LOCK), tcr);
+  UNLOCK_EXCEPTION_LOCK(tcr);
   ((void (*)())callback_ptr) (xp, arg1, arg2, arg3, arg4, arg5);
-  LOCK(lisp_global(EXCEPTION_LOCK), tcr);
+  LOCK_EXCEPTION_LOCK(tcr);
 #ifdef DEBUG
   fprintf(dbgout, "0x%x acquired exception lock after callback\n", tcr);
 #endif
@@ -1773,7 +1773,7 @@ wait_for_exception_lock_in_handler(TCR *tcr,
 				   xframe_list *xf)
 {
 
-  LOCK(lisp_global(EXCEPTION_LOCK), tcr);
+  LOCK_EXCEPTION_LOCK(tcr);
 #ifdef DEBUG
   fprintf(dbgout, "0x%x has exception lock\n", tcr);
 #endif
@@ -1793,7 +1793,7 @@ unlock_exception_lock_in_handler(TCR *tcr)
 #ifdef DEBUG
   fprintf(dbgout, "0x%x releasing exception lock\n", tcr);
 #endif
-  UNLOCK(lisp_global(EXCEPTION_LOCK),tcr);
+  UNLOCK_EXCEPTION_LOCK(tcr);
 }
 
 /* 

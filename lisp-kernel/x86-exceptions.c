@@ -715,9 +715,9 @@ callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
                                   natural, natural, natural);
   callback_fn_type callback_fn = (callback_fn_type)callback_ptr;
 
-  UNLOCK(lisp_global(EXCEPTION_LOCK), tcr);
+  UNLOCK_EXCEPTION_LOCK(tcr);
   delta = callback_fn(xp, arg1, arg2, arg3, arg4, arg5);
-  LOCK(lisp_global(EXCEPTION_LOCK), tcr);
+  LOCK_EXCEPTION_LOCK(tcr);
 
 #ifdef X8632
   tcr->next_method_context = *vsp++;
@@ -1404,7 +1404,7 @@ wait_for_exception_lock_in_handler(TCR *tcr,
 				   xframe_list *xf)
 {
 
-  LOCK(lisp_global(EXCEPTION_LOCK), tcr);
+  LOCK_EXCEPTION_LOCK(tcr);
 #if 0
   fprintf(dbgout, "0x" LISP " has exception lock\n", tcr);
 #endif
@@ -1427,7 +1427,7 @@ unlock_exception_lock_in_handler(TCR *tcr)
 #endif
   tcr->xframe = tcr->xframe->prev;
   tcr->valence = TCR_STATE_EXCEPTION_RETURN;
-  UNLOCK(lisp_global(EXCEPTION_LOCK),tcr);
+  UNLOCK_EXCEPTION_LOCK(tcr);
 #if 0
   fprintf(dbgout, "0x" LISP " released exception lock\n", tcr);
 #endif
