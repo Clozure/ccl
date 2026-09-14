@@ -751,7 +751,7 @@ add_area(area *new_area, TCR *tcr)
 {
   LOCK(lisp_global(TCR_AREA_LOCK),tcr);
   add_area_holding_area_lock(new_area);
-  LOCK(lisp_global(TCR_AREA_LOCK),tcr);
+  UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
 }  
 
 /*
@@ -1026,7 +1026,7 @@ condemn_area(area *a, TCR *tcr)
 {
   LOCK(lisp_global(TCR_AREA_LOCK),tcr);
   condemn_area_holding_area_lock(a);
-  LOCK(lisp_global(TCR_AREA_LOCK),tcr);
+  UNLOCK(lisp_global(TCR_AREA_LOCK),tcr);
 }
 
 
