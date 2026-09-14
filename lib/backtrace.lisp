@@ -258,22 +258,31 @@ object."
         (incf frame-number)))))
 
 (defun %show-stack-frame-label (frame-number p context lfun pc detailed-p)
-  (case *backtrace-format*
-    (:direct
-       (let ((call (backtrace-call-arguments context p lfun pc)))
-         (format t "~&~3D: ~a ~a~@d~:[~; [Exception]~]"
-                 frame-number
-                 (if lfun
-                   (if detailed-p (car call) call)
-                   "<non-function frame>")
-                 "at pc "
-                 pc
-                 (exception-frame-p p))))
-    (t (format t "~&~c(~x) : ~D ~a ~d"
-                      (if (exception-frame-p p)  #\* #\space)
-                      (index->address p) frame-number
-                      (if lfun (backtrace-call-arguments context p lfun pc))
-                      pc))))
+  ;; detailed-p NIL: print only the function name, never the stack args.
+  ;; Formatting raw stack slots with ~s can call CLASS-OF on arbitrary
+  ;; words and signal inside the backtrace printer itself.
+  (flet ((frame-label ()
+           (cond ((null lfun) "<non-function frame>")
+                 (detailed-p
+                  (let ((call (backtrace-call-arguments context p lfun pc)))
+                    (if (eq *backtrace-format* :direct) (car call) call)))
+                 (t (or (ignore-errors (function-name lfun))
+                        (ignore-errors (%lfun-name-string lfun))
+                        lfun)))))
+    (case *backtrace-format*
+      (:direct
+       (format t "~&~3D: ~a ~a~@d~:[~; [Exception]~]"
+               frame-number
+               (frame-label)
+               "at pc "
+               pc
+               (exception-frame-p p)))
+      (t
+       (format t "~&~c(~x) : ~D ~a ~d"
+               (if (exception-frame-p p) #\* #\space)
+               (index->address p) frame-number
+               (frame-label)
+               pc)))))
 
 
 (defun %access-lisp-data (vstack-index)
