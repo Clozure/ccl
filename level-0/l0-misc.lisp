@@ -1135,16 +1135,24 @@
        (let* ((state (%get-signed-natural ptr target::rwlock.state)))
          (declare (fixnum state))
          (cond ((> state 0)
-                (unless (eql (%get-object ptr target::rwlock.writer) tcr)
-                  #+futex
-                  (%unlock-futex ptr)
-                  #-futex
-                  (%release-spin-lock ptr)
-                  (error :not-lock-owner :lock lock)))
+                (if (eql (%get-object ptr target::rwlock.writer) tcr)
+                  (progn
+                    ;; We already have write access: nothing to promote.
+                    #+futex
+                    (%unlock-futex ptr)
+                    #-futex
+                    (%release-spin-lock ptr)
+                    t)
+                  (progn
+                    #+futex
+                    (%unlock-futex ptr)
+                    #-futex
+                    (%release-spin-lock ptr)
+                    (error 'not-lock-owner :lock lock))))
                ((= state 0)
                 #+futex (%unlock-futex ptr)
                 #-futex (%release-spin-lock ptr)
-                (error :not-locked :lock lock))
+                (error 'not-locked :lock lock))
                (t
                 (if (= state -1)
                   (progn
