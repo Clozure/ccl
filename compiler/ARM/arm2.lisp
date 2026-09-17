@@ -5826,6 +5826,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
            reglocatives
            pregs
            no-regs
+           (nfp-saved nil)
            (nsaved-fprs 0)
            (*arm2-vstack* 0)
            (*arm2-nfp-depth* *arm2-nfp-depth*)
@@ -5870,7 +5871,12 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                       (! check-max-nargs max)
                       (! check-max-nargs-large max))))
                 (unless lexprp
-                  (! save-lisp-context-variable))
+                  (! save-lisp-context-variable)
+                  ;; Save NFP here, before anything (like a stack-consed
+                  ;; &rest list) allocates a stack object.  We expect to
+                  ;; discard stack objects before restoring NFP.
+                  (! save-nfp)
+                  (setq nfp-saved t))
                 ;; If there were &optional args, initialize their values
                 ;; to NIL.  All of the argregs get vpushed as a result of this.
                 (when opt
@@ -5934,9 +5940,10 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 
                   (arm2-set-vstack nbytes-vpushed)
                   (setq optsupvloc (- *arm2-vstack* (* num-opt *arm2-target-node-size*)))))))
-          ;; Caller's context is saved; *arm2-vstack* is valid.  Might still have method-var
-          ;; to worry about.
-          (! save-nfp)
+          ;; Caller's context is saved; *arm2-vstack* is valid.  Might
+          ;; still have method-var to worry about.
+          (unless nfp-saved
+            (! save-nfp))
 
           (arm2-save-non-volatile-fprs seg nsaved-fprs)
           (unless (= 0 pregs)
