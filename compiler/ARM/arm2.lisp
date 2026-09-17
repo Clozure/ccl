@@ -5512,9 +5512,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
               (when (> n 0)
                 (! dpayback n)
                 (setq n 0))
-              (if *arm2-open-code-inline*
-                (! unbind-interrupt-level-inline)
-                (! unbind-interrupt-level)))
+              (! unbind-interrupt-level))
             (compiler-bug "unknown payback token ~s" r)))))))
 
 

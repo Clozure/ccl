@@ -5568,9 +5568,7 @@
               (when (> n 0)
                 (! dpayback n)
                 (setq n 0))
-              (if *arm642-open-code-inline*
-                (! unbind-interrupt-level-inline)
-                (! unbind-interrupt-level)))
+              (! unbind-interrupt-level))
             (compiler-bug "unknown payback token ~s" r)))))))
 
 (defun arm642-tailcallok (xfer)

@@ -5991,39 +5991,6 @@
                                               ())
   (ret))
 
-(define-arm64-vinsn unbind-interrupt-level-inline (()
-                                                   ()
-                                                   ((tlb :imm)
-                                                    (link :imm)
-                                                    (curval :imm)
-                                                    (oldval :imm)
-                                                    (save-nargs :u64)))
-  ;; Pop the *interrupt-level* binding; if we just RE-ENABLED interrupts
-  ;; (curval<0 restored to oldval>=0) and one is pending, trap.
-  ;; ARM64-DEVIATION (v2's, carried): PPC keeps two compare results in
-  ;; crf0/crf1 across the restore; ARM64 has one NZCV, so curval/oldval
-  ;; live in registers and each is compared immediately before its
-  ;; branch.
-  (ldr tlb (:@ rcontext (:$ arm64::tcr.tlb-pointer)))
-  (ldr curval (:@ tlb (:$ arm64::interrupt-level-binding-index)))
-  (ldr link (:@ rcontext (:$ arm64::tcr.db-link)))
-  (ldr oldval (:@ link (:$ 16)))
-  (ldr link (:@ link (:$ 0)))
-  (str oldval (:@ tlb (:$ arm64::interrupt-level-binding-index)))
-  (str link (:@ rcontext (:$ arm64::tcr.db-link)))
-  (cmp curval (:$ 0))
-  (b.ge :done)
-  (cmp oldval (:$ 0))
-  (b.lt :done)
-  (mov save-nargs nargs)
-  (ldr nargs (:@ rcontext (:$ arm64::tcr.interrupt-pending)))
-  (cmp nargs (:$ 0))
-  (b.le :restore)
-  (uuo-interrupt-now)
-  :restore
-  (mov nargs save-nargs)
-  :done)
-
 ;;; Requires .SPbind registered in arm64-subprims-additions.lisp (w11) --
 ;;; subprimitive-offset returns NIL for unregistered names.
 (define-arm64-vinsn (bind :call :subprim)

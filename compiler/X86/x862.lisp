@@ -6740,13 +6740,7 @@
               (when (> n 0)
                 (x862-dpayback seg n)
                 (setq n 0))
-              (if (and *x862-open-code-inline*
-		       (target-arch-case
-			(:x8632 nil)
-			(:x8664 t)))
-                (let* ((*available-backend-node-temps* (bitclr *x862-arg-z* (bitclr x8664::rcx *available-backend-node-temps*))))
-                  (! unbind-interrupt-level-inline))
-                (! unbind-interrupt-level)))
+              (! unbind-interrupt-level))
             (compiler-bug "unknown payback token ~s" r)))))))
 
 (defun x862-spread-lambda-list (seg listform whole req opt rest keys 

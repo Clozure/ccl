@@ -4989,9 +4989,7 @@
               (when (> n 0)
                 (! dpayback n)
                 (setq n 0))
-              (if *ppc2-open-code-inline*
-                (! unbind-interrupt-level-inline)
-                (! unbind-interrupt-level)))
+              (! unbind-interrupt-level))
             (compiler-bug "unknown payback token ~s" r)))))))
 
 (defun ppc2-spread-lambda-list (seg listform whole req opt rest keys 

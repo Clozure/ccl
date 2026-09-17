@@ -2088,28 +2088,6 @@
 (define-x8632-subprim-call-vinsn (unbind-interrupt-level) .SPunbind-interrupt-level)
 
 #||
-(define-x8632-vinsn unbind-interrupt-level-inline (()
-                                                   ()
-                                                   ((link :imm)
-                                                    (curval :imm)
-                                                    (oldval :imm)
-                                                    (tlb :imm)))
-  (movl (:@ (:%seg :rcontext) x8632::tcr.tlb-pointer) (:%l tlb))
-  (movl (:@ (:%seg :rcontext) x8632::tcr.db-link) (:%l link))
-  (movl (:@ x8632::interrupt-level-binding-index (:%l tlb)) (:%l curval))
-  (testl (:%l curval) (:%l curval))
-  (movl (:@ 8 #|binding.val|# (:%l link)) (:%l oldval))
-  (movl (:@ #|binding.link|# (:%l link)) (:%l link))
-  (movl (:%l oldval) (:@ x8632::interrupt-level-binding-index (:%l tlb)))
-  (movl (:%l link) (:@ (:%seg :rcontext) x8632::tcr.db-link))
-  (jns :done)
-  (testl (:%l oldval) (:%l oldval))
-  (js :done)
-  (btrl (:$ub 31) (:@ (:%seg :rcontext) x8632::tcr.interrupt-pending))
-  (jae :done)
-  (ud2a)
-  (:byte 2)
-  :done)
 ||#
 
 (define-x8632-vinsn (jump-return-pc :jumpLR) (()
