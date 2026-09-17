@@ -147,7 +147,7 @@
   (%fixnum-ref-natural (%get-kernel-global 'tenured-area)
                        target::area.static-dnodes))
 (defun %usedbytes ()
-  (with-lock-grabbed (*kernel-exception-lock*)
+  (with-exception-lock
     (with-lock-grabbed (*kernel-tcr-area-lock*)
       (%normalize-areas)
       (let ((static 0)
@@ -637,6 +637,72 @@
 (defun %lock-recursive-lock-object (lock &optional flag)
   (%lock-recursive-lock-ptr (recursive-lock-ptr lock) lock flag))
 
+;;; These are the Lisp versions of lock_recursive_lock_deferring_suspension
+;;; and its unlock counterpart in thread_manager.c.  These functions
+;;; are only for operating on *kernel-exception-lock* (which is the same
+;;; memory as EXCEPTION_LOCK in the lisp kernel).
+;;;
+;;; A thread must defer a suspend request while it holds the exception
+;;; lock's internal spin lock.  This is because the thread that
+;;; requested the suspension needs that very spin lock to release
+;;; EXCEPTION_LOCK on its way out of the handler.  A suspended holder
+;;; will never release it.
+;;;
+;;; A thread whose *interrupt-level* is -2 holds the world-stopper in
+;;; SEM_WAIT_FOREVER until it reaches a delivery point, so the
+;;; deferred window has to be as short as possible.
+
+#-futex
+(defun %lock-recursive-lock-ptr-deferring-suspension (ptr lock flag)
+  (with-macptrs ((p)
+                 (owner (%get-ptr ptr target::lockptr.owner))
+                 (signal (%get-ptr ptr target::lockptr.signal))
+                 (spin (%inc-ptr ptr target::lockptr.spinlock)))
+    (%setf-macptr-to-object p (%current-tcr))
+    (if (istruct-typep flag 'lock-acquisition)
+      (setf (lock-acquisition.status flag) nil)
+      (if flag (report-bad-arg flag 'lock-acquisition)))
+    (loop
+      (without-interrupts
+        ;; Recursive acquire: we already own it, so we never touch the
+        ;; spin word and have nothing to defer.
+        (when (eql p owner)
+          (incf (%get-natural ptr target::lockptr.count))
+          (when flag
+            (setf (lock-acquisition.status flag) t))
+          (return t))
+        (with-deferred-gc
+          ;; no non-local exits, no exceptions, no consing
+          (%get-spin-lock spin)
+          (when (eql 1 (incf (%get-natural ptr target::lockptr.avail)))
+            (setf (%get-ptr ptr target::lockptr.owner) p
+                  (%get-natural ptr target::lockptr.count) 1)
+            (%release-spin-lock spin)
+            (if flag
+             (setf (lock-acquisition.status flag) t))
+            (return t))
+          (%release-spin-lock spin)))
+      ;; Wait with suspension enabled again.
+      (%process-wait-on-semaphore-ptr signal 1 0
+                                      (recursive-lock-whostate lock)))))
+
+;;; A futex build would have the same problem with the exception lock:
+;;; a thread frozen holding the futex word leaves the world-stopper
+;;; waiting on it forever.
+;;;
+;;; Since nothing is #+futex today (see the guard at the top of this
+;;; file), just error here.  The lisp kernel likewise defines its
+;;; deferring variants only in the non-futex branch.
+
+#+futex
+(defun %lock-recursive-lock-ptr-deferring-suspension (ptr lock flag)
+  (declare (ignore ptr lock flag))
+  (error "can't do this for futex"))
+
+(defun %lock-recursive-lock-object-deferring-suspension (lock &optional flag)
+  (%lock-recursive-lock-ptr-deferring-suspension
+   (recursive-lock-ptr lock) lock flag))
+
 
 
 
@@ -791,6 +857,45 @@
 
 (defun %unlock-recursive-lock-object (lock)
   (%unlock-recursive-lock-ptr (%svref lock target::lock._value-cell) lock))
+
+#-futex
+(defun %unlock-recursive-lock-ptr-deferring-suspension (ptr lock)
+  (with-macptrs ((signal (%get-ptr ptr target::lockptr.signal))
+                 (spin (%inc-ptr ptr target::lockptr.spinlock)))
+    (unless (eql (%get-object ptr target::lockptr.owner) (%current-tcr))
+      (error 'not-lock-owner :lock lock))
+    (without-interrupts
+     (when (eql 0 (decf (the fixnum
+                          (%get-natural ptr target::lockptr.count))))
+       (let* ((pending 0))
+         (declare (fixnum pending))
+         (with-deferred-gc
+           ;; no non-local exits, no exceptions, no consing
+           (%get-spin-lock spin)
+           (setf (%get-natural ptr target::lockptr.owner) 0)
+           (setq pending (+ (the fixnum
+                              (1- (the fixnum
+                                    (%get-fixnum ptr target::lockptr.avail))))
+                            (the fixnum
+                              (%get-fixnum ptr target::lockptr.waiting))))
+           (setf (%get-natural ptr target::lockptr.avail) 0
+                 (%get-natural ptr target::lockptr.waiting) 0)
+           (%release-spin-lock spin))
+         ;; Post once the word is released and the level is restored:
+         ;; the kernel's twin likewise raises the semaphore after
+         ;; accepting the suspend request.
+         (dotimes (i pending)
+           (%signal-semaphore-ptr signal)))))
+    nil))
+
+#+futex
+(defun %unlock-recursive-lock-ptr-deferring-suspension (ptr lock)
+  (declare (ignore ptr lock))
+  (error "can't do this for futex"))
+
+(defun %unlock-recursive-lock-object-deferring-suspension (lock)
+  (%unlock-recursive-lock-ptr-deferring-suspension
+   (%svref lock target::lock._value-cell) lock))
 
 
 

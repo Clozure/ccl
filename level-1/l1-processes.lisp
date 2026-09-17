@@ -258,7 +258,7 @@
     (symbol-value sym)
     (let* ((val
             (without-interrupts
-             (with-lock-grabbed (*kernel-exception-lock*)
+             (with-exception-lock
                (with-lock-grabbed (*kernel-tcr-area-lock*)
                  (let* ((tcr (process-tcr process)))
                    (if tcr
@@ -272,7 +272,7 @@
 (defun (setf symbol-value-in-process) (value sym process)
   (if (eq process *current-process*)
     (setf (symbol-value sym) value)
-    (with-lock-grabbed (*kernel-exception-lock*)
+    (with-exception-lock
       (with-lock-grabbed (*kernel-tcr-area-lock*)
         (let* ((tcr (process-tcr process)))
           (if tcr

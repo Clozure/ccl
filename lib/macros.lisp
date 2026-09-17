@@ -2572,8 +2572,21 @@ the lock held."
 
  
 (defmacro with-exception-lock (&body body)
-  `(with-lock-grabbed (*kernel-exception-lock*)
-    ,@body))
+  ;; Use this to take *kernel-exception-lock* instead of with-lock-grabbed.
+  ;; The exception lock is special in that its internal spin word must not
+  ;; be held across a suspension.
+  (let* ((locked (gensym))
+         (l (gensym)))
+    `(with-lock-context
+       (let ((,locked (make-lock-acquisition))
+             (,l *kernel-exception-lock*))
+         (declare (dynamic-extent ,locked))
+         (unwind-protect
+              (progn
+                (%lock-recursive-lock-object-deferring-suspension ,l ,locked)
+                ,@body)
+           (when (lock-acquisition.status ,locked)
+             (%unlock-recursive-lock-object-deferring-suspension ,l)))))))
 
 
 (defmacro with-lock-grabbed-maybe ((lock &optional
