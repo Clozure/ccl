@@ -995,8 +995,8 @@
               ((eql 0 (%get-signed-natural ptr target::rwlock.state))
                ;; That wasn't so bad, was it ?  We have the spinlock now.
                (setf (%get-signed-natural ptr target::rwlock.state) 1)
-               (%release-spin-lock ptr)
                (%set-object ptr target::rwlock.writer tcr)
+               (%release-spin-lock ptr)
                (if flag
                  (setf (lock-acquisition.status flag) t))
                t)
@@ -1028,8 +1028,8 @@
                ;; That wasn't so bad, was it ?  We have the spinlock now.
                (setf (%get-signed-natural ptr target::rwlock.state) 1)
                (setf (%get-signed-long write-signal) -1)
-               (%unlock-futex ptr)
                (%set-object ptr target::rwlock.writer tcr)
+               (%unlock-futex ptr)
                (if flag
                  (setf (lock-acquisition.status flag) t))
                t)
