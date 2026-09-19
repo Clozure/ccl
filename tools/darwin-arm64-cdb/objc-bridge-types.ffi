@@ -1,0 +1,53 @@
+;; Complete layout for ffigen's `(struct-ref "id")` (protocol/block params).
+;; Bare `:id` still resolves via the typedef (`:* objc_object`) because
+;; `%foreign-type-or-record` prefers a non-record parse over a same-named
+;; record — needed for `rlet ((p :id +null-ptr+))` in cocoa-ide.
+(struct ("" 0)
+ "id"
+ (("isa" (field (typedef "Class") 0 8))))
+
+;; Modern ObjC: `instancetype` is a contextual typedef for the
+;; receiving class; for FFI it is equivalent to `id`.  ffigen emits
+;; `(typedef "instancetype")` in method results but never a defining
+;; `(type … "instancetype" …)` form, so parse-ffi leaves it unknown.
+(type ("" 0)
+ "instancetype"
+ (typedef "id"))
+
+;; ObjC lightweight generics type parameters (e.g. NSArray<ObjectType>,
+;; NSMeasurement<UnitType: NSUnit *>).  ffigen emits bare
+;; `(typedef "ObjectType")` with no defining type form — treat as id.
+(type ("" 0) "ObjectType" (typedef "id"))
+(type ("" 0) "KeyType" (typedef "id"))
+(type ("" 0) "UnitType" (typedef "id"))
+(type ("" 0) "CandidateType" (typedef "id"))
+(type ("" 0) "ItemIdentifierType" (typedef "id"))
+(type ("" 0) "SectionIdentifierType" (typedef "id"))
+(type ("" 0) "K" (typedef "id"))
+
+;; Clang builtin; shows up in some ObjC method encodings / va_list args.
+(type ("" 0)
+ "__builtin_va_list"
+ (pointer (void ())))
+(type ("" 0)
+ "va_list"
+ (pointer (void ())))
+
+;; Appears in a few SDK headers; not needed for messaging but keeps
+;; parse-ffi / type lookup from exploding if referenced.
+(type ("" 0)
+ "__uint128_t"
+ (unsigned-long-long ()))
+
+;; Historical NSConstantString layout used by with-nsstr / #@.
+;; Not emitted as a C struct from modern Foundation headers (ObjC class).
+(struct ("" 0)
+ "NSSimpleCString"
+ (("isa" (field (pointer (void ())) 0 8))
+  ("bytes" (field (pointer (signed-char ())) 8 8))
+  ("numBytes" (field (unsigned-long ()) 16 8))))
+(struct ("" 0)
+ "NSConstantString"
+ (("isa" (field (pointer (void ())) 0 8))
+  ("bytes" (field (pointer (signed-char ())) 8 8))
+  ("numBytes" (field (unsigned-long ()) 16 8))))
