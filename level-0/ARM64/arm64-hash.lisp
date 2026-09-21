@@ -267,35 +267,11 @@
 (defarm64lapfunction %set-hash-table-vector-key-conditional ((offset 0) (vector arg_x) (old arg_y) (new arg_z))
   (jump-subprim .SPset-hash-key-conditional))
 
-;;; =====================================================================
-;;; strip-tag-to-fixnum — from vendor/ccl/level-0/PPC/ppc-hash.lisp:162
-;;; =====================================================================
-;;;
-;;; Strip tag bits from x, producing a fixnum.
-;;; PPC64: (clrlri. imm0 arg_z (- nbits-in-word fixnumshift))
-;;;        (beq @done)                    ; already a fixnum (low bits zero)
-;;;        (clrrri arg_z x ntagbits)      ; clear low ntagbits
-;;;        (srri arg_z arg_z (- ntagbits fixnumshift))  ; shift to fixnum
-;;;        @done (blr)
-;;;
-;;; On arm64: ntagbits=4, fixnumshift=3, nbits-in-word=64.
-;;; clrlri. with n=(64-3)=61 clears the top 61 bits and sets flags:
-;;;   ands imm0, arg_z, #0x7 (tagmask)
-;;; If the low 3 bits are zero, it's already a fixnum — return as-is.
-;;; Otherwise: clear low 4 bits (fulltag), shift right by (4-3)=1.
-;;; = (arg_z & ~0xF) >> 1
-
+;;; Return fixnums unchanged; otherwise clear 4-bit fulltag and
+;;; logical shift right 1.
 (defarm64lapfunction strip-tag-to-fixnum ((x arg_z))
-  ;; (clrlri. imm0 arg_z (- target::nbits-in-word target::fixnumshift))
-  ;; = ands imm0, arg_z, #((1<<fixnumshift)-1) = ands imm0, arg_z, #7
-  (ands imm0 arg_z (:$ arm64::fixnummask))
-  (b.eq @done)
-  ;; (clrrri arg_z x target::ntagbits) — clear low ntagbits bits
-  ;; = and arg_z, x, ~((1<<ntagbits)-1) = and arg_z, x, ~0xF;
-  ;; ldb wrap for Matt's negative-immediate encoder restriction.
-  (and arg_z x (:$ (ldb (byte 64 0) (lognot (1- (ash 1 arm64::ntagbits))))))
-  ;; (srri arg_z arg_z (- target::ntagbits target::fixnumshift))
-  ;; = lsr arg_z, arg_z, #(4-3) = lsr arg_z, arg_z, #1
-  (lsr arg_z arg_z (:$ (- arm64::ntagbits arm64::fixnumshift)))
-  @done
+  (bic imm0 x (:$ arm64::fulltagmask))
+  (lsr imm0 imm0 (:$ (- arm64::ntagbits arm64::nfixnumtagbits)))
+  (tst x (:$ arm64::fixnummask))
+  (csel arg_z x imm0 (:? eq))
   (ret))
