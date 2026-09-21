@@ -112,21 +112,16 @@
   (str old (:@ imm1 (:$ arm64::interrupt-level-binding-index)))    ; ppc:440
   (ret))                                           ; ppc:441
 
-;;; =====================================================================
-;;; set-%gcable-macptrs% — ppc:505
-;;; =====================================================================
-;;; imm0 = &gcable-pointers (rnil + negative kernel-global offset → sub).
-;;; Push ptr onto the gcable list head atomically.  status=(:w temp4)
-;;; per the kernel ll/sc idiom (spentry-B:113-129).
+;;; Add the macptr in arg_z to the kernel global gcable-pointers (a
+;;; linked list).
 (defarm64lapfunction set-%gcable-macptrs% ((ptr arg_z))
-  (sub imm0 rnil (:$ (- (arm64::%kernel-global 'gcable-pointers)))) ; ppc:506
+  (sub imm0 rnil (:$ (- (arm64::%kernel-global 'gcable-pointers))))
   @again
-  (ldxr arg_y (:@ imm0))                           ; ppc:508 lrarx (old head)
-  (stur arg_y (:@ ptr (:$ arm64::xmacptr.link)))   ; ppc:509
-  (stxr (:w temp4) ptr (:@ imm0))                  ; ppc:510 strcx.
-  (cbnz (:w temp4) @again)                         ; ppc:511
-  (dmb (:$ 11))                                    ; ppc:512 isync → dmb ish
-  (ret))                                           ; ppc:513
+  (ldxr arg_y (:@ imm0))                         ;old head
+  (stur arg_y (:@ ptr (:$ arm64::xmacptr.link)))
+  (stlxr (:w imm1) ptr (:@ imm0))       ;probably don't need release ordering
+  (cbnz (:w imm1) @again)
+  (ret))
 
 ;;; =====================================================================
 ;;; get-saved-register-values — ppc:933  (modern arch: plain DEFUN)
@@ -151,12 +146,9 @@
   (mov arg_z (:$ arm64::subtag-no-thread-local-binding)) ; ppc:952
   (ret))                                           ; ppc:953
 
-;;; =====================================================================
-;;; %store-node-conditional — ppc:483
-;;; =====================================================================
-;;; Whole body = TAIL jump to the EGC-memoizing subprim (PPC: ba).
+;;; Branch to the subprim to handle EGC memoization
 (defarm64lapfunction %store-node-conditional ((offset 0) (object arg_x) (old arg_y) (new arg_z))
-  (jump-subprim .SPstore-node-conditional))        ; ppc:484 (ba)
+  (jump-subprim .SPstore-node-conditional))
 
 ;;; =====================================================================
 ;;; %store-immediate-conditional — ppc:486
@@ -949,48 +941,41 @@
   (mov arg_z dest)                                 ; ppc:262
   (ret))
 
-;;; =====================================================================
-;;; %lock-gc-lock — ppc:517
-;;; =====================================================================
-;;; Atomically incf (or decf if negative) gc-inhibit-count.  PPC has NO
-;;; isync here (commented out) — omitted faithfully.  cmp flags (arg_y vs 0)
-;;; survive the flag-safe add to b.ge.
+;;; Atomically increment or decrement the gc-inhibit-count kernel-global
+;;; It's decremented if it's currently negative, incremented otherwise.
 (defarm64lapfunction %lock-gc-lock ()
-  (sub imm0 rnil (:$ (- (arm64::%kernel-global 'gc-inhibit-count)))) ; ppc:518 (&global)
+  (sub imm0 rnil (:$ (- (arm64::%kernel-global 'gc-inhibit-count))))
   @again
-  (ldxr arg_y (:@ imm0))                           ; ppc:520 lrarx
-  (cmp arg_y (:$ 0))                               ; ppc:521 (cmpri cr1)
-  (add arg_z arg_y (:$ (ash 1 arm64::fixnumshift))) ; ppc:522 (addi '1 — flag-safe)
-  (b.ge @store)                                    ; ppc:523 (bge cr1)
-  (sub arg_z arg_y (:$ (ash 1 arm64::fixnumshift))) ; ppc:524 (subi '1)
+  (ldxr arg_y (:@ imm0))
+  (cmp arg_y (:$ 0))
+  (add arg_z arg_y (:$ '1))
+  (b.ge @store)
+  (sub arg_z arg_y (:$ '1))
   @store
-  (stxr (:w temp4) arg_z (:@ imm0))                ; ppc:526 strcx.
-  (cbnz (:w temp4) @again)                          ; ppc:527
-  (ret))                                           ; ppc:529 (no isync — see ppc:528)
+  (stxr (:w imm1) arg_z (:@ imm0))
+  (cbnz (:w imm1) @again)
+  (ret))
 
-;;; =====================================================================
-;;; %unlock-gc-lock — ppc:534
-;;; =====================================================================
-;;; cr1 = (arg_y vs -1) via (cmn arg_y #1).  cbnz/stxr do NOT touch NZCV,
-;;; so the last iteration's cmn flags survive to the post-loop (b.ne) that
-;;; decides whether to fire the immediate-GC trap (DECIDE-3).
+;;; Atomically decrement or increment the gc-inhibit-count kernel-global
+;;; It's incremented if it's currently negative, decremented otherwise.
+;;; If it's incremented from -1 to 0, try to GC.
 (defarm64lapfunction %unlock-gc-lock ()
-  (sub imm0 rnil (:$ (- (arm64::%kernel-global 'gc-inhibit-count)))) ; ppc:536 (&global)
+  (sub imm0 rnil (:$ (- (arm64::%kernel-global 'gc-inhibit-count))))
   @again
-  (ldxr arg_y (:@ imm0))                           ; ppc:538 lrarx
-  (cmn arg_y (:$ (ash 1 arm64::fixnumshift)))      ; ppc:539 (cmpri cr1 arg_y -1)
-  (sub arg_z arg_y (:$ (ash 1 arm64::fixnumshift))) ; ppc:540 (subi '1 — flag-safe)
-  (b.gt @store)                                    ; ppc:541 (bgt cr1)
-  (add arg_z arg_y (:$ (ash 1 arm64::fixnumshift))) ; ppc:542 (addi '1)
+  (ldxr arg_y (:@ imm0))
+  (cmn arg_y (:$ (ash 1 arm64::fixnumshift)))
+  (sub arg_z arg_y (:$ '1))
+  (b.gt @store)
+  (add arg_z arg_y (:$ '1))
   @store
-  (stxr (:w temp4) arg_z (:@ imm0))                ; ppc:544 strcx.
-  (cbnz (:w temp4) @again)                          ; ppc:545
-  (b.ne @done)                                     ; ppc:546 (bnelr cr1) arg_y!=-1 → return
+  (stxr (:w imm1) arg_z (:@ imm0))
+  (cbnz (:w imm1) @again)
+  (b.ne @done)
   ;; count went -1 -> 0: try an immediate GC.
-  (mov imm0 (:$ arch::gc-trap-function-immediate-gc)) ; ppc:549 (li -1 → movn)
-  (uuo-gc-trap)                                    ; ppc:550 (trlgei → DECIDE-3; args imm1)
+  (mov imm0 (:$ arch::gc-trap-function-immediate-gc))
+  (uuo-gc-trap)
   @done
-  (ret))                                           ; ppc:551
+  (ret))
 
 ;;; =====================================================================
 ;;; %fixnum-gcd — ppc-numbers.lisp:355 (the #+ppc64-target arm; the
