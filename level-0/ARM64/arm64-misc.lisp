@@ -150,42 +150,16 @@
 (defarm64lapfunction %store-node-conditional ((offset 0) (object arg_x) (old arg_y) (new arg_z))
   (jump-subprim .SPstore-node-conditional))
 
-;;; =====================================================================
-;;; %store-immediate-conditional — ppc:486
-;;; =====================================================================
-;;; ll/sc: current=temp1, status=(:w temp4).  offset vpop'd, unboxed, added
-;;; into imm1... base kept in imm2 ([Xn]-only; imm1 is macro scratch).
+;;; The address of the slot has to be formed in a register for
+;;; ldxr/stxr.  The subprims hold that interior pointer in an imm
+;;; register, and pc_luser_xp restarts them if the GC might have moved
+;;; the object before the store happened.
 (defarm64lapfunction %store-immediate-conditional ((offset 0) (object arg_x) (old arg_y) (new arg_z))
-  (vpop temp0)                                     ; ppc:487
-  (unbox-fixnum imm0 temp0)                        ; ppc:488
-  (add imm2 object imm0)                           ; base = object+offset
-  @again
-  (ldxr temp1 (:@ imm2))                           ; ppc:491 lrarx current
-  (cmp temp1 old)                                  ; ppc:492 cmpr
-  (b.ne @lose)                                     ; ppc:493 (bne)
-  (stxr (:w temp4) new (:@ imm2))                  ; ppc:494 strcx.
-  (cbnz (:w temp4) @again)                         ; ppc:495 (bne @again)
-  (dmb (:$ 11))                                    ; ppc:496 isync → dmb ish
-  (add arg_z rnil (:$ arm64::t-offset))            ; ppc:497 (li arg_z T)
-  (ret)                                            ; ppc:498
-  @lose
-  (clrex)                                          ; ppc:500-501 reservation-discharge
-  (mov arg_z rnil)                                 ; ppc:502 (li nil)
-  (ret))                                           ; ppc:503
+  (jump-subprim .SPstore-immediate-conditional))
 
-;;; =====================================================================
-;;; %atomic-incf-node — ppc:555
-;;; =====================================================================
 (defarm64lapfunction %atomic-incf-node ((by arg_x) (node arg_y) (disp arg_z))
-  (check-nargs 3)                                 ; ppc:556
-  (unbox-fixnum imm1 disp)                          ; ppc:557
-  (add imm0 node imm1)                             ; base = node+disp ([Xn]-only)
-  @again
-  (ldaxr arg_z (:@ imm0))                           ; ppc:559 lrarx
-  (add arg_z arg_z by)                             ; ppc:560
-  (stlxr (:w temp4) arg_z (:@ imm0))                ; ppc:561 strcx.
-  (cbnz (:w temp4) @again)                          ; ppc:562 (bne- @again)
-  (ret))                                           ; ppc:564
+  (check-nargs 3)
+  (jump-subprim .SPatomic-incf-node))
 
 ;;; =====================================================================
 ;;; %atomic-incf-ptr — ppc:566

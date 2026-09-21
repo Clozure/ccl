@@ -1413,6 +1413,59 @@ C(egc_write_barrier_end):               /* ppc:829 (family END marker)     */
         ret
 endsp set_hash_key_conditional
 
+/*
+ * ldxr/stxr take only a base register, so these subprims must form
+ * the address of a slot inside a lisp object in an imm register.  If
+ * the GC relocates the object while the derived pointer is still
+ * live, we'll access the old, now-wrong, location.  pc_luser_xp
+ * checks for this situation and handles it by moving the PC back to
+ * the _retry label (which recomputes the derived pointer) whenever a
+ * thread is interrupted before the exclusive store has succeeded.
+ * The code from _retry up to a successful store must therefore be
+ * restartable: it may not modify anything it (re)reads.
+ */
+
+/*
+ * Byte offset (a fixnum) on vstack, object in arg_x, old in arg_y,
+ * new in arg_z.  Returns T if the store happened, NIL otherwise.
+ */
+        .globl C(store_immediate_conditional_retry)
+        .globl C(store_immediate_conditional_test)
+spentry store_immediate_conditional
+        ldr temp0, [vsp], #node_size
+C(store_immediate_conditional_retry):
+        add imm0, arg_x, temp0, asr #fixnumshift
+1:      ldaxr imm2, [imm0]
+        cmp imm2, arg_y
+        b.ne 9f
+        stlxr w3, arg_z, [imm0]  /* w3 is word view of imm3 */
+C(store_immediate_conditional_test):
+        cbnz w3, 1b
+        add arg_z, rnil, #t_offset
+        ret
+9:      clrex
+        mov arg_z, rnil
+        ret
+endsp store_immediate_conditional
+
+/*
+ * Increment in arg_x, node in arg_y, byte offset in arg_z.  Return
+ * newly-incremented value.
+ */
+        .globl C(atomic_incf_node_retry)
+        .globl C(atomic_incf_node_test)
+spentry atomic_incf_node
+C(atomic_incf_node_retry):
+        add imm0, arg_y, arg_z, asr #fixnumshift  /* form internal pointer */
+1:      ldaxr imm1, [imm0]
+        add imm1, imm1, arg_x
+        stlxr w3, imm1, [imm0]  /* w3 is word view of imm3 */
+C(atomic_incf_node_test):
+        cbnz w3, 1b
+        mov arg_z, imm1
+        ret
+endsp atomic_incf_node
+
 /* ===== conslist ===== */
 /* ported from ppc-spentry.s:839-851 (PPC64 branch) */
 spentry conslist
@@ -6936,137 +6989,138 @@ C(toplevel_loop):
         .section RELRO
         .p2align 3
 C(sptab):
-        .quad _SPbuiltin_plus // 0 SPbuiltin_plus
-        .quad _SPbuiltin_minus // 1 SPbuiltin_minus
-        .quad _SPbuiltin_times // 2 SPbuiltin_times
-        .quad _SPbuiltin_div // 3 SPbuiltin_div
-        .quad _SPbuiltin_eq // 4 SPbuiltin_eq
-        .quad _SPbuiltin_ne // 5 SPbuiltin_ne
-        .quad _SPbuiltin_gt // 6 SPbuiltin_gt
-        .quad _SPbuiltin_ge // 7 SPbuiltin_ge
-        .quad _SPbuiltin_lt // 8 SPbuiltin_lt
-        .quad _SPbuiltin_le // 9 SPbuiltin_le
-        .quad _SPbuiltin_eql // 10 SPbuiltin_eql
-        .quad _SPbuiltin_length // 11 SPbuiltin_length
-        .quad _SPbuiltin_seqtype // 12 SPbuiltin_seqtype
-        .quad _SPbuiltin_assq // 13 SPbuiltin_assq
-        .quad _SPbuiltin_memq // 14 SPbuiltin_memq
-        .quad _SPbuiltin_logbitp // 15 SPbuiltin_logbitp
-        .quad _SPbuiltin_logior // 16 SPbuiltin_logior
-        .quad _SPbuiltin_logand // 17 SPbuiltin_logand
-        .quad _SPbuiltin_ash // 18 SPbuiltin_ash
-        .quad _SPbuiltin_negate // 19 SPbuiltin_negate
-        .quad _SPbuiltin_logxor // 20 SPbuiltin_logxor
-        .quad _SPbuiltin_aref1 // 21 SPbuiltin_aref1
-        .quad _SPbuiltin_aset1 // 22 SPbuiltin_aset1
-        .quad _SPfuncall // 23 SPfuncall
-        .quad _SPmkcatch1v // 24 SPmkcatch1v
-        .quad _SPmkcatchmv // 25 SPmkcatchmv
-        .quad _SPmkunwind // 26 SPmkunwind
-        .quad _SPbind // 27 SPbind
-        .quad _SPconslist // 28 SPconslist
-        .quad _SPconslist_star // 29 SPconslist_star
-        .quad _SPmakes32 // 30 SPmakes32
-        .quad _SPmakeu32 // 31 SPmakeu32
-        .quad _SPfix_overflow // 32
-        .quad _SPmakeu64 // 33
-        .quad _SPmakes64 // 34
-        .quad _SPmvpass // 35 SPmvpass
-        .quad _SPvalues // 36 SPvalues
-        .quad _SPnvalret // 37 SPnvalret
-        .quad _SPthrow // 38 SPthrow
-        .quad _SPnthrowvalues // 39 SPnthrowvalues
-        .quad _SPnthrow1value // 40 SPnthrow1value
-        .quad _SPbind_self // 41 SPbind_self
-        .quad _SPbind_nil // 42 SPbind_nil
-        .quad _SPbind_self_boundp_check // 43 SPbind_self_boundp_check
-        .quad _SPrplaca // 44 SPrplaca
-        .quad _SPrplacd // 45 SPrplacd
-        .quad _SPgvset // 46 SPgvset
-        .quad _SPset_hash_key // 47 SPset_hash_key
-        .quad _SPstore_node_conditional // 48 SPstore_node_conditional
-        .quad _SPset_hash_key_conditional // 49 SPset_hash_key_conditional
-        .quad _SPstkconslist // 50 SPstkconslist
-        .quad _SPstkconslist_star // 51 SPstkconslist_star
-        .quad _SPmkstackv // 52 SPmkstackv
-        .quad _SPsetqsym // 53 SPsetqsym
-        .quad _SPprogvsave // 54 SPprogvsave
-        .quad _SPstack_misc_alloc // 55 SPstack_misc_alloc
-        .quad _SPgvector // 56 SPgvector
-        .quad _SPfitvals // 57 SPfitvals
-        .quad _SPnthvalue // 58 SPnthvalue
-        .quad _SPdefault_optional_args // 59 SPdefault_optional_args
-        .quad _SPopt_supplied_p // 60 SPopt_supplied_p
-        .quad _SPheap_rest_arg // 61 SPheap_rest_arg
-        .quad _SPreq_heap_rest_arg // 62 SPreq_heap_rest_arg
-        .quad _SPheap_cons_rest_arg // 63 SPheap_cons_rest_arg
-        .quad 0 // 64 SPcheck_fpu_exception
-        .quad 0 // 65 SPdiscard_stack_object
-        .quad _SPksignalerr // 66 SPksignalerr
-        .quad _SPstack_rest_arg // 67 SPstack_rest_arg
-        .quad _SPreq_stack_rest_arg // 68 SPreq_stack_rest_arg
-        .quad _SPstack_cons_rest_arg // 69 SPstack_cons_rest_arg
-        .quad _SPcall_closure // 70 SPcall_closure
-        .quad _SPspreadargz // 71 SPspreadargz
-        .quad _SPtfuncallgen // 72 SPtfuncallgen
-        .quad _SPtfuncallslide // 73 SPtfuncallslide
-        .quad _SPjmpsym // 74 SPjmpsym
-        .quad _SPtcallsymgen // 75 SPtcallsymgen
-        .quad _SPtcallsymslide // 76 SPtcallsymslide
-        .quad _SPtcallnfngen // 77 SPtcallnfngen
-        .quad _SPtcallnfnslide // 78 SPtcallnfnslide
-        .quad _SPmisc_ref // 79
-        .quad _SPsubtag_misc_ref // 80 SPsubtag_misc_ref
-        .quad _SPmakestackblock // 81 SPmakestackblock
-        .quad _SPmakestackblock0 // 82 SPmakestackblock0
-        .quad _SPmakestacklist // 83 SPmakestacklist
-        .quad _SPstkgvector // 84 SPstkgvector
-        .quad _SPmisc_alloc // 85 SPmisc_alloc
-        .quad 0 // 86 SPatomic_incf_node
-        .quad _SPrecover_values // 87 SPrecover_values
-        .quad _SPinteger_sign // 88 SPinteger_sign
-        .quad _SPsubtag_misc_set // 89 SPsubtag_misc_set
-        .quad _SPmisc_set // 90 SPmisc_set
-        .quad _SPspread_lexprz // 91 SPspread_lexprz
-        .quad _SPreset // 92 SPreset
-        .quad _SPmvslide // 93 SPmvslide
-        .quad _SPsave_values // 94 SPsave_values
-        .quad _SPadd_values // 95 SPadd_values
-        .quad _SPmisc_alloc_init // 96 SPmisc_alloc_init
-        .quad _SPstack_misc_alloc_init // 97 SPstack_misc_alloc_init
-        .quad _SPpopj // 98 SPpopj
-        .quad _SPgetu64 // 99 SPgetu64
-        .quad _SPgets64 // 100 SPgets64
-        .quad _SPspecref // 101 SPspecref
-        .quad _SPspecrefcheck // 102 SPspecrefcheck
-        .quad _SPspecset // 103 SPspecset
-        .quad _SPgets32 // 104 SPgets32
-        .quad _SPgetu32 // 105 SPgetu32
-        .quad _SPmvpasssym // 106 SPmvpasssym
-        .quad _SPunbind // 107 SPunbind
-        .quad _SPunbind_n // 108 SPunbind_n
-        .quad _SPunbind_to // 109 SPunbind_to
-        .quad _SPprogvrestore // 110 SPprogvrestore
-        .quad _SPbind_interrupt_level_0 // 111 SPbind_interrupt_level_0
-        .quad _SPbind_interrupt_level_m1 // 112 SPbind_interrupt_level_m1
-        .quad _SPbind_interrupt_level // 113 SPbind_interrupt_level
-        .quad _SPunbind_interrupt_level // 114 SPunbind_interrupt_level
-        .quad _SParef2 // 115 SParef2
-        .quad _SParef3 // 116 SParef3
-        .quad _SPaset2 // 117 SPaset2
-        .quad _SPaset3 // 118 SPaset3
-        .quad _SPkeyword_bind // 119 SPkeyword_bind
-        .quad _SPffcall // 120 SPffcall
-        .quad 0 // 121 SPdebind
-        .quad _SPcallback // 122 SPcallback
-        .quad _SPffcall_return_registers // 123 SPffcall_return_registers (PROPOSED extension, 16m5f)
-        .quad _SPtfuncallvsp // 124 SPtfuncallvsp (PROPOSED extension, 16m5f)
-        .quad _SPcallbuiltin // 125 SPcallbuiltin (PROPOSED extension, 16m5f)
-        .quad _SPcallbuiltin0 // 126 SPcallbuiltin0 (PROPOSED extension, 16m5f)
-        .quad _SPcallbuiltin1 // 127 SPcallbuiltin1 (PROPOSED extension, 16m5f)
-        .quad _SPcallbuiltin2 // 128 SPcallbuiltin2 (PROPOSED extension, 16m5f)
-        .quad _SPcallbuiltin3 // 129 SPcallbuiltin3 (PROPOSED extension, 16m5f)
-        .quad _SPlexpr_entry // 130 SPlexpr_entry (PROPOSED extension, 16m5f)
-        .quad _SPnmkunwind // 131 SPnmkunwind (PROPOSED extension, 16m5f)
-        .quad _SPffcall_indirect_result // 132 SPffcall_indirect_result (PROPOSED extension, 16m71)
+        .quad _SPbuiltin_plus                //   0
+        .quad _SPbuiltin_minus               //   1
+        .quad _SPbuiltin_times               //   2
+        .quad _SPbuiltin_div                 //   3
+        .quad _SPbuiltin_eq                  //   4
+        .quad _SPbuiltin_ne                  //   5
+        .quad _SPbuiltin_gt                  //   6
+        .quad _SPbuiltin_ge                  //   7
+        .quad _SPbuiltin_lt                  //   8
+        .quad _SPbuiltin_le                  //   9
+        .quad _SPbuiltin_eql                 //  10
+        .quad _SPbuiltin_length              //  11
+        .quad _SPbuiltin_seqtype             //  12
+        .quad _SPbuiltin_assq                //  13
+        .quad _SPbuiltin_memq                //  14
+        .quad _SPbuiltin_logbitp             //  15
+        .quad _SPbuiltin_logior              //  16
+        .quad _SPbuiltin_logand              //  17
+        .quad _SPbuiltin_ash                 //  18
+        .quad _SPbuiltin_negate              //  19
+        .quad _SPbuiltin_logxor              //  20
+        .quad _SPbuiltin_aref1               //  21
+        .quad _SPbuiltin_aset1               //  22
+        .quad _SPfuncall                     //  23
+        .quad _SPmkcatch1v                   //  24
+        .quad _SPmkcatchmv                   //  25
+        .quad _SPmkunwind                    //  26
+        .quad _SPbind                        //  27
+        .quad _SPconslist                    //  28
+        .quad _SPconslist_star               //  29
+        .quad _SPmakes32                     //  30
+        .quad _SPmakeu32                     //  31
+        .quad _SPfix_overflow                //  32
+        .quad _SPmakeu64                     //  33
+        .quad _SPmakes64                     //  34
+        .quad _SPmvpass                      //  35
+        .quad _SPvalues                      //  36
+        .quad _SPnvalret                     //  37
+        .quad _SPthrow                       //  38
+        .quad _SPnthrowvalues                //  39
+        .quad _SPnthrow1value                //  40
+        .quad _SPbind_self                   //  41
+        .quad _SPbind_nil                    //  42
+        .quad _SPbind_self_boundp_check      //  43
+        .quad _SPrplaca                      //  44
+        .quad _SPrplacd                      //  45
+        .quad _SPgvset                       //  46
+        .quad _SPset_hash_key                //  47
+        .quad _SPstore_node_conditional      //  48
+        .quad _SPset_hash_key_conditional    //  49
+        .quad _SPstkconslist                 //  50
+        .quad _SPstkconslist_star            //  51
+        .quad _SPmkstackv                    //  52
+        .quad _SPsetqsym                     //  53
+        .quad _SPprogvsave                   //  54
+        .quad _SPstack_misc_alloc            //  55
+        .quad _SPgvector                     //  56
+        .quad _SPfitvals                     //  57
+        .quad _SPnthvalue                    //  58
+        .quad _SPdefault_optional_args       //  59
+        .quad _SPopt_supplied_p              //  60
+        .quad _SPheap_rest_arg               //  61
+        .quad _SPreq_heap_rest_arg           //  62
+        .quad _SPheap_cons_rest_arg          //  63
+        .quad 0                              //  64
+        .quad 0                              //  65
+        .quad _SPksignalerr                  //  66
+        .quad _SPstack_rest_arg              //  67
+        .quad _SPreq_stack_rest_arg          //  68
+        .quad _SPstack_cons_rest_arg         //  69
+        .quad _SPcall_closure                //  70
+        .quad _SPspreadargz                  //  71
+        .quad _SPtfuncallgen                 //  72
+        .quad _SPtfuncallslide               //  73
+        .quad _SPjmpsym                      //  74
+        .quad _SPtcallsymgen                 //  75
+        .quad _SPtcallsymslide               //  76
+        .quad _SPtcallnfngen                 //  77
+        .quad _SPtcallnfnslide               //  78
+        .quad _SPmisc_ref                    //  79
+        .quad _SPsubtag_misc_ref             //  80
+        .quad _SPmakestackblock              //  81
+        .quad _SPmakestackblock0             //  82
+        .quad _SPmakestacklist               //  83
+        .quad _SPstkgvector                  //  84
+        .quad _SPmisc_alloc                  //  85
+        .quad _SPatomic_incf_node            //  86
+        .quad _SPrecover_values              //  87
+        .quad _SPinteger_sign                //  88
+        .quad _SPsubtag_misc_set             //  89
+        .quad _SPmisc_set                    //  90
+        .quad _SPspread_lexprz               //  91
+        .quad _SPreset                       //  92
+        .quad _SPmvslide                     //  93
+        .quad _SPsave_values                 //  94
+        .quad _SPadd_values                  //  95
+        .quad _SPmisc_alloc_init             //  96
+        .quad _SPstack_misc_alloc_init       //  97
+        .quad _SPpopj                        //  98
+        .quad _SPgetu64                      //  99
+        .quad _SPgets64                      // 100
+        .quad _SPspecref                     // 101
+        .quad _SPspecrefcheck                // 102
+        .quad _SPspecset                     // 103
+        .quad _SPgets32                      // 104
+        .quad _SPgetu32                      // 105
+        .quad _SPmvpasssym                   // 106
+        .quad _SPunbind                      // 107
+        .quad _SPunbind_n                    // 108
+        .quad _SPunbind_to                   // 109
+        .quad _SPprogvrestore                // 110
+        .quad _SPbind_interrupt_level_0      // 111
+        .quad _SPbind_interrupt_level_m1     // 112
+        .quad _SPbind_interrupt_level        // 113
+        .quad _SPunbind_interrupt_level      // 114
+        .quad _SParef2                       // 115
+        .quad _SParef3                       // 116
+        .quad _SPaset2                       // 117
+        .quad _SPaset3                       // 118
+        .quad _SPkeyword_bind                // 119
+        .quad _SPffcall                      // 120
+        .quad 0                              // 121
+        .quad _SPcallback                    // 122
+        .quad _SPffcall_return_registers     // 123
+        .quad _SPtfuncallvsp                 // 124
+        .quad _SPcallbuiltin                 // 125
+        .quad _SPcallbuiltin0                // 126
+        .quad _SPcallbuiltin1                // 127
+        .quad _SPcallbuiltin2                // 128
+        .quad _SPcallbuiltin3                // 129
+        .quad _SPlexpr_entry                 // 130
+        .quad _SPnmkunwind                   // 131
+        .quad _SPffcall_indirect_result      // 132
+        .quad _SPstore_immediate_conditional // 133
 C(sptab_end):

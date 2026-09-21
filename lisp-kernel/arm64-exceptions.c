@@ -2274,9 +2274,41 @@ extern opcode
   egc_rplacd, egc_rplacd_did_store,
   egc_gvset, egc_gvset_did_store,
   egc_set_hash_key, egc_set_hash_key_did_store,
-  egc_store_node_conditional, egc_store_node_conditional_test,
-  egc_set_hash_key_conditional, egc_set_hash_key_conditional_test,
-  egc_write_barrier_end;
+  egc_store_node_conditional, egc_store_node_conditional_retry,
+  egc_store_node_conditional_test,
+  egc_set_hash_key_conditional, egc_set_hash_key_conditional_retry,
+  egc_set_hash_key_conditional_test,
+  egc_write_barrier_end,
+  store_immediate_conditional_retry, store_immediate_conditional_test,
+  atomic_incf_node_retry, atomic_incf_node_test;
+
+/*
+ * Some subprims need to do a load/store-exclusive operation on a word
+ * at an offset from a lisp object pointer.  On arm64, ldxr/stxr only
+ * support a bare register address.  Thus, we have to compute
+ * object+offset separately and store that interior pointer into an
+ * imm reg in order to use ldxr/stxr.
+ *
+ * When a thread is stopped, see if the PC is in the [retry, test)
+ * interval, or if the store-exclusive operation failed (i.e., the
+ * status is 1).  In that case, the store didn't happen: move the PC
+ * back so that object+offset is recomputed when the thread resumes.
+ * That way, if the GC moves the object, we'll pick up the new
+ * address.
+ */
+static Boolean
+restart_exclusive_store(ExceptionInformation *xp, pc retry, pc test,
+                          int status_reg)
+{
+  pc program_counter = xpPC(xp);
+
+  if (((program_counter >= retry) && (program_counter < test)) ||
+      ((program_counter == test) && ((xpGPR(xp, status_reg) == 1)))) {
+    set_xpPC(xp, retry);
+    return true; /* we moved the PC */
+  }
+  return false;  /* no match */
+}
 
 /*
  * Assert that EGC subprims are in expected address order.  If this is
@@ -2407,6 +2439,16 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
   lisp_frame *frame = (lisp_frame *)ptr_from_lispobj(xpSP(xp));
   LispObj cur_allocptr = xpGPR(xp, allocptr);
   int allocptr_tag = fulltag_of(cur_allocptr);
+
+  /* were we in any of these special subprims? */
+  if (restart_exclusive_store(xp, &store_immediate_conditional_retry,
+                              &store_immediate_conditional_test, Rimm3)) {
+    return;
+  }
+  if (restart_exclusive_store(xp, &atomic_incf_node_retry,
+                              &atomic_incf_node_test, Rimm3)) {
+    return;
+  }
 
   /* are we in the EGC write-barrier region? */
   if ((program_counter >= &egc_write_barrier_start) &&
