@@ -890,7 +890,7 @@ the lisp and run REBUILD-CCL again.")
 (defloadvar *ansi-tests-directory*
     (merge-pathnames  "ansi-tests/" *ccl-tests-directory*))
 
-(defun ensure-tests-loaded (&key force update ansi ccl (load t))
+(defun ensure-tests-loaded (&key force update ansi ccl stress (load t))
   (unless (and (find-package "REGRESSION-TEST") (not force))
     (if (probe-file *ansi-tests-directory*)
         (when update
@@ -947,10 +947,16 @@ the lisp and run REBUILD-CCL again.")
               (load (merge-pathnames *ansi-tests-directory* "gclload2.lsp")))
             ;; And our own tests
             (when ccl
-              (load (merge-pathnames *ansi-tests-directory* "ccl.lsp")))))))))
+              (load (merge-pathnames *ansi-tests-directory* "ccl.lsp")))
+            ;; Slow and multi-threaded tests.  Older test suite checkouts
+            ;; don't have this file.
+            (when stress
+              (let ((file (merge-pathnames *ansi-tests-directory* "ccl-stress.lsp")))
+                (when (probe-file file)
+                  (load file))))))))))
 
 
-(defun test-ccl (&key force (update t) verbose (catch-errors t) (ansi t) (ccl t)
+(defun test-ccl (&key force (update t) verbose (catch-errors t) (ansi t) (ccl t) (stress t)
                       optimization-settings exit exhaustive)
   (if exhaustive
     (let* ((total-failures ()))
@@ -973,6 +979,9 @@ the lisp and run REBUILD-CCL again.")
                                              :catch-errors catch-errors
                                              :ansi ansi
                                              :ccl ccl
+                                             ;; not worth repeating at
+                                             ;; every optimization setting
+                                             :stress nil
                                              :optimization-settings optimization-settings
                                              :exit nil)))
                     (when failures
@@ -985,7 +994,8 @@ the lisp and run REBUILD-CCL again.")
              (*load-preserves-optimization-settings* t))
         (with-global-optimization-settings ()
           (proclaim `(optimize ,@optimization-settings))
-          (ensure-tests-loaded :force force :update update :ansi ansi :ccl ccl)
+          (ensure-tests-loaded :force force :update update :ansi ansi :ccl ccl
+                               :stress stress)
           (cwd *ansi-tests-directory*)
           (let ((do-tests (find-symbol "DO-TESTS" "REGRESSION-TEST"))
                 (failed (find-symbol "*FAILED-TESTS*" "REGRESSION-TEST"))
