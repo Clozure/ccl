@@ -81,44 +81,6 @@ void signal_handler(int, siginfo_t *, ExceptionInformation *, TCR *, int);
 #endif
 
 /* ------------------------------------------------------------------ */
-/* C-side register numbers — authority: arm64-constants.h R* numbers
- * @ pin 115b7aa (map unified upstream at 01d73c3). */
-enum {
-  imm0 = 0,
-  imm1 = 1,
-  imm2 = 2,
-  imm3 = 3,
-  imm4 = 4,
-  imm5 = 5,        /* arm64-asm.lisp: imm5=x5, DISTINCT from nargs */
-  nargs = 6,       /* arm64-asm.lisp: nargs=x6 */
-  fn = 7,          /* fn=x7 */
-  arg_w = 8,       /* renumbered @ upstream 01d73c3 (map unified) */
-  arg_x = 9,
-  arg_y = 10,
-  arg_z = 11,
-  temp0 = 12,
-  temp1 = 13,
-  temp2 = 14, nfn = 14,
-  temp3 = 15, fname = 15,
-  temp4 = 16,
-  temp5 = 17,      /* NEW boxed temp @ 01d73c3 */
-  save0 = 19,
-  save1 = 20,
-  save2 = 21,
-  save3 = 22,
-  rnil = 23,
-  tsp = 24,        /* Matt's design HAS a tsp register */
-  vsp = 25,
-  allocptr = 26,
-  allocbase = 27,
-  rcontext = 28
-  /* Rlr(30)/Rsp(31) are now provided by his arm64-constants.h DEFCONST
-     register table (RECONCILED 556aebe8: our duplicates dropped; our code's
-     Rlr/Rsp references resolve to his, same values).  AArch64 SP is not one
-     of regs[0..30]; Rsp=31 is the selector for stack-register arguments. */
-};
-
-/* ------------------------------------------------------------------ */
 /* PROPOSED C-side struct overlays (ratify with Matt; arm64-constants.h
  * has no C struct block yet).  lisp_frame moved to
  * platform-linuxarm64.h (albt.c needs it too).
@@ -395,14 +357,14 @@ finish_allocating_cons(ExceptionInformation *xp)
 {
   pc program_counter = xpPC(xp);
   opcode instr;
-  LispObj cur_allocptr = xpGPR(xp, allocptr);
+  LispObj cur_allocptr = xpGPR(xp, Rallocptr);
   cons *c = (cons *)ptr_from_lispobj(untag(cur_allocptr));
 
   while (1) {
     instr = *program_counter++;
 
     if (IS_CLR_ALLOCPTR_TAG(instr)) {       /* ppc:166-170 */
-      xpGPR(xp, allocptr) = untag(cur_allocptr);
+      xpGPR(xp, Rallocptr) = untag(cur_allocptr);
       xpPC(xp) = program_counter;
       return;
     } else if (IS_SET_ALLOCPTR_CAR_RD(instr)) {  /* ppc:173-174 */
@@ -431,12 +393,12 @@ finish_allocating_uvector(ExceptionInformation *xp)
 {
   pc program_counter = xpPC(xp);
   opcode instr;
-  LispObj cur_allocptr = xpGPR(xp, allocptr);
+  LispObj cur_allocptr = xpGPR(xp, Rallocptr);
 
   while (1) {
     instr = *program_counter++;
     if (IS_CLR_ALLOCPTR_TAG(instr)) {       /* ppc:213-217 */
-      xpGPR(xp, allocptr) = untag(cur_allocptr);
+      xpGPR(xp, Rallocptr) = untag(cur_allocptr);
       xpPC(xp) = program_counter;
       return;
     }
@@ -471,7 +433,7 @@ allocate_object(ExceptionInformation *xp,
      without extending the heap.
   */
   if (new_heap_segment(xp, bytes_needed, false, tcr, NULL)) {  /* ppc:253 */
-    xpGPR(xp, allocptr) += disp_from_allocptr;
+    xpGPR(xp, Rallocptr) += disp_from_allocptr;
     return true;
   }
 
@@ -486,7 +448,7 @@ allocate_object(ExceptionInformation *xp,
 
   /* Try again, growing the heap if necessary */
   if (new_heap_segment(xp, bytes_needed, true, tcr, NULL)) {   /* ppc:272 */
-    xpGPR(xp, allocptr) += disp_from_allocptr;
+    xpGPR(xp, Rallocptr) += disp_from_allocptr;
     return true;
   }
 
@@ -516,7 +478,7 @@ lisp_allocation_failure(ExceptionInformation *xp, TCR *tcr, natural bytes_needed
      size (say 128K bytes), signal a "chronically out-of-memory" condition;
      else signal a "allocation request failed" condition.
   */
-  xpGPR(xp,allocptr) = xpGPR(xp,allocbase) = VOID_ALLOCPTR;
+  xpGPR(xp, Rallocptr) = xpGPR(xp, Rallocbase) = VOID_ALLOCPTR;
   handle_error(xp, bytes_needed < (128<<10) ? XNOMEM : error_alloc_failed, 0, 0, xpPC(xp));
 }
 
@@ -531,7 +493,7 @@ Boolean
 allocate_list(ExceptionInformation *xp, TCR *tcr)
 {
   natural
-    nconses = (unbox_fixnum(xpGPR(xp,arg_z))),
+    nconses = (unbox_fixnum(xpGPR(xp, Rarg_z))),
     bytes_needed = (nconses << dnode_shift);
   LispObj
     prev = lisp_nil,
@@ -539,22 +501,22 @@ allocate_list(ExceptionInformation *xp, TCR *tcr)
 
   if (nconses == 0) {
     /* Silly case */
-    xpGPR(xp,arg_z) = lisp_nil;
-    xpGPR(xp,allocptr) = lisp_nil;
+    xpGPR(xp, Rarg_z) = lisp_nil;
+    xpGPR(xp, Rallocptr) = lisp_nil;
     return true;
   }
   update_bytes_allocated(tcr, (void *)(void *) tcr->save_allocptr);
   if (allocate_object(xp,bytes_needed,(-bytes_needed)+fulltag_cons,tcr)) {
-    for (current = xpGPR(xp,allocptr);
+    for (current = xpGPR(xp, Rallocptr);
          nconses;
          prev = current, current+= dnode_size, nconses--) {
       deref(current,0) = prev;      /* cdr */
       /* GC may relocate the initial element while allocating the block. */
-      deref(current,1) = xpGPR(xp,arg_y); /* car */
+      deref(current,1) = xpGPR(xp, Rarg_y); /* car */
     }
-    xpGPR(xp,arg_z) = prev;
-    xpGPR(xp,arg_y) = xpGPR(xp,allocptr);
-    xpGPR(xp,allocptr)-=fulltag_cons;
+    xpGPR(xp, Rarg_z) = prev;
+    xpGPR(xp, Rarg_y) = xpGPR(xp, Rallocptr);
+    xpGPR(xp, Rallocptr)-=fulltag_cons;
   } else {
     lisp_allocation_failure(xp,tcr,bytes_needed);
   }
@@ -568,7 +530,7 @@ handle_alloc_trap(ExceptionInformation *xp, TCR *tcr)
   signed_natural disp = 0;
   unsigned allocptr_tag;
 
-  cur_allocptr = xpGPR(xp,allocptr);
+  cur_allocptr = xpGPR(xp, Rallocptr);
   allocptr_tag = fulltag_of(cur_allocptr);
 
   switch (allocptr_tag) {
@@ -619,8 +581,8 @@ OSStatus
 handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
 {                                 /* ppc-exceptions.c:424-557 */
   LispObj
-    selector = xpGPR(xp,imm0),
-    arg = xpGPR(xp,imm1);
+    selector = xpGPR(xp, Rimm0),
+    arg = xpGPR(xp, Rimm1);
   area *a = active_dynamic_area;
   Boolean egc_was_enabled = (a->older != NULL);
   natural gc_previously_deferred = gc_deferred;
@@ -629,14 +591,14 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
   switch (selector) {
   case GC_TRAP_FUNCTION_EGC_CONTROL:   /* ppc:436-439 */
     egc_control(arg != 0, a->active);
-    xpGPR(xp,arg_z) = lisp_nil + (egc_was_enabled ? t_offset : 0);
+    xpGPR(xp, Rarg_z) = lisp_nil + (egc_was_enabled ? t_offset : 0);
     break;
 
   case GC_TRAP_FUNCTION_CONFIGURE_EGC: /* ppc:441-446 */
-    a->threshold = unbox_fixnum(xpGPR(xp, arg_x));
-    g1_area->threshold = unbox_fixnum(xpGPR(xp, arg_y));
-    g2_area->threshold = unbox_fixnum(xpGPR(xp, arg_z));
-    xpGPR(xp,arg_z) = lisp_nil+t_offset;
+    a->threshold = unbox_fixnum(xpGPR(xp, Rarg_x));
+    g1_area->threshold = unbox_fixnum(xpGPR(xp, Rarg_y));
+    g2_area->threshold = unbox_fixnum(xpGPR(xp, Rarg_z));
+    xpGPR(xp, Rarg_z) = lisp_nil+t_offset;
     break;
 
   case GC_TRAP_FUNCTION_SET_LISP_HEAP_THRESHOLD:  /* ppc:448-455 */
@@ -648,7 +610,7 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
     }
     /* fall through */
   case GC_TRAP_FUNCTION_GET_LISP_HEAP_THRESHOLD:  /* ppc:456-458 */
-    xpGPR(xp, imm0) = lisp_heap_gc_threshold;
+    xpGPR(xp, Rimm0) = lisp_heap_gc_threshold;
     break;
 
   case GC_TRAP_FUNCTION_USE_LISP_HEAP_THRESHOLD:  /* ppc:460-471 */
@@ -661,7 +623,7 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
         tenure_to_area(tenured_area);
       }
     }
-    xpGPR(xp, imm0) = lisp_heap_gc_threshold;
+    xpGPR(xp, Rimm0) = lisp_heap_gc_threshold;
     break;
 
   case GC_TRAP_FUNCTION_ENSURE_STATIC_CONSES:     /* ppc:473-475 */
@@ -676,11 +638,11 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
     if (egc_was_enabled) {
       tenure_to_area(tenured_area);
     }
-    xpGPR(xp, imm0) = tenured_area->static_dnodes << dnode_shift;
+    xpGPR(xp, Rimm0) = tenured_area->static_dnodes << dnode_shift;
     break;
 
   default:                        /* ppc:488-551 */
-    update_bytes_allocated(tcr, (void *) ptr_from_lispobj(xpGPR(xp, allocptr)));
+    update_bytes_allocated(tcr, (void *) ptr_from_lispobj(xpGPR(xp, Rallocptr)));
 
     if (selector == GC_TRAP_FUNCTION_IMMEDIATE_GC) {
       if (!full_gc_deferred) {
@@ -715,7 +677,7 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
       if (selector & GC_TRAP_FUNCTION_SAVE_APPLICATION) {
         OSErr err;
         extern OSErr save_application(unsigned, Boolean);
-        TCR *tcr = TCR_FROM_TSD(xpGPR(xp, rcontext));
+        TCR *tcr = TCR_FROM_TSD(xpGPR(xp, Rrcontext));
         area *vsarea = tcr->vs_area;
 
         nrs_TOPLFUNC.vcell = *((LispObj *)(vsarea->high)-1);
@@ -730,7 +692,7 @@ handle_gc_trap(ExceptionInformation *xp, TCR *tcr)
       case GC_TRAP_FUNCTION_FREEZE:   /* ppc:538-542 */
         a->active = (BytePtr) align_to_power_of_2(a->active, log2_page_size);
         tenured_area->static_dnodes = area_dnode(a->active, a->low);
-        xpGPR(xp, imm0) = tenured_area->static_dnodes << dnode_shift;
+        xpGPR(xp, Rimm0) = tenured_area->static_dnodes << dnode_shift;
         break;
       default:
         break;
@@ -790,20 +752,18 @@ restore_soft_stack_limit(unsigned stkreg)
   TCR *tcr = get_tcr(true);
 
   switch (stkreg) {
-  case Rsp:  /* ARM64-DEVIATION: PPC used sp=r1; AArch64 SP is not a
-                numbered GPR, selector Rsp=31 (see enum above).
-                Step by page_size (16KiB on Darwin arm64), not 4096. */
+  case Rsp:  /* Step by page_size (16KiB on Darwin arm64), not 4096. */
     a = tcr->cs_area;
     if ((a->softlimit - page_size) > (a->hardlimit + 16384)) {
       a->softlimit -= page_size;
     }
     tcr->cs_limit = (LispObj)ptr_to_lispobj(a->softlimit);
     break;
-  case vsp:
+  case Rvsp:
     a = tcr->vs_area;
     adjust_soft_protection_limit(a);
     break;
-  case tsp:
+  case Rtsp:
     a = tcr->ts_area;
     adjust_soft_protection_limit(a);
   }
@@ -814,11 +774,11 @@ restore_soft_stack_limit(unsigned stkreg)
 void
 reset_lisp_process(ExceptionInformation *xp)
 {                                 /* ppc-exceptions.c:618-633 */
-  TCR *tcr = TCR_FROM_TSD(xpGPR(xp,rcontext));
+  TCR *tcr = TCR_FROM_TSD(xpGPR(xp, Rrcontext));
   catch_frame *last_catch = (catch_frame *) ptr_from_lispobj(untag(tcr->catch_top));
 
-  tcr->save_allocptr = (void *) ptr_from_lispobj(xpGPR(xp, allocptr));
-  tcr->save_allocbase = (void *) ptr_from_lispobj(xpGPR(xp, allocbase));
+  tcr->save_allocptr = (void *) ptr_from_lispobj(xpGPR(xp, Rallocptr));
+  tcr->save_allocbase = (void *) ptr_from_lispobj(xpGPR(xp, Rallocbase));
 
   tcr->save_vsp = (LispObj *) ptr_from_lispobj(((lisp_frame *)ptr_from_lispobj(last_catch->csp))->savevsp);
   tcr->save_tsp = (LispObj *) ptr_from_lispobj((LispObj) ptr_to_lispobj(last_catch)) - (2*node_size); /* account for TSP header */
@@ -831,8 +791,8 @@ void
 platform_new_heap_segment(ExceptionInformation *xp, TCR *tcr, BytePtr low, BytePtr high)
 {                                 /* ppc-exceptions.c:636-642 */
   tcr->last_allocptr = (void *)high;
-  xpGPR(xp,allocptr) = (LispObj) high;
-  xpGPR(xp,allocbase) = (LispObj) low;
+  xpGPR(xp, Rallocptr) = (LispObj) high;
+  xpGPR(xp, Rallocbase) = (LispObj) low;
 }
 
 
@@ -864,7 +824,7 @@ tcr_frame_ptr(TCR *tcr)
     xp = tcr->suspend_context;
   }
   if (xp) {
-    bp = (LispObj *) xpSP(xp);  /* ARM64-DEVIATION: xpGPR(xp,sp) → xpSP */
+    bp = (LispObj *) xpSP(xp);
   }
   return bp;
 }
@@ -878,14 +838,17 @@ normalize_tcr(ExceptionInformation *xp, TCR *tcr, Boolean is_other_tcr)
   if (xp) {
     if (is_other_tcr) {
       pc_luser_xp(xp, tcr, NULL);
-      freeptr = xpGPR(xp, allocptr);
+      freeptr = xpGPR(xp, Rallocptr);
       if (fulltag_of(freeptr) == 0){
         cur_allocptr = (void *) ptr_from_lispobj(freeptr);
       }
     }
-    update_area_active((area **)&tcr->cs_area, (BytePtr) ptr_from_lispobj(xpSP(xp)));
-    update_area_active((area **)&tcr->vs_area, (BytePtr) ptr_from_lispobj(xpGPR(xp, vsp)));
-    update_area_active((area **)&tcr->ts_area, (BytePtr) ptr_from_lispobj(xpGPR(xp, tsp)));
+    update_area_active((area **)&tcr->cs_area,
+                       (BytePtr)ptr_from_lispobj(xpSP(xp)));
+    update_area_active((area **)&tcr->vs_area,
+                       (BytePtr)ptr_from_lispobj(xpGPR(xp, Rvsp)));
+    update_area_active((area **)&tcr->ts_area,
+                       (BytePtr)ptr_from_lispobj(xpGPR(xp, Rtsp)));
   } else {
     /* In ff-call. */
     cur_allocptr = (void *) (tcr->save_allocptr);
@@ -908,8 +871,8 @@ normalize_tcr(ExceptionInformation *xp, TCR *tcr, Boolean is_other_tcr)
   if (cur_allocptr) {
     update_bytes_allocated(tcr, cur_allocptr);
     if (freeptr) {
-      xpGPR(xp, allocptr) = VOID_ALLOCPTR;
-      xpGPR(xp, allocbase) = VOID_ALLOCPTR;
+      xpGPR(xp, Rallocptr) = VOID_ALLOCPTR;
+      xpGPR(xp, Rallocbase) = VOID_ALLOCPTR;
     }
   }
 }
@@ -925,7 +888,7 @@ gc_like_from_xp(ExceptionInformation *xp,
                 signed_natural(*fun)(TCR *, signed_natural),
                 signed_natural param)
 {                                 /* ppc-exceptions.c:741-800 */
-  TCR *tcr = TCR_FROM_TSD(xpGPR(xp, rcontext)), *other_tcr;
+  TCR *tcr = TCR_FROM_TSD(xpGPR(xp, Rrcontext)), *other_tcr;
   int result;
   signed_natural inhibit;
 
@@ -943,8 +906,8 @@ gc_like_from_xp(ExceptionInformation *xp,
 
   gc_tcr = tcr;
 
-  xpGPR(xp, allocptr) = VOID_ALLOCPTR;
-  xpGPR(xp, allocbase) = VOID_ALLOCPTR;
+  xpGPR(xp, Rallocptr) = VOID_ALLOCPTR;
+  xpGPR(xp, Rallocbase) = VOID_ALLOCPTR;
 
   normalize_tcr(xp, tcr, false);
 
@@ -1174,12 +1137,12 @@ handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr,
   if (addr && (addr == tcr->safe_ref_address)) {  /* ppc:942-947 */
     adjust_exception_pc(xp,4);
 
-    xpGPR(xp,imm0) = 0;
+    xpGPR(xp, Rimm0) = 0;
     return 0;
   }
 
   if (xpPC(xp) == (pc)touch_page) {               /* ppc:949-953 */
-    xpGPR(xp,imm0) = 0;
+    xpGPR(xp, Rimm0) = 0;
     xpPC(xp) = (pc)touch_page_end;
     return 0;
   }
@@ -1228,7 +1191,7 @@ handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr,
               (unsigned long)pcval);
       cold_load_dump_frame(xp);
       darwin_arm64_describe_pc_object(pcval);
-      darwin_arm64_describe_fn(xpGPR(xp, 7));
+      darwin_arm64_describe_fn(xpGPR(xp, Rfn));
       _exit(157);
     }
   }
@@ -1311,11 +1274,11 @@ int ffcall_overflow_count = 0;    /* ppc-exceptions.c:1052 */
 OSStatus
 do_vsp_overflow (ExceptionInformation *xp, BytePtr addr)
 {                                 /* ppc-exceptions.c:1103-1112 */
-  TCR* tcr = TCR_FROM_TSD(xpGPR(xp, rcontext));
+  TCR* tcr = TCR_FROM_TSD(xpGPR(xp, Rrcontext));
   area *a = tcr->vs_area;
   protected_area_ptr vsp_soft = a->softprot;
   unprotect_area(vsp_soft);
-  signal_stack_soft_overflow(xp,vsp);
+  signal_stack_soft_overflow(xp, Rvsp);
   return 0;
 }
 
@@ -1323,11 +1286,11 @@ do_vsp_overflow (ExceptionInformation *xp, BytePtr addr)
 OSStatus
 do_tsp_overflow (ExceptionInformation *xp, BytePtr addr)
 {                                 /* ppc-exceptions.c:1115-1124 */
-  TCR* tcr = TCR_FROM_TSD(xpGPR(xp, rcontext));
+  TCR* tcr = TCR_FROM_TSD(xpGPR(xp, Rrcontext));
   area *a = tcr->ts_area;
   protected_area_ptr tsp_soft = a->softprot;
   unprotect_area(tsp_soft);
-  signal_stack_soft_overflow(xp,tsp);
+  signal_stack_soft_overflow(xp, Rtsp);
   return 0;
 }
 
@@ -1516,23 +1479,24 @@ cold_load_dump_frame(ExceptionInformation *xp)
           "  temp0-5(x12-17) 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx 0x%lx\n"
           "  save0-3(x19-22) 0x%lx 0x%lx 0x%lx 0x%lx  rnil 0x%lx\n"
           "  allocptr(x26) 0x%lx  allocbase(x27) 0x%lx  rcontext 0x%lx\n",
-          (unsigned long)xpGPR(xp, 30), (unsigned long)xpGPR(xp, 6),
-          (unsigned long)xpGPR(xp, 25), (unsigned long)xpGPR(xp, 24),
+          (unsigned long)xpGPR(xp, Rlr), (unsigned long)xpGPR(xp, Rnargs),
+          (unsigned long)xpGPR(xp, Rvsp), (unsigned long)xpGPR(xp, Rtsp),
           (unsigned long)xpSP(xp),
-          (unsigned long)xpGPR(xp, 0), (unsigned long)xpGPR(xp, 1),
-          (unsigned long)xpGPR(xp, 2), (unsigned long)xpGPR(xp, 3),
-          (unsigned long)xpGPR(xp, 4), (unsigned long)xpGPR(xp, 5),
-          (unsigned long)xpGPR(xp, 8), (unsigned long)xpGPR(xp, 9),
-          (unsigned long)xpGPR(xp, 10), (unsigned long)xpGPR(xp, 11),
-          (unsigned long)xpGPR(xp, 7),
-          (unsigned long)xpGPR(xp, 12), (unsigned long)xpGPR(xp, 13),
-          (unsigned long)xpGPR(xp, 14), (unsigned long)xpGPR(xp, 15),
-          (unsigned long)xpGPR(xp, 16), (unsigned long)xpGPR(xp, 17),
-          (unsigned long)xpGPR(xp, 19), (unsigned long)xpGPR(xp, 20),
-          (unsigned long)xpGPR(xp, 21), (unsigned long)xpGPR(xp, 22),
-          (unsigned long)xpGPR(xp, 23),
-          (unsigned long)xpGPR(xp, 26), (unsigned long)xpGPR(xp, 27),
-          (unsigned long)xpGPR(xp, 28));
+          (unsigned long)xpGPR(xp, Rimm0), (unsigned long)xpGPR(xp, Rimm1),
+          (unsigned long)xpGPR(xp, Rimm2), (unsigned long)xpGPR(xp, Rimm3),
+          (unsigned long)xpGPR(xp, Rimm4), (unsigned long)xpGPR(xp, Rimm5),
+          (unsigned long)xpGPR(xp, Rarg_w), (unsigned long)xpGPR(xp, Rarg_x),
+          (unsigned long)xpGPR(xp, Rarg_y), (unsigned long)xpGPR(xp, Rarg_z),
+          (unsigned long)xpGPR(xp, Rfn),
+          (unsigned long)xpGPR(xp, Rtemp0), (unsigned long)xpGPR(xp, Rtemp1),
+          (unsigned long)xpGPR(xp, Rtemp2), (unsigned long)xpGPR(xp, Rtemp3),
+          (unsigned long)xpGPR(xp, Rtemp4), (unsigned long)xpGPR(xp, Rtemp5),
+          (unsigned long)xpGPR(xp, Rsave0), (unsigned long)xpGPR(xp, Rsave1),
+          (unsigned long)xpGPR(xp, Rsave2), (unsigned long)xpGPR(xp, Rsave3),
+          (unsigned long)xpGPR(xp, Rrnil),
+          (unsigned long)xpGPR(xp, Rallocptr),
+          (unsigned long)xpGPR(xp, Rallocbase),
+          (unsigned long)xpGPR(xp, Rrcontext));
   if (where) {
     fprintf(dbgout, "  code@pc:");
     for (i = 0; i < 8; i++) {
@@ -1557,8 +1521,8 @@ uuo_cold_load_fatal(ExceptionInformation *xp, pc where, opcode the_uuo,
   cold_load_dump_frame(xp);
 #if defined(DARWIN) && defined(ARM64)
   darwin_arm64_describe_pc_object(pcval);
-  darwin_arm64_describe_fn(xpGPR(xp, 7));
-  darwin_arm64_describe_fn(xpGPR(xp, 14)); /* nfn = temp2 */
+  darwin_arm64_describe_fn(xpGPR(xp, Rfn));
+  darwin_arm64_describe_fn(xpGPR(xp, Rnfn));
 #endif
   _exit(157);
   return -1;                      /* not reached */
@@ -1583,7 +1547,7 @@ pv_cold_load_fatal(ExceptionInformation *xp, BytePtr addr, Boolean is_write)
   cold_load_dump_frame(xp);
 #if defined(DARWIN) && defined(ARM64)
   darwin_arm64_describe_pc_object(pcval);
-  darwin_arm64_describe_fn(xpGPR(xp, 7));
+  darwin_arm64_describe_fn(xpGPR(xp, Rfn));
   /* Dump a few words before the faulting store for context. */
   if (pcval >= 16) {
     unsigned *ip = (unsigned *)(pcval - 16);
@@ -1618,11 +1582,11 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
 {
   unsigned imm16 = UUO_IMM16(the_uuo);
   unsigned format = UUO_FORMAT(imm16);
-  LispObj cmain = nrs_CMAIN.vcell;              /* ppc:1558 */
-  TCR *tcr = TCR_FROM_TSD(xpGPR(xp, rcontext)); /* ppc:1559 */
+  LispObj cmain = nrs_CMAIN.vcell;
+  TCR *tcr = TCR_FROM_TSD(xpGPR(xp, Rrcontext));
   Boolean cmain_is_macptr =
     ((fulltag_of(cmain) == fulltag_misc) &&
-     (header_subtag(header_of(cmain)) == subtag_macptr)); /* ppc:1657-1658 */
+     (header_subtag(header_of(cmain)) == subtag_macptr));
 
   OSStatus status = -1;
 
@@ -1810,28 +1774,28 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
          structured UUO formats carry the type/bounds/unbound errors. */
       unsigned errnum = UUO_INTERR_ERRNUM(mi);
       unsigned gpr = UUO_INTERR_GPR(mi);
-      TCR *target = (TCR *)xpGPR(xp,arg_z);  /* ppc:1389 */
+      TCR *target = (TCR *)xpGPR(xp, Rarg_z);  /* ppc:1389 */
       status = 0;
       switch (errnum) {
       case error_propagate_suspend:   /* ppc:1392-1393 */
         break;
       case error_interrupt:           /* ppc:1394-1396 */
-        xpGPR(xp,imm0) = (LispObj) raise_thread_interrupt(target);
+        xpGPR(xp, Rimm0) = (LispObj) raise_thread_interrupt(target);
         break;
       case error_suspend:             /* ppc:1397-1399 */
-        xpGPR(xp,imm0) = (LispObj) lisp_suspend_tcr(target);
+        xpGPR(xp, Rimm0) = (LispObj) lisp_suspend_tcr(target);
         break;
       case error_suspend_all:         /* ppc:1400-1402 */
         lisp_suspend_other_threads();
         break;
       case error_resume:              /* ppc:1403-1405 */
-        xpGPR(xp,imm0) = (LispObj) lisp_resume_tcr(target);
+        xpGPR(xp, Rimm0) = (LispObj) lisp_resume_tcr(target);
         break;
       case error_resume_all:          /* ppc:1406-1408 */
         lisp_resume_other_threads();
         break;
       case error_kill:                /* ppc:1409-1411 */
-        xpGPR(xp,imm0) = (LispObj)kill_tcr(target);
+        xpGPR(xp, Rimm0) = (LispObj)kill_tcr(target);
         break;
       case error_allocate_list:       /* ppc:1412-1414 */
         allocate_list(xp,get_tcr(true));
@@ -1884,7 +1848,7 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
         status = 0;
       } else {
         status = uuo_cold_load_fatal(xp, where, the_uuo,
-                                     "wrong argument count", nargs);
+                                     "wrong argument count", Rnargs);
       }
       break;
 
@@ -1899,8 +1863,8 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
         *VS_area = tcr->vs_area;
 
       natural
-        current_SP = xpSP(xp),        /* ppc:1599 xpGPR(sp) */
-        current_VSP = xpGPR(xp,vsp);  /* ppc:1600 */
+        current_SP = xpSP(xp),
+        current_VSP = xpGPR(xp, Rvsp);
 
       if (current_SP  < (natural) (CS_area->hardlimit)) { /* ppc:1602 */
         /* If we are not in soft overflow mode yet, assume that the
@@ -1978,13 +1942,13 @@ void
 callback_for_trap (LispObj callback_macptr, ExceptionInformation *xp, pc where,
                    natural arg1, natural arg2, natural arg3)
 {
-  natural code_vector = register_codevector_contains_pc(xpGPR(xp, fn), where);
-  unsigned register_number = fn;
+  natural code_vector = register_codevector_contains_pc(xpGPR(xp, Rfn), where);
+  unsigned register_number = Rfn;
   natural index = (natural)where;
 
   if (code_vector == 0) {
-    register_number = nfn;
-    code_vector = register_codevector_contains_pc(xpGPR(xp, nfn), where);
+    register_number = Rnfn;
+    code_vector = register_codevector_contains_pc(xpGPR(xp, Rnfn), where);
   }
   if (code_vector == 0)
     register_number = 0;
@@ -2003,17 +1967,17 @@ callback_to_lisp (LispObj callback_macptr, ExceptionInformation *xp,
   natural  callback_ptr;
   area *a;
 
-  TCR *tcr = TCR_FROM_TSD(xpGPR(xp, rcontext));
+  TCR *tcr = TCR_FROM_TSD(xpGPR(xp, Rrcontext));
 
   /* Put the active stack pointer where .SPcallback expects it */
   a = tcr->cs_area;
   a->active = (BytePtr) ptr_from_lispobj(xpSP(xp)); /* ppc:1502 xpGPR(sp) */
 
   /* Copy globals from the exception frame to tcr */
-  tcr->save_allocptr = (void *)ptr_from_lispobj(xpGPR(xp, allocptr));
-  tcr->save_allocbase = (void *)ptr_from_lispobj(xpGPR(xp, allocbase));
-  tcr->save_vsp = (LispObj*) ptr_from_lispobj(xpGPR(xp, vsp));
-  tcr->save_tsp = (LispObj*) ptr_from_lispobj(xpGPR(xp, tsp));
+  tcr->save_allocptr = (void *)ptr_from_lispobj(xpGPR(xp, Rallocptr));
+  tcr->save_allocbase = (void *)ptr_from_lispobj(xpGPR(xp, Rallocbase));
+  tcr->save_vsp = (LispObj*) ptr_from_lispobj(xpGPR(xp, Rvsp));
+  tcr->save_tsp = (LispObj*) ptr_from_lispobj(xpGPR(xp, Rtsp));
 
 
 
@@ -2033,8 +1997,8 @@ callback_to_lisp (LispObj callback_macptr, ExceptionInformation *xp,
 
 
   /* Copy GC registers back into exception frame */
-  xpGPR(xp, allocbase) = (LispObj) ptr_to_lispobj(tcr->save_allocbase);
-  xpGPR(xp, allocptr) = (LispObj) ptr_to_lispobj(tcr->save_allocptr);
+  xpGPR(xp, Rallocbase) = (LispObj) ptr_to_lispobj(tcr->save_allocbase);
+  xpGPR(xp, Rallocptr) = (LispObj) ptr_to_lispobj(tcr->save_allocptr);
 }
 
 area *
@@ -2422,13 +2386,13 @@ restart_allocation(ExceptionInformation *xp, TCR *tcr)
   }
 
   /* derive allocptr position before this allocation */
-  uint64_t orig_allocptr = xpGPR(xp, allocptr) + sub_disp;
+  uint64_t orig_allocptr = xpGPR(xp, Rallocptr) + sub_disp;
   /* record this segment's bytes allocated before we reset allocptr */
   update_bytes_allocated(tcr, (void *)orig_allocptr);
 
   xpPC(xp) = sub_pc;
-  xpGPR(xp, allocbase) = VOID_ALLOCPTR;
-  xpGPR(xp, allocptr)  = VOID_ALLOCPTR;
+  xpGPR(xp, Rallocbase) = VOID_ALLOCPTR;
+  xpGPR(xp, Rallocptr)  = VOID_ALLOCPTR;
 }
 
 void
@@ -2437,7 +2401,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
   pc program_counter = xpPC(xp);
   opcode instr = *program_counter;
   lisp_frame *frame = (lisp_frame *)ptr_from_lispobj(xpSP(xp));
-  LispObj cur_allocptr = xpGPR(xp, allocptr);
+  LispObj cur_allocptr = xpGPR(xp, Rallocptr);
   int allocptr_tag = fulltag_of(cur_allocptr);
 
   /* were we in any of these special subprims? */
@@ -2465,11 +2429,11 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
         /* The store-exclusive hasn't happened yet. */
         return;
       }
-      root = xpGPR(xp, arg_x);
-      val = xpGPR(xp, arg_z);
-      ea = (LispObj *)(root + unbox_fixnum(xpGPR(xp, temp0)));
+      root = xpGPR(xp, Rarg_x);
+      val = xpGPR(xp, Rarg_z);
+      ea = (LispObj *)(root + unbox_fixnum(xpGPR(xp, Rtemp0)));
       need_memoize_root = true;
-      xpGPR(xp, arg_z) = t_value;
+      xpGPR(xp, Rarg_z) = t_value;
     } else if (program_counter >= &egc_store_node_conditional) {
       if ((program_counter < &egc_store_node_conditional_retry) ||
           restart_exclusive_store(xp, &egc_store_node_conditional_retry,
@@ -2479,35 +2443,36 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
            needed. */
         return;
       }
-      val = xpGPR(xp, arg_z);
-      ea = (LispObj *)(xpGPR(xp, arg_x) + unbox_fixnum(xpGPR(xp, temp0)));
-      xpGPR(xp, arg_z) = t_value;
+      val = xpGPR(xp, Rarg_z);
+      ea = (LispObj *)(xpGPR(xp, Rarg_x) + unbox_fixnum(xpGPR(xp, Rtemp0)));
+      xpGPR(xp, Rarg_z) = t_value;
     } else if (program_counter >= &egc_set_hash_key) {
       if (program_counter < &egc_set_hash_key_did_store) {
         return;
       }
-      root = xpGPR(xp, arg_x);
-      val = xpGPR(xp, arg_z);
-      ea = (LispObj *)(root + xpGPR(xp, arg_y) + misc_data_offset);
+      root = xpGPR(xp, Rarg_x);
+      val = xpGPR(xp, Rarg_z);
+      ea = (LispObj *)(root + xpGPR(xp, Rarg_y) + misc_data_offset);
       need_memoize_root = true;
     } else if (program_counter >= &egc_gvset) {
       if (program_counter < &egc_gvset_did_store) {
         return;
       }
-      ea = (LispObj *)(xpGPR(xp, arg_x) + xpGPR(xp, arg_y) + misc_data_offset);
-      val = xpGPR(xp, arg_z);
+      ea = (LispObj *)(xpGPR(xp, Rarg_x) + xpGPR(xp, Rarg_y) +
+                       misc_data_offset);
+      val = xpGPR(xp, Rarg_z);
     } else if (program_counter >= &egc_rplacd) {
       if (program_counter < &egc_rplacd_did_store) {
         return;
       }
-      ea = (LispObj *)untag(xpGPR(xp, arg_y));       /* cdr @ untag+0 */
-      val = xpGPR(xp, arg_z);
+      ea = (LispObj *)untag(xpGPR(xp, Rarg_y));       /* cdr @ untag+0 */
+      val = xpGPR(xp, Rarg_z);
     } else {                      /* egc_rplaca */
       if (program_counter < &egc_rplaca_did_store) {
         return;
       }
-      ea = ((LispObj *)untag(xpGPR(xp, arg_y))) + 1; /* car @ untag+8 */
-      val = xpGPR(xp, arg_z);
+      ea = ((LispObj *)untag(xpGPR(xp, Rarg_y))) + 1; /* car @ untag+8 */
+      val = xpGPR(xp, Rarg_z);
     }
     if (need_check_memo) {        /* ppc:1964-1976 verbatim */
       natural bitnumber = area_dnode(ea, lisp_global(REF_BASE));
@@ -2632,7 +2597,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
          * with the correctly-decremented allocptr.
          */
         *alloc_disp = disp;
-        xpGPR(xp, allocptr) += disp;
+        xpGPR(xp, Rallocptr) += disp;
       } else {
         /*
          * gc:
@@ -2646,8 +2611,8 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
          */
         uint64_t orig_allocptr = cur_allocptr + disp;
         update_bytes_allocated(tcr, (void *)orig_allocptr);
-        xpGPR(xp, allocbase) = VOID_ALLOCPTR;
-        xpGPR(xp, allocptr) = VOID_ALLOCPTR - disp;
+        xpGPR(xp, Rallocbase) = VOID_ALLOCPTR;
+        xpGPR(xp, Rallocptr) = VOID_ALLOCPTR - disp;
       }
       break;
     }
@@ -2665,7 +2630,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       } else {
         Bug(xp, "what's being allocated here ?");
       }
-      xpGPR(xp, allocptr) = xpGPR(xp, allocbase) = VOID_ALLOCPTR;
+      xpGPR(xp, Rallocptr) = xpGPR(xp, Rallocbase) = VOID_ALLOCPTR;
       break;
 
     case ID_adjust_allocptr_instruction:
@@ -2710,8 +2675,8 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
          `mov temp4, #0'.  PC points at the NEXT insn to execute, so
          every remaining step is completed here and none is redone in a
          way that could differ. */
-      set_xpLR(xp, xpGPR(xp, temp4));
-      xpGPR(xp, temp4) = 0;
+      set_xpLR(xp, xpGPR(xp, Rtemp4));
+      xpGPR(xp, Rtemp4) = 0;
       xpPC(xp) = base + 4;
       return;
     }
@@ -2758,7 +2723,7 @@ interrupt_handler(int signum, siginfo_t *info, ExceptionInformation *context)
           wait_for_exception_lock_in_handler(tcr, context, &xframe_link);
           PMCL_exception_handler(signum, context, tcr, info, old_valence);
           if (disp) {
-            xpGPR(context, allocptr) -= disp;
+            xpGPR(context, Rallocptr) -= disp;
           }
           unlock_exception_lock_in_handler(tcr);
           exit_signal_handler(tcr, old_valence, old_last_lisp_frame);
