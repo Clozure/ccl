@@ -945,20 +945,37 @@ before doing so.")
 			       (atomic-incf (nhash.vector.count vector))
 			       t))
 		       (return-from lock-free-puthash value))))))
-              (t (let ((old-value (%svref vector (%i+ vector-index 1))))
-                   (unless (or (eq old-value rehashing-value-marker)
-                               ;; In theory, could reuse the deleted slot since we know it had this key
-                               ;; initially, but that would complicate the state machine for very little gain.
-                               (eq old-value deleted-hash-value-marker)
-                               ;; This means we're competing with someone inserting this key.  We could continue
-                               ;; except then would have to sync up nhash.vector.count, so don't.
-                               (eq old-value free-hash-marker))
-                     (when (set-hash-value-conditional vector-index vector old-value value)
-                       (return-from lock-free-puthash value))))))))
-    ;; We're here because the table needs rehashing or it was getting rehashed while we
-    ;; were searching, or no room for new entry, or somebody else claimed the key from
-    ;; under us (that last case doesn't need to retry, but it's unlikely enough that
-    ;; it's not worth checking for).  Take care of it and try again.
+              ;; nhash.find-new returns either the index of KEY or the
+              ;; index of a free slot.  If it was a free slot, another
+              ;; thread may have claimed it for a different key since
+              ;; then, so only store the value if the key there really
+              ;; is KEY.  Otherwise, fall through and retry.
+              ((let ((table-key (%svref vector vector-index)))
+                 (or (eq table-key key)
+                     (and (neq table-key deleted-hash-key-marker)
+                          (funcall (hash-table-test-function hash) key
+                                   table-key))))
+               (let ((old-value (%svref vector (%i+ vector-index 1))))
+                 (unless (or (eq old-value rehashing-value-marker)
+                             ;; In theory, could reuse the deleted
+                             ;; slot since we know it had this key
+                             ;; initially, but that would complicate
+                             ;; the state machine for very little
+                             ;; gain.
+                             (eq old-value deleted-hash-value-marker)
+                             ;; This means we're competing with
+                             ;; someone inserting this key.  We could
+                             ;; continue except then would have to
+                             ;; sync up nhash.vector.count, so don't.
+                             (eq old-value free-hash-marker))
+                   (when (set-hash-value-conditional vector-index vector
+                                                     old-value value)
+                     (return-from lock-free-puthash value))))))))
+    ;; We're here because the table needs rehashing or it was getting
+    ;; rehashed while we were searching, or no room for new entry, or
+    ;; somebody else claimed the key from under us (that last case
+    ;; doesn't need to retry, but it's unlikely enough that it's not
+    ;; worth checking for).  Take care of it and try again.
     (lock-free-rehash hash)))
 
 (defun lock-free-hash-table-count (hash)
