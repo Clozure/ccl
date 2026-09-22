@@ -1265,19 +1265,18 @@ C(egc_set_hash_key_did_store):
 9:      ret                             /* ppc:683                         */
 endsp set_hash_key
 
-/* ===== store_node_conditional ===== */
-/* ported from ppc-spentry.s:705-748 (PPC64 branch) */
+/* fixnum byte offset on vstack, arg_x = object, arg_y = old, arg_z = new */
         .globl C(egc_store_node_conditional)
 spentry store_node_conditional
 C(egc_store_node_conditional):
-        cmp arg_z, arg_x
-        ldr temp0, [vsp], #node_size          /* vpop(temp0) */
-        asr imm4, temp0, #fixnumshift         /* unbox_fixnum(imm4,temp0) */
-        add imm0, arg_x, imm4                 /* ldxr/stxr take [Xn] only */
-1:      ldxr temp1, [imm0]
+        ldr temp0, [vsp], #node_size    /* fixnum-encoded byte offset */
+        .globl C(egc_store_node_conditional_retry)
+C(egc_store_node_conditional_retry):
+        add imm0, arg_x, temp0, asr #fixnumshift  /* form interior pointer */
+1:      ldxr temp1, [imm0]              /*  ldxr/stxr take [Xn] only */
         cmp temp1, arg_y
-        b.ne 9f
-        stxr w17, arg_z, [imm0]               /* status=temp5/x17 (uniform)    */
+        b.ne conditional_store_false
+        stxr w17, arg_z, [imm0]
         .globl C(egc_store_node_conditional_test)
 C(egc_store_node_conditional_test):
         cbnz w17, 1b
@@ -1294,7 +1293,7 @@ C(egc_store_node_conditional_test):
         lsr imm0, imm0, #bitmap_shift   /* ppc:727                         */
         lsr imm3, imm3, imm4            /* ppc:728                         */
         ref_global temp1, refbits       /* ppc:729                         */
-        b.hs 8f                         /* ppc:730 bge (UNSIGNED)          */
+        b.hs conditional_store_true     /* ppc:730 bge (UNSIGNED)          */
         lsl imm0, imm0, #3              /* ppc:731                         */
         add temp1, temp1, imm0
 2:      ldxr imm1, [temp1]              /* ppc:732                         */
@@ -1312,15 +1311,7 @@ C(egc_store_node_conditional_test):
         orr imm1, imm1, imm3
         stlxr w17, imm1, [temp1]
         cbnz w17, 3b
-8:      add arg_z, rnil, #t_offset            /* success => T              */
-        ret
-9:      clrex                                 /* PPC strcx-to-RESERVATION_
-                                                 DISCHARGE = discharge the
-                                                 reservation; AArch64 has a
-                                                 dedicated insn (our v2
-                                                 arm64-spentry.s uses it) */
-        mov arg_z, rnil                       /* failure => NIL            */
-        ret
+        b conditional_store_true
 endsp store_node_conditional
 
 /* ===== set_hash_key_conditional ===== */
@@ -1328,10 +1319,10 @@ endsp store_node_conditional
 spentry set_hash_key_conditional
         .globl C(egc_set_hash_key_conditional)
 C(egc_set_hash_key_conditional):
-        cmp arg_z, arg_x
         ldr temp0, [vsp], #node_size
-        asr imm4, temp0, #fixnumshift
-        add imm0, arg_x, imm4                 /* ldxr/stxr take [Xn] only */
+        .globl C(egc_set_hash_key_conditional_retry)
+C(egc_set_hash_key_conditional_retry):
+        add imm0, arg_x, temp0, asr #fixnumshift /* ldxr/stxr take [Xn] only */
 1:      ldxr temp1, [imm0]
         cmp temp1, arg_y
         b.ne 9f
@@ -1355,20 +1346,20 @@ C(egc_set_hash_key_conditional_test):
         ref_global temp1, ephemeral_refidx      /* ppc:780                 */
         b.hs 8f                         /* ppc:781 bge (UNSIGNED)          */
         lsl imm0, imm0, #3              /* ppc:782                         */
-        add temp0, temp2, imm0          /* [Xn] form (temp0 free)          */
-2:      ldxr imm1, [temp0]              /* ppc:783                         */
+        add imm5, temp2, imm0           /* [Xn] form; temp0 must survive  */
+2:      ldxr imm1, [imm5]              /* ppc:783                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp0]
+        stlxr w17, imm1, [imm5]
         cbnz w17, 2b
         mov imm3, #0x8000000000000000   /* ppc:788                         */
         and imm4, imm2, #0x3f           /* ppc:789                         */
         lsr imm2, imm2, #bitmap_shift   /* ppc:790                         */
         lsr imm3, imm3, imm4            /* ppc:791                         */
         lsl imm2, imm2, #3              /* ppc:792                         */
-        add temp0, temp1, imm2
-3:      ldxr imm1, [temp0]              /* ppc:793                         */
+        add imm5, temp1, imm2
+3:      ldxr imm1, [imm5]              /* ppc:793                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp0]
+        stlxr w17, imm1, [imm5]
         cbnz w17, 3b
         /* -- memoize the hash VECTOR itself (ppc:799-828) -- */
         ref_global temp1, refbits       /* ppc:800                         */
@@ -1384,10 +1375,10 @@ C(egc_set_hash_key_conditional_test):
         ldr imm1, [temp1, imm0]         /* ppc:810                         */
         tst imm1, imm3                  /* ppc:811 and.                    */
         b.ne 8f                         /* ppc:812                         */
-        add temp0, temp1, imm0
-4:      ldxr imm1, [temp0]              /* ppc:813                         */
+        add imm5, temp1, imm0
+4:      ldxr imm1, [imm5]              /* ppc:813                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp0]
+        stlxr w17, imm1, [imm5]
         cbnz w17, 4b
         ref_global temp1, ephemeral_refidx      /* ppc:818                 */
         mov imm3, #0x8000000000000000   /* ppc:819                         */
@@ -1395,15 +1386,20 @@ C(egc_set_hash_key_conditional_test):
         lsr imm2, imm2, #bitmap_shift   /* ppc:821                         */
         lsr imm3, imm3, imm4            /* ppc:822                         */
         lsl imm2, imm2, #3              /* ppc:823                         */
-        add temp0, temp1, imm2
-5:      ldxr imm1, [temp0]              /* ppc:824                         */
+        add imm5, temp1, imm2
+5:      ldxr imm1, [imm5]              /* ppc:824                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp0]
+        stlxr w17, imm1, [imm5]
         cbnz w17, 5b
         .globl C(egc_write_barrier_end)
 C(egc_write_barrier_end):               /* ppc:829 (family END marker)     */
+/* store_node_conditional exits here, too.  These must be outside
+   the write-barrier region: pc_luser_xp assumes that a pc past the
+   _test label means that the store succeeded. */
+conditional_store_true:
 8:      add arg_z, rnil, #t_offset            /* success => T              */
         ret
+conditional_store_false:
 9:      clrex                                 /* PPC strcx-to-RESERVATION_
                                                  DISCHARGE = discharge the
                                                  reservation; AArch64 has a

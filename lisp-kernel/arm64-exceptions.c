@@ -2458,22 +2458,28 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     Boolean need_check_memo = true, need_memoize_root = false;
 
     if (program_counter >= &egc_set_hash_key_conditional) {
-      if ((program_counter < &egc_set_hash_key_conditional_test) ||
-          ((program_counter == &egc_set_hash_key_conditional_test) &&
-           ((xpGPR(xp, temp5) & 0xffffffff) != 0))) {
+      if ((program_counter < &egc_set_hash_key_conditional_retry) ||
+          restart_exclusive_store(xp, &egc_set_hash_key_conditional_retry,
+                                  &egc_set_hash_key_conditional_test,
+                                  Rtemp5)) {
+        /* The store-exclusive hasn't happened yet. */
         return;
       }
       root = xpGPR(xp, arg_x);
+      val = xpGPR(xp, arg_z);
       ea = (LispObj *)(root + unbox_fixnum(xpGPR(xp, temp0)));
       need_memoize_root = true;
+      xpGPR(xp, arg_z) = t_value;
     } else if (program_counter >= &egc_store_node_conditional) {
-      if ((program_counter < &egc_store_node_conditional_test) ||
-          ((program_counter == &egc_store_node_conditional_test) &&
-           ((xpGPR(xp, temp5) & 0xffffffff) != 0))) {
-        /* The conditional store either hasn't been attempted yet, or
-           has failed.  No need to adjust the PC, or do memoization. */
+      if ((program_counter < &egc_store_node_conditional_retry) ||
+          restart_exclusive_store(xp, &egc_store_node_conditional_retry,
+                                  &egc_store_node_conditional_test,
+                                  Rtemp5)) {
+        /* The store-exclusive hasn't happened yet.  No memoization
+           needed. */
         return;
       }
+      val = xpGPR(xp, arg_z);
       ea = (LispObj *)(xpGPR(xp, arg_x) + unbox_fixnum(xpGPR(xp, temp0)));
       xpGPR(xp, arg_z) = t_value;
     } else if (program_counter >= &egc_set_hash_key) {
