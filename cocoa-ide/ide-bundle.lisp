@@ -39,11 +39,15 @@
 				    (eql (aref name 0) #\#)))))))
 	     (not (or (member (car (last (pathname-directory p))) source-ignore :test #'equalp)
 		      (backup-p (file-namestring p))
-		      (member (file-namestring p) source-ignore :test #'equalp))))))
+		      (member (file-namestring p) source-ignore :test #'equalp)
+		      ;; compiled by compile-ide-xibs, not copied
+		      (equalp (pathname-type p) "xib"))))))
     (let* ((source-dir (ensure-directory-pathname source))
 	   (target-dir (ensure-directory-pathname bundle-path))
 	   (contents-dir (subdir target-dir "Contents")))
       (recursive-copy-directory source-dir contents-dir :if-exists if-exists :test #'ignore-test)
+      #+darwin-target
+      (compile-ide-xibs source-dir contents-dir)
       (when copy-headers
 	(let* ((subdirs (ccl::cdb-subdirectory-path))
 	       (ccl-headers (make-pathname :host "ccl"
@@ -73,6 +77,54 @@
         )
       #-windows-target
       (ccl::touch target-dir))))
+
+(defparameter *ide-xib-deployment-target* "10.13"
+  "Minimum macOS version for nibs compiled from the IDE's .xib files.
+Keep this in step with OSVERSION in lisp-kernel/darwinx8664/Makefile.")
+
+;;; Some of the IDE's nibs are kept as Interface Builder .xib source.
+;;; Compile each .xib under SOURCE-DIR with ibtool, putting the .nib
+;;; at the corresponding place under CONTENTS-DIR.  ibtool comes with
+;;; Xcode; it is not part of the Command Line Tools.
+(defun compile-ide-xibs (source-dir contents-dir)
+  (let* ((source-dir (truename source-dir))
+         (prefix-length (length (pathname-directory source-dir)))
+         (xibs (directory
+                (make-pathname :directory
+                               (append (pathname-directory source-dir)
+                                       '(:wild-inferiors))
+                               :name :wild :type "xib"
+                               :defaults source-dir))))
+    (dolist (xib xibs (fresh-line))
+      (format t "~&;Compile XIB ~s" (back-translate-pathname xib))
+      (let* ((nib (make-pathname :directory
+                                 (append (pathname-directory contents-dir)
+                                         (nthcdr prefix-length
+                                                 (pathname-directory xib)))
+                                 :name (pathname-name xib) :type "nib"
+                                 :defaults contents-dir))
+             (output (make-string-output-stream)))
+        ;; ibtool writes either a flat file or a bundle directory,
+        ;; so remove whichever one an earlier build left behind.
+        (if (directoryp nib)
+          (recursive-delete-directory nib)
+          (when (probe-file nib)
+            (delete-file nib)))
+        (ensure-directories-exist nib)
+        (multiple-value-bind (exit-status code)
+            (external-process-status
+             (run-program "xcrun"
+                          (list "ibtool" "--errors"
+                                "--output-format" "human-readable-text"
+                                "--minimum-deployment-target"
+                                *ide-xib-deployment-target*
+                                "--compile"
+                                (native-translated-namestring nib)
+                                (native-translated-namestring xib))
+                          :output output :error output))
+          (unless (and (eq exit-status :exited) (zerop code))
+            (error "Compiling ~a with ibtool failed:~&~a"
+                   xib (get-output-stream-string output))))))))
 
 ;;; This runs "make install" to generate
 ;;; "ccl:cocoa-ide;altconsole;AltConsole.app",
