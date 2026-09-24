@@ -1005,7 +1005,8 @@
   lisp-sigexit
   jvm-init
   lisp-lstat
-  lisp-realpath)
+  lisp-realpath
+  lisp-monotonic-time)
 
 ;;; "nrs" means nil-relative symbol
 (defmacro nrs-offset (name)

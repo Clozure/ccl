@@ -1027,6 +1027,7 @@
   jvm-init
   lisp-lstat
   lisp-realpath
+  lisp-monotonic-time
   ;; Dummy entry
   last-kernel-import
 )

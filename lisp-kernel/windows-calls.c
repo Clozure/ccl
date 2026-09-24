@@ -1073,6 +1073,48 @@ lisp_realpath(wchar_t *filename, wchar_t *resolved_name)
     return NULL;
 }
 
+static uint64_t qpc_frequency;          /* counts per second, fixed at boot */
+static uint64_t monotonic_timebase_ns;
+
+/*
+ * Return monotonic (non-decreasing) time in nanoseconds relative to
+ * an arbitrary time base.  Time spent in system sleep is included.
+ */
+static uint64_t
+monotonic_ns(void)
+{
+  LARGE_INTEGER count;
+  uint64_t c;
+
+  /* Microsoft says this counts time in sleep & hibernate */
+  QueryPerformanceCounter(&count);
+  c = count.QuadPart;
+  /* split so that c * 1e9 can't overflow */
+  return (c / qpc_frequency) * 1000000000ULL +
+    (c % qpc_frequency) * 1000000000ULL / qpc_frequency;
+}
+
+void
+init_monotonic_timebase(void)
+{
+  LARGE_INTEGER freq;
+
+  /* Can't fail on XP and later, so no check here unlike unix-calls.c */
+  QueryPerformanceFrequency(&freq);
+  qpc_frequency = freq.QuadPart;
+  monotonic_timebase_ns = monotonic_ns();
+}
+
+/*
+ * Return time since process startup in units of ns_per_unit,
+ * e.g., if ns_per_unit is 1 000 000, return milliseconds.
+ */
+uint64_t
+lisp_monotonic_time(uint32_t ns_per_unit)
+{
+  return (monotonic_ns() - monotonic_timebase_ns) / ns_per_unit;
+}
+
 /*
  * This is a kludge to ensure that advapi32.dll is linked with the
  * lisp kernel.  Lisp's RNG needs to call SystemFunction036 aka

@@ -1951,6 +1951,7 @@ main
 #else
   extern LispObj load_image(char *);
 #endif
+  extern void init_monotonic_timebase(void);
   area *a;
   BytePtr stack_base, current_sp = (BytePtr) current_stack_pointer();
   TCR *tcr;
@@ -2184,6 +2185,7 @@ main
   lisp_global(STACK_SIZE) = thread_stack_size<<fixnumshift;
 
 
+  init_monotonic_timebase();
   exception_init();
 
   

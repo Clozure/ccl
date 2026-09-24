@@ -38,6 +38,8 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <time.h>
+#include <stdio.h>
 
 ssize_t
 lisp_read(int fd, void *buf, size_t count)
@@ -167,4 +169,71 @@ char *
 lisp_realpath(const char *file_name, char *resolved_name)
 {
   return realpath(file_name, resolved_name);
+}
+
+#ifdef LINUX
+/* CLOCK_MONOTONIC stops during suspend; CLOCK_BOOTTIME doesn't. */
+#define MONOTONIC_CLOCK_ID CLOCK_BOOTTIME
+#elif defined(DARWIN)
+/*
+ * Counts time while asleep, like CLOCK_MONOTONIC, but isn't subject
+ * to frequency or time adjustments and empirically has much finer
+ * resolution (about 40 ns compared to 1 microsecond on both Intel and
+ * Apple silicon).
+ */
+#define MONOTONIC_CLOCK_ID CLOCK_MONOTONIC_RAW
+#elif defined(FREEBSD) || defined(SOLARIS)
+/*
+ * FreeBSD: On FreeBSD 15, CLOCK_MONOTONIC is documented to count
+ *          time while the system is asleep; earlier releases don't say.
+ * illumos/Solaris: CLOCK_MONOTONIC behavior while asleep not documented.
+ */
+#define MONOTONIC_CLOCK_ID CLOCK_MONOTONIC
+#else
+#error "specify MONOTONIC_CLOCK_ID for target system"
+#endif
+
+/*
+ * Return monotonic (non-decreasing) time in nanoseconds relative to
+ * an arbitrary time base.  Time spent in system sleep is included when
+ * the system clock supports that.
+ */
+static uint64_t
+monotonic_ns(void)
+{
+  struct timespec ts;
+
+  clock_gettime(MONOTONIC_CLOCK_ID, &ts);
+  return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
+
+static uint64_t monotonic_timebase_ns;
+
+/* called from main() */
+void
+init_monotonic_timebase(void)
+{
+  struct timespec ts;
+
+  /*
+   * Fail in the unlikely event that the system doesn't know about the
+   * monotonic clock id.
+   */
+  if (clock_gettime(MONOTONIC_CLOCK_ID, &ts) != 0) {
+    perror("clock_gettime");
+    exit(1);
+  }
+  monotonic_timebase_ns = monotonic_ns();
+}
+
+/*
+ * Return time since process startup in units of ns_per_unit,
+ * e.g., if ns_per_unit is 1 000 000, return milliseconds.
+ */
+uint64_t
+lisp_monotonic_time(uint32_t ns_per_unit)
+{
+  uint64_t now_ns = monotonic_ns();
+
+  return (now_ns - monotonic_timebase_ns) / ns_per_unit;
 }

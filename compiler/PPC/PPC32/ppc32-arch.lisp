@@ -647,6 +647,7 @@
   jvm-init
   lisp-lstat
   lisp-realpath
+  lisp-monotonic-time
 )
 
 (defmacro nrs-offset (name)
