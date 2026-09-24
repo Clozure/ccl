@@ -42,27 +42,31 @@
   (when (> seconds #x3fffffff)          ;over 30 years in seconds
     (setq seconds #x3fffffff))
   (with-process-whostate ("Sleep")
-    (rlet ((a :timespec)
-           (b :timespec))
-      (setf (pref a :timespec.tv_sec) seconds
-            (pref a :timespec.tv_nsec) nanoseconds)
-      (let* ((aptr a)
-             (bptr b))
+    (rlet ((ts :timespec))
+      (let* ((ns-per-unit (floor 1000000000 internal-time-units-per-second))
+             (now (get-internal-real-time))
+             (stop (+ now
+                      (* seconds internal-time-units-per-second)
+                      (floor nanoseconds ns-per-unit))))
         (loop
-          (let* ((result (#_nanosleep aptr bptr)))
+          (setf (pref ts :timespec.tv_sec) seconds
+                (pref ts :timespec.tv_nsec) nanoseconds)
+          (let* ((result (#_nanosleep ts (%null-ptr))))
             (declare (type (signed-byte 32) result))
-            (if (and (< result 0)
-                     (eql (%get-errno) (- #$EINTR)))
-              (progn
-                ;; Some versions of OSX have a bug: if the call to #_nanosleep
-                ;; is interrupted near the time when the timeout would
-                ;; have occurred, the "remaining time" is computed as
-                ;; a negative value and, on 64-bit platforms, zero-extended.
-                #+(and darwin-target 64-bit-target)
-                (when (>= (pref bptr :timespec.tv_sec) #x80000000)
-                  (return))
-                (psetq aptr bptr bptr aptr))
-              (return))))))))
+            (unless (and (< result 0)
+                         (eql (%get-errno) (- #$EINTR)))
+              (return)))
+          ;; Interrupted by a signal.  The remaining time the kernel would
+          ;; report is computed before the signal handler runs, so the time
+          ;; the thread spends blocked inside the handler (a GC suspend, for
+          ;; instance) is missing from it.  Measure the remainder against the
+          ;; monotonic clock instead.
+          (when (>= (setq now (get-internal-real-time)) stop)
+            (return))
+          (multiple-value-bind (remaining-seconds remaining-units)
+              (floor (- stop now) internal-time-units-per-second)
+            (setq seconds remaining-seconds
+                  nanoseconds (* remaining-units ns-per-unit))))))))
 
 
 (defun timeval->ticks (tv)
