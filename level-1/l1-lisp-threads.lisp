@@ -76,43 +76,24 @@
                     :address (or ptz (%null-ptr))
                     :int))
 
-(defloadvar *lisp-start-timeval*
-    (progn
-      (let* ((r (make-record :timeval)))
-        (gettimeofday r)
-        r)))
-
-
-(defloadvar *internal-real-time-session-seconds* nil)
-
+;;; The kernel import returns elapsed time since the lisp process
+;;; started in units of ns-per-unit.  The clock used is monotonic, and
+;;; continues to run during sleep whenever the platform OS is
+;;; documented to support that.
+(defun %monotonic-time (ns-per-unit)
+  (ff-call (%kernel-import target::kernel-import-lisp-monotonic-time)
+           :unsigned-fullword ns-per-unit
+           :unsigned-doubleword))
 
 (defun get-internal-real-time ()
   "Return the real time in the internal time format. (See
   INTERNAL-TIME-UNITS-PER-SECOND.) This is useful for finding elapsed time."
-  (rlet ((tv :timeval))
-    (gettimeofday tv)
-    (let* ((units (truncate (the fixnum (pref tv :timeval.tv_usec)) (/ 1000000 internal-time-units-per-second)))
-           (initial *internal-real-time-session-seconds*))
-      (if initial
-        (locally
-            (declare (type (unsigned-byte 32) initial))
-          (+ (* internal-time-units-per-second
-                (the (unsigned-byte 32)
-                  (- (the (unsigned-byte 32) (pref tv :timeval.tv_sec))
-                     initial)))
-             units))
-        (progn
-          (setq *internal-real-time-session-seconds*
-                (pref tv :timeval.tv_sec))
-          units)))))
+  ;; The value we return here will be a fixnum for about 36,000 years
+  ;; after startup on 64-bit systems, and for about 6 days on 32-bit.
+  (%monotonic-time (floor 1000000000 internal-time-units-per-second)))
 
 (defun get-tick-count ()
-  (values (floor (get-internal-real-time)
-                 (floor internal-time-units-per-second
-                        *ticks-per-second*))))
-
-
-
+  (%monotonic-time *ns-per-tick*))
 
 (defun %kernel-global-offset (name-or-offset)
   (if (fixnump name-or-offset)
