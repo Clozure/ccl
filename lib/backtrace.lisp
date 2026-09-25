@@ -34,6 +34,8 @@
   "If :TRADITIONAL, shows calls to non-toplevel functions using FUNCALL, and shows frame address values.
    If :DIRECT, uses a more streamlined format.")
 
+;;; TCR must be suspended (and not the current thread's): everything
+;;; below reads its stack and dynamic state directly.
 (defun context-for-suspended-tcr (tcr)
   (let ((frame-ptr (%tcr-frame-ptr tcr)))
     (new-backtrace-info nil
@@ -42,8 +44,13 @@
                         tcr
                         nil       ;; condition - not used
                         frame-ptr ;; current
-                        #+ppc-target *fake-stack-frames*
-                        #+(or x86-target arm-target arm64-target) frame-ptr
+                        #+(or ppc-target arm64-target)
+                        (let ((loc (%tcr-binding-location
+                                    tcr '*fake-stack-frames*)))
+                          (if loc
+                            (%fixnum-ref loc)
+                            (%sym-global-value '*fake-stack-frames*)))
+                        #+(or x86-target arm-target) frame-ptr
                         (%fixnum-ref tcr (- target::tcr.db-link
 					    target::tcr-bias))
                         0         ;; break level - not used

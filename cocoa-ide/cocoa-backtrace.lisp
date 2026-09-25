@@ -18,7 +18,8 @@
 
 (defclass stack-descriptor ()
   ((context :initarg :context :reader stack-descriptor-context)
-   (filter :initform nil :initarg :filter :reader stack-descriptor-filter)
+   (filter :initform #'ccl::function-frame-p :initarg :filter
+           :reader stack-descriptor-filter)
    (interruptable-p :initform t :accessor stack-descriptor-interruptable-p)
    (segment-size :initform 50 :reader stack-descriptor-segment-size)
    (frame-count :initform -1 :reader stack-descriptor-frame-count)
@@ -58,8 +59,8 @@
 (defmethod count-stack-descriptor-frames ((sd stack-descriptor))
   (let ((count 0))
     (map-stack-frames sd (lambda (fp context)
-                           (when (ccl::function-frame-p fp context)
-                             (incf count))))
+                           (declare (ignore fp context))
+                           (incf count)))
     count))
 
 ;; Function must be side-effect free, it may be restarted or aborted.

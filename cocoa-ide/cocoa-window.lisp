@@ -113,7 +113,7 @@
                                                   #+x86-target (ccl::%current-frame-ptr)
                                                   #+arm-target (or (ccl::current-fake-stack-frame)
                                                                   (ccl::%current-frame-ptr))
-                                                  #+arm64-target (ccl::%current-frame-ptr)
+                                                  #+arm64-target ccl::*fake-stack-frames*
                                                   (ccl::db-link)
                                                   (1+ ccl::*break-level*)))
                         (ccl::*backtrace-contexts* (cons context ccl::*backtrace-contexts*)))  

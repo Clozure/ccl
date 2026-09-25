@@ -814,19 +814,40 @@ update_area_active (area **aptr, BytePtr value)
 
 LispObj *
 tcr_frame_ptr(TCR *tcr)
-{                                 /* ppc-exceptions.c:661-676 */
-  ExceptionInformation *xp;
-  LispObj *bp = NULL;
+{
+  ExceptionInformation *xp = NULL;
 
+  /*
+   * Return the address of the suspended tcr's youngest lisp frame on
+   * the control stack, i.e., where a backtrace of that thread should
+   * start.
+   *
+   * Where the address lives depends on what the thread was doing when
+   * it stopped.
+   *
+   * - If the thread was taking an exception from lisp code, then
+   *   pending_exception_context is the context of the fault, and its
+   *   sp is the top of the lisp frames.
+   *
+   * - If the thread was just minding its own business running lisp
+   *   code, then suspend_context holds its registers at the moment of
+   *   suspension; its sp is the top of the lisp frames.
+   *
+   * - If the thread was in foreign code (an ff-call, or the exception
+   *   handler's own C code), then suspend_context's sp points into C
+   *   frames, which the lisp frame walker can't parse.  The code that
+   *   left lisp saved the top of the lisp frames in last_lisp_frame,
+   *   so use that.  (In the lisp cases last_lisp_frame is stale.)
+   *
+   * This is the same analysis that gc_like_from_xp() does.
+   */
   if (tcr->pending_exception_context)
     xp = tcr->pending_exception_context;
-  else {
+  else if (tcr->valence == TCR_STATE_LISP)
     xp = tcr->suspend_context;
-  }
-  if (xp) {
-    bp = (LispObj *) xpSP(xp);
-  }
-  return bp;
+  if (xp)
+    return (LispObj *) xpSP(xp);
+  return (LispObj *) tcr->last_lisp_frame;
 }
 
 void
