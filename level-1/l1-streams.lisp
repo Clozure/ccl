@@ -5456,30 +5456,30 @@
     (- #$ETIMEDOUT)))
     
 (defun process-input-wait (fd &optional timeout)
-  "Wait until input is available on a given file-descriptor."
-  (rlet ((now :timeval))
-    (let* ((wait-end 
-            (when timeout
-              (gettimeofday now)
-              (+ (timeval->milliseconds now) timeout))))
-      (loop
-        (multiple-value-bind (win error)
-            (fd-input-available-p fd (or timeout -1))
-          (when win
-            (return (values t nil nil)))
-          (when (eql error 0)         ;timed out
-            (return (values nil t nil)))
-          ;; If it returned and a timeout was specified, check
-          ;; to see if it's been exceeded.  If so, return NIL;
-          ;; otherwise, adjust the remaining timeout.
-          ;; If there was no timeout, continue to wait forever.
-          (unless (eql error (- #$EINTR))
-            (return (values nil nil error)))
+  "Wait until input is available on the given file descriptor.  The
+  timeout is in milliseconds."
+  (let* ((units-per-ms (floor internal-time-units-per-second 1000))
+         (wait-end
           (when timeout
-            (gettimeofday now)
-            (setq timeout (- wait-end (timeval->milliseconds now)))
-            (if (<= timeout 0)
-              (return (values nil t nil)))))))))
+            (+ (get-internal-real-time) (* timeout units-per-ms)))))
+    (loop
+      (multiple-value-bind (win error)
+          (fd-input-available-p fd (or timeout -1))
+        (when win
+          (return (values t nil nil)))
+        (when (eql error 0)         ;timed out
+          (return (values nil t nil)))
+        ;; If it returned and a timeout was specified, check
+        ;; to see if it's been exceeded.  If so, return NIL;
+        ;; otherwise, adjust the remaining timeout.
+        ;; If there was no timeout, continue to wait forever.
+        (unless (eql error (- #$EINTR))
+          (return (values nil nil error)))
+        (when timeout
+          (setq timeout (ceiling (- wait-end (get-internal-real-time))
+                                 units-per-ms))
+          (if (<= timeout 0)
+            (return (values nil t nil))))))))
 
 
 (defun process-output-would-block (fd)
@@ -5491,30 +5491,30 @@
     (- #$ETIMEDOUT)))
 
 (defun process-output-wait (fd &optional timeout)
-  "Wait until output is possible on a given file descriptor."
-  (rlet ((now :timeval))
-    (let* ((wait-end 
-            (when timeout
-              (gettimeofday now)
-              (+ (timeval->milliseconds now) timeout))))
-      (loop
-        (multiple-value-bind (win error)
-            (fd-ready-for-output-p fd (or timeout -1))
-          (when win
-            (return (values t nil nil)))
-          (when (eql error 0)
-            (return (values nil t nil)))
-          (unless (eql error (- #$EINTR))
-            (return (values nil nil error)))
-          ;; If it returned and a timeout was specified, check
-          ;; to see if it's been exceeded.  If so, return NIL;
-          ;; otherwise, adjust the remaining timeout.
-          ;; If there was no timeout, continue to wait forever.
+  "Wait until output is possible on the given file descriptor.  The
+  timeout is in milliseconds."
+  (let* ((units-per-ms (floor internal-time-units-per-second 1000))
+         (wait-end
           (when timeout
-            (gettimeofday now)
-            (setq timeout (- wait-end (timeval->milliseconds now)))
-            (if (<= timeout 0)
-              (return (values nil t nil)))))))))
+            (+ (get-internal-real-time) (* timeout units-per-ms)))))
+    (loop
+      (multiple-value-bind (win error)
+          (fd-ready-for-output-p fd (or timeout -1))
+        (when win
+          (return (values t nil nil)))
+        (when (eql error 0)
+          (return (values nil t nil)))
+        (unless (eql error (- #$EINTR))
+          (return (values nil nil error)))
+        ;; If it returned and a timeout was specified, check
+        ;; to see if it's been exceeded.  If so, return NIL;
+        ;; otherwise, adjust the remaining timeout.
+        ;; If there was no timeout, continue to wait forever.
+        (when timeout
+          (setq timeout (ceiling (- wait-end (get-internal-real-time))
+                                 units-per-ms))
+          (if (<= timeout 0)
+            (return (values nil t nil))))))))
 
 
 
