@@ -70,6 +70,31 @@ print_lisp_frame(lisp_frame *frame)
    Say whatever can be said about foreign frames and lisp frames.
 */
 
+/* A stack word that is fixnum-tagged, and the target of a stack-alloc
+   marker, are both followed as POINTERS to the next frame.  Zero satisfies
+   `(header & fixnummask) == 0', so a zero word -- which stacks are full of
+   -- produced next == NULL.  The loop then called lisp_frame_p(NULL), so
+   the backtrace printer died inside the very crash it was reporting.  Any
+   small fixnum faults the same way, and a candidate below `start' either
+   walks backwards or spins forever.
+
+   A candidate is therefore accepted only when it makes forward progress and
+   stays inside the region being walked.  Anything else ends the walk with a
+   diagnostic: a truncated backtrace is useful, and a SIGSEGV in the
+   debugger destroys the only evidence the crash produced.
+*/
+static lisp_frame *
+advance_or_stop(lisp_frame *start, lisp_frame *end, lisp_frame *candidate,
+                char *what)
+{
+  if ((candidate > start) && (candidate <= end)) {
+    return candidate;
+  }
+  fprintf(dbgout, "Bad %s at %p: %p is not a forward address below %p\n",
+          what, start, candidate, end);
+  return end;
+}
+
 void
 walk_stack_frames(lisp_frame *start, lisp_frame *end) 
 {
@@ -92,11 +117,13 @@ walk_stack_frames(lisp_frame *start, lisp_frame *end)
         elements = (header_element_count(header)+2)&~1;
         next = (lisp_frame *)(current+elements);
       } else if ((header & fixnummask) == 0) {
-        next = (lisp_frame *)header;
+        next = advance_or_stop(start, end, (lisp_frame *)header,
+                               "frame link");
       } else if (header == stack_alloc_marker) {
-        next = (lisp_frame *)(current[1]);
+        next = advance_or_stop(start, end, (lisp_frame *)(current[1]),
+                               "stack-alloc marker");
       } else {
-        fprintf(dbgout, "Bad frame! (0x%x)\n", start);
+        fprintf(dbgout, "Bad frame! (%p)\n", start);
         next = end;
       }
     }
