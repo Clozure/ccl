@@ -34,10 +34,10 @@
 (defconstant single-float-epsilon (make-short-float-from-fixnums 1 103 0))
 (defconstant single-float-negative-epsilon (make-short-float-from-fixnums 1 102 0))
 
-(defconstant least-positive-normalized-short-float (make-short-float-from-fixnums 1 1 0))
-(defconstant least-negative-normalized-short-float (make-short-float-from-fixnums 1 1 -1))
-(defconstant least-positive-normalized-single-float (make-short-float-from-fixnums 1 1 0))
-(defconstant least-negative-normalized-single-float (make-short-float-from-fixnums 1 1 -1))
+(defconstant least-positive-normalized-short-float (make-short-float-from-fixnums 0 1 0))
+(defconstant least-negative-normalized-short-float (make-short-float-from-fixnums 0 1 -1))
+(defconstant least-positive-normalized-single-float (make-short-float-from-fixnums 0 1 0))
+(defconstant least-negative-normalized-single-float (make-short-float-from-fixnums 0 1 -1))
 
 (let ((bigfloat (make-float-from-fixnums #x1ffffff #xfffffff #x7fe 0)))
   ; do it this way if you want to be able to compile before reading floats works  
