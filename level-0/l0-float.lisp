@@ -168,9 +168,9 @@
     ; is only 53 bits and positive so should be easy
     ;(values (logior (ash hi 28) lo) exp sign)))
     ; if denormalized, may fit in a fixnum
-    (setq exp (- exp (if (< hi #x1000000) 
-                       (+ IEEE-double-float-mantissa-width double-float-decode-bias)
-                       (+ IEEE-double-float-mantissa-width IEEE-double-float-bias))))
+    ;; A zero exponent field (zero or subnormal) scales like 1.
+    (setq exp (- (max exp 1)
+                 (+ IEEE-double-float-mantissa-width IEEE-double-float-bias)))
     (if (< hi (ash 1 (1- target::fixnumshift))) ; aka 2
       (values (logior (ash hi 28) lo) exp sign)
       ; might fit in 1 word?
@@ -182,9 +182,9 @@
 #+64-bit-target
 (defun integer-decode-double-float (n)
   (multiple-value-bind (hi lo exp sign)(%integer-decode-double-float n)
-    (setq exp (- exp (if (< hi #x1000000) 
-                       (+ IEEE-double-float-mantissa-width double-float-decode-bias)
-                       (+ IEEE-double-float-mantissa-width IEEE-double-float-bias))))
+    ;; A zero exponent field (zero or subnormal) scales like 1.
+    (setq exp (- (max exp 1)
+                 (+ IEEE-double-float-mantissa-width IEEE-double-float-bias)))
     (values (logior (ash hi 28) lo) exp sign)))
     
 
