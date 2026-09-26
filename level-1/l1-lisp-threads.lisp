@@ -36,33 +36,48 @@
 (defloadvar *ns-per-tick*
     (floor 1000000000 *ticks-per-second*))
 
+;;; The time %nanosleep measures its own deadline against, in nanoseconds.
+;;; A monotonic clock where there is one; otherwise the time of day.
+#-windows-target
+(defun %nanosleep-clock ()
+  #-darwin-target
+  (rlet ((ts :timespec))
+    (when (eql 0 (#_clock_gettime #$CLOCK_MONOTONIC ts))
+      (return-from %nanosleep-clock
+        (+ (* (pref ts :timespec.tv_sec) 1000000000)
+           (pref ts :timespec.tv_nsec)))))
+  (rlet ((tv :timeval))
+    (gettimeofday tv)
+    (+ (* (pref tv :timeval.tv_sec) 1000000000)
+       (* (pref tv :timeval.tv_usec) 1000))))
+
 #-windows-target
 (defun %nanosleep (seconds nanoseconds)
   #+(and darwin-target 64-bit-target)
   (when (> seconds #x3fffffff)          ;over 30 years in seconds
     (setq seconds #x3fffffff))
   (with-process-whostate ("Sleep")
-    (rlet ((a :timespec)
-           (b :timespec))
-      (setf (pref a :timespec.tv_sec) seconds
-            (pref a :timespec.tv_nsec) nanoseconds)
-      (let* ((aptr a)
-             (bptr b))
+    (rlet ((ts :timespec))
+      (let* ((deadline (+ (%nanosleep-clock)
+                          (* seconds 1000000000)
+                          nanoseconds)))
         (loop
-          (let* ((result (#_nanosleep aptr bptr)))
+          (setf (pref ts :timespec.tv_sec) seconds
+                (pref ts :timespec.tv_nsec) nanoseconds)
+          (let* ((result (#_nanosleep ts (%null-ptr))))
             (declare (type (signed-byte 32) result))
-            (if (and (< result 0)
-                     (eql (%get-errno) (- #$EINTR)))
-              (progn
-                ;; Some versions of OSX have a bug: if the call to #_nanosleep
-                ;; is interrupted near the time when the timeout would
-                ;; have occurred, the "remaining time" is computed as
-                ;; a negative value and, on 64-bit platforms, zero-extended.
-                #+(and darwin-target 64-bit-target)
-                (when (>= (pref bptr :timespec.tv_sec) #x80000000)
-                  (return))
-                (psetq aptr bptr bptr aptr))
-              (return))))))))
+            (unless (and (< result 0)
+                         (eql (%get-errno) (- #$EINTR)))
+              (return)))
+          ;; Interrupted by a signal.  The remaining time the kernel would
+          ;; report is computed before the signal handler runs, so time the
+          ;; thread spends blocked inside the handler (a GC suspend, for
+          ;; instance) is missing from it.  Measure the remainder here.
+          (let* ((remaining (- deadline (%nanosleep-clock))))
+            (when (<= remaining 0)
+              (return))
+            (multiple-value-setq (seconds nanoseconds)
+              (floor remaining 1000000000))))))))
 
 
 (defun timeval->ticks (tv)
