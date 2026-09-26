@@ -179,7 +179,6 @@
   ; number of mantissa bits including hidden bit
   (defconstant *double-float-precision* (1+ IEEE-double-float-mantissa-width))
   (defconstant *short-float-precision* (1+ IEEE-single-float-mantissa-width))
-  (defconstant *double-float-bias* IEEE-double-float-bias)
   (defconstant *double-float-max-exponent* (1+ IEEE-double-float-normal-exponent-max))
   (defconstant *double-float-max-exact-power-of-5* 23)
   ;(defconstant *short-float-max-exact-integer-length* 24)
@@ -191,7 +190,6 @@
 
 (eval-when (:compile-toplevel :execute)
   (defconstant *short-float-max-exact-power-of-5* 10)
-  (defconstant *short-float-bias* IEEE-single-float-bias)
   (defconstant *short-float-max-exact-integer-length* 24)
   (defconstant *short-float-max-exponent* (1+ IEEE-single-float-normal-exponent-max))
 )
@@ -299,7 +297,7 @@
         (scale-float (float (if (minusp sign) (- integer) integer) (if short a-short-float))
                      power-of-2)))    
     (let* ((exponent (+ length power-of-2))
-           (biased-exponent (+ exponent (if short *short-float-bias* *double-float-bias*)))
+           (biased-exponent (+ exponent (if short single-float-decode-bias double-float-decode-bias)))
            (sticky-residue nil))
       (cond
        ((<= biased-exponent 0)

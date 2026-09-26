@@ -1105,7 +1105,7 @@
 	(sig mantissa (ash sig 1)))
        ((logbitp 23 sig)
 	(values sig
-		(- (- IEEE-single-float-bias)
+		(- (- single-float-decode-bias)
 		   IEEE-single-float-digits
 		   bias)
 		sign))))
@@ -1113,7 +1113,7 @@
 
 (defun integer-decode-short-float (sfloat)
   (multiple-value-bind (mantissa exp sign)(fixnum-decode-short-float sfloat)
-    (let* ((biased (- exp IEEE-single-float-bias IEEE-single-float-digits)))
+    (let* ((biased (- exp single-float-decode-bias IEEE-single-float-digits)))
       (setq sign (if (eql 0 sign) 1 -1))
       (if (eq exp 255)
 	(error "Can't decode NAN/Inf: ~s" sfloat))

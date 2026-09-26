@@ -811,7 +811,11 @@
 
 ;;; IEEE-floating-point constants.
 
-(defconstant IEEE-single-float-bias 126)
+(defconstant IEEE-single-float-bias 127)
+;;; Subtracting this from a stored exponent gives the exponent that
+;;; DECODE-FLOAT returns, whose significand is in [1/2, 1) rather than
+;;; IEEE's [1, 2).
+(defconstant single-float-decode-bias (1- IEEE-single-float-bias))
 (defconstant IEEE-single-float-exponent-offset 23)
 (defconstant IEEE-single-float-exponent-width 8)
 (defconstant IEEE-single-float-mantissa-offset 0)
@@ -824,7 +828,9 @@
 
 ;;; Double-floats are IEEE DOUBLE-FLOATs in both MCL implementations.
 
-(defconstant IEEE-double-float-bias 1022)
+(defconstant IEEE-double-float-bias 1023)
+;;; See SINGLE-FLOAT-DECODE-BIAS.
+(defconstant double-float-decode-bias (1- IEEE-double-float-bias))
 (defconstant IEEE-double-float-exponent-offset 52)
 (defconstant IEEE-double-float-exponent-width 11)
 (defconstant IEEE-double-float-mantissa-offset 0)

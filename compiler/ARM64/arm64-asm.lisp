@@ -1745,8 +1745,7 @@
     (ccl::make-short-float-from-fixnums
      ;; insert into top 4 bits of mantissa
      (dpb m (byte 4 19) 0)
-     ;; CCL misdefines ieee-single-float-bias: it's 126, not 127 as expected
-     (+ (1+ ccl::ieee-single-float-bias) e)
+     (+ ccl::ieee-single-float-bias e)
      (if (= sign 1) -1 1))))
 
 ;;; If the integer n can be encoded as a wide immmediate, return

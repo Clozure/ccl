@@ -169,8 +169,8 @@
     ;(values (logior (ash hi 28) lo) exp sign)))
     ; if denormalized, may fit in a fixnum
     (setq exp (- exp (if (< hi #x1000000) 
-                       (+ IEEE-double-float-mantissa-width IEEE-double-float-bias)
-                       (+ IEEE-double-float-mantissa-width (1+ IEEE-double-float-bias)))))
+                       (+ IEEE-double-float-mantissa-width double-float-decode-bias)
+                       (+ IEEE-double-float-mantissa-width IEEE-double-float-bias))))
     (if (< hi (ash 1 (1- target::fixnumshift))) ; aka 2
       (values (logior (ash hi 28) lo) exp sign)
       ; might fit in 1 word?
@@ -183,8 +183,8 @@
 (defun integer-decode-double-float (n)
   (multiple-value-bind (hi lo exp sign)(%integer-decode-double-float n)
     (setq exp (- exp (if (< hi #x1000000) 
-                       (+ IEEE-double-float-mantissa-width IEEE-double-float-bias)
-                       (+ IEEE-double-float-mantissa-width (1+ IEEE-double-float-bias)))))
+                       (+ IEEE-double-float-mantissa-width double-float-decode-bias)
+                       (+ IEEE-double-float-mantissa-width IEEE-double-float-bias))))
     (values (logior (ash hi 28) lo) exp sign)))
     
 
@@ -192,10 +192,10 @@
 #+32-bit-target
 (defun %truncate-double-float (n)
   (multiple-value-bind (hi lo exp sign)(%integer-decode-double-float n)
-    (if (< exp (1+ IEEE-double-float-bias)) ; this is false in practice
+    (if (< exp IEEE-double-float-bias) ; this is false in practice
       0
       (progn
-        (setq exp (- exp (+ IEEE-double-float-mantissa-width (1+ IEEE-double-float-bias))))
+        (setq exp (- exp (+ IEEE-double-float-mantissa-width IEEE-double-float-bias)))
         (if (eq sign 1)  ; positive
           (logior (ash hi (+ 28 exp))(ash lo exp))
           (if (<= exp 0) ; exp positive - negate before shift - else after
@@ -214,10 +214,10 @@
 ; actually only called when bigger than a fixnum
 (defun %truncate-short-float (n)
   (multiple-value-bind (mantissa exp sign)(fixnum-decode-short-float n)
-    (if (< exp (1+ IEEE-single-float-bias)) ; is magnitude less than 1 - false in practice
+    (if (< exp IEEE-single-float-bias) ; is magnitude less than 1 - false in practice
       0
       (progn
-        (setq exp (- exp (+ IEEE-single-float-mantissa-width (1+ IEEE-single-float-bias))))
+        (setq exp (- exp (+ IEEE-single-float-mantissa-width IEEE-single-float-bias)))
         (ash (if (eq sign 0) mantissa (- mantissa)) exp)))))
 
 (defun decode-float (n)
@@ -236,15 +236,15 @@
            (let* ((val (%make-dfloat))
                   (zeros (dfloat-significand-zeros n)))
 	     (%%double-float-abs! n val)
-             (%%scale-dfloat! val (+ 2 IEEE-double-float-bias zeros) val) ; get it normalized
-             (set-%double-float-exp val IEEE-double-float-bias)      ; then bash exponent
-             (values val (- old-exp zeros IEEE-double-float-bias) sign)))
+             (%%scale-dfloat! val (+ 2 double-float-decode-bias zeros) val) ; get it normalized
+             (set-%double-float-exp val double-float-decode-bias)      ; then bash exponent
+             (values val (- old-exp zeros double-float-decode-bias) sign)))
          (if (> old-exp IEEE-double-float-normal-exponent-max)
            (error "Can't decode NAN or infinity ~s" n)
            (let ((val (%make-dfloat)))
              (%%double-float-abs! n val)
-             (set-%double-float-exp val IEEE-double-float-bias)
-             (values val (- old-exp IEEE-double-float-bias) sign))))))
+             (set-%double-float-exp val double-float-decode-bias)
+             (values val (- old-exp double-float-decode-bias) sign))))))
     (short-float
      (let* ((old-exp (%short-float-exp n))
             (sign (if (%short-float-sign n) -1.0s0 1.0s0)))
@@ -255,26 +255,26 @@
            (let* ((val (%make-sfloat))
                   (zeros (sfloat-significand-zeros n)))
 	     (%%short-float-abs! n val)
-             (%%scale-sfloat! val (+ 2 IEEE-single-float-bias zeros) val) ; get it normalized
-             (set-%short-float-exp val IEEE-single-float-bias)      ; then bash exponent
-             (values val (- old-exp zeros IEEE-single-float-bias) sign))
+             (%%scale-sfloat! val (+ 2 single-float-decode-bias zeros) val) ; get it normalized
+             (set-%short-float-exp val single-float-decode-bias)      ; then bash exponent
+             (values val (- old-exp zeros single-float-decode-bias) sign))
            #+64-bit-target
            (let* ((zeros (sfloat-significand-zeros n))
                   (val (%%scale-sfloat (%short-float-abs n)
-				       (+ 2 IEEE-single-float-bias zeros))))
-             (values (set-%short-float-exp val IEEE-single-float-bias)
-                     (- old-exp zeros IEEE-single-float-bias) sign)))
+				       (+ 2 single-float-decode-bias zeros))))
+             (values (set-%short-float-exp val single-float-decode-bias)
+                     (- old-exp zeros single-float-decode-bias) sign)))
          (if (> old-exp IEEE-single-float-normal-exponent-max)
            (error "Can't decode NAN or infinity ~s" n)
            #+32-bit-target
            (let ((val (%make-sfloat)))
              (%%short-float-abs! n val)
-             (set-%short-float-exp val IEEE-single-float-bias)
-             (values val (- old-exp IEEE-single-float-bias) sign))
+             (set-%short-float-exp val single-float-decode-bias)
+             (values val (- old-exp single-float-decode-bias) sign))
            #+64-bit-target
 	   (values (set-%short-float-exp (%short-float-abs n)
-					 IEEE-single-float-bias)
-		   (- old-exp IEEE-single-float-bias) sign)))))))
+					 single-float-decode-bias)
+		   (- old-exp single-float-decode-bias) sign)))))))
 
 ; (* float (expt 2 int))
 (defun scale-float (float int)
@@ -289,7 +289,7 @@
          (if (%double-float-zerop float)
            float 
            (let ((result (%make-dfloat)))
-             (%%scale-dfloat! float (+ (1+ IEEE-double-float-bias) int) result)))
+             (%%scale-dfloat! float (+ IEEE-double-float-bias int) result)))
          (if (<= new-exp 0)  ; maybe going denormalized        
            (if (<= new-exp (- IEEE-double-float-digits))
              0.0d0 ; should this be underflow? - should just be normal and result is fn of current fpu-mode
@@ -297,7 +297,7 @@
              (let ((result (%make-dfloat)))
                (%copy-double-float float result)
                (set-%double-float-exp result 1) ; scale by float-exp -1
-               (%%scale-dfloat! result (+ IEEE-double-float-bias (+ float-exp int)) result)              
+               (%%scale-dfloat! result (+ double-float-decode-bias (+ float-exp int)) result)
                result))
            (if (> new-exp IEEE-double-float-normal-exponent-max) 
              (error (make-condition 'floating-point-overflow
@@ -315,9 +315,9 @@
            float
            #+32-bit-target
            (let ((result (%make-sfloat)))
-             (%%scale-sfloat! float (+ (1+ IEEE-single-float-bias) int) result))
+             (%%scale-sfloat! float (+ IEEE-single-float-bias int) result))
            #+64-bit-target
-           (%%scale-sfloat float (+ (1+ IEEE-single-float-bias) int)))
+           (%%scale-sfloat float (+ IEEE-single-float-bias int)))
          (if (<= new-exp 0)  ; maybe going denormalized        
            (if (<= new-exp (- IEEE-single-float-digits))
              ;; should this be underflow? - should just be normal and
@@ -328,11 +328,11 @@
              (let ((result (%make-sfloat)))
                (%copy-short-float float result)
                (set-%short-float-exp result 1) ; scale by float-exp -1
-               (%%scale-sfloat! result (+ IEEE-single-float-bias (+ float-exp int)) result)              
+               (%%scale-sfloat! result (+ single-float-decode-bias (+ float-exp int)) result)
                result)
              #+64-bit-target
              (%%scale-sfloat (set-%short-float-exp float 1)
-                             (+ IEEE-single-float-bias (+ float-exp int))))
+                             (+ single-float-decode-bias (+ float-exp int))))
            (if (> new-exp IEEE-single-float-normal-exponent-max) 
              (error (make-condition 'floating-point-overflow
                                     :operation 'scale-float
@@ -401,8 +401,8 @@
                 (denlen (integer-length den))
                 (exp (- numlen denlen))
                 (minusp (minusp num)))
-           (if (and (<= numlen IEEE-double-float-bias)
-                    (<= denlen IEEE-double-float-bias)
+           (if (and (<= numlen double-float-decode-bias)
+                    (<= denlen double-float-decode-bias)
                     #|(not (minusp exp))|# 
                     (<= (abs exp) IEEE-double-float-mantissa-width))
              (with-stack-double-floats ((fnum num)
@@ -417,20 +417,20 @@
                         (num (if minusp (- num) num))
                         (int (round (ash num shift) den)) ; gaak
                         (intlen (integer-length int))
-                        (new-exp (+ intlen (- IEEE-double-float-bias shift))))
+                        (new-exp (+ intlen (- double-float-decode-bias shift))))
                    
                    (when (> intlen IEEE-double-float-digits)
                      (setq shift (1- shift))
                      (setq int (round (ash num shift) den))
                      (setq intlen (integer-length int))
-                     (setq new-exp (+ intlen (- IEEE-double-float-bias shift))))
+                     (setq new-exp (+ intlen (- double-float-decode-bias shift))))
                    (when (> new-exp 2046)
                      (error (make-condition 'floating-point-overflow
                                             :operation 'double-float
                                             :operands (list number))))
 		   (make-float-from-fixnums (ldb (byte 25 (- intlen 25)) int)
 					    (ldb (byte 28 (max (- intlen 53) 0)) int)
-					    new-exp ;(+ intlen (- IEEE-double-float-bias 53))
+					    new-exp ;(+ intlen (- double-float-decode-bias 53))
 					    (if minusp -1 1)
 					    result))
                  ; den > num - exp negative
@@ -453,8 +453,8 @@
              (denlen (integer-length den))
              (exp (- numlen denlen))
              (minusp (minusp num)))
-        (if (and (<= numlen IEEE-single-float-bias)
-                 (<= denlen IEEE-single-float-bias)
+        (if (and (<= numlen single-float-decode-bias)
+                 (<= denlen single-float-decode-bias)
                  #|(not (minusp exp))|# 
                  (<= (abs exp) IEEE-single-float-mantissa-width))
           (target::with-stack-short-floats ((fnum num)
@@ -468,12 +468,12 @@
                      (num (if minusp (- num) num))
                      (int (round (ash num shift) den)) ; gaak
                      (intlen (integer-length int))
-                     (new-exp (+ intlen (- IEEE-single-float-bias shift))))
+                     (new-exp (+ intlen (- single-float-decode-bias shift))))
 		(when (> intlen IEEE-single-float-digits)
                   (setq shift (1- shift))
                   (setq int (round (ash num shift) den))
                   (setq intlen (integer-length int))
-                  (setq new-exp (+ intlen (- IEEE-single-float-bias shift))))
+                  (setq new-exp (+ intlen (- single-float-decode-bias shift))))
                 (when (> new-exp IEEE-single-float-normal-exponent-max)
                   (error (make-condition 'floating-point-overflow
                                          :operation 'short-float
@@ -500,8 +500,8 @@
              (denlen (integer-length den))
              (exp (- numlen denlen))
              (minusp (minusp num)))
-        (if (and (<= numlen IEEE-single-float-bias)
-                 (<= denlen IEEE-single-float-bias)
+        (if (and (<= numlen single-float-decode-bias)
+                 (<= denlen single-float-decode-bias)
                  #|(not (minusp exp))|# 
                  (<= (abs exp) IEEE-single-float-mantissa-width))
           (/ (the short-float (%short-float num))
@@ -514,12 +514,12 @@
                      (num (if minusp (- num) num))
                      (int (round (ash num shift) den)) ; gaak
                      (intlen (integer-length int))
-                     (new-exp (+ intlen (- IEEE-single-float-bias shift))))
+                     (new-exp (+ intlen (- single-float-decode-bias shift))))
 		(when (> intlen IEEE-single-float-digits)
                   (setq shift (1- shift))
                   (setq int (round (ash num shift) den))
                   (setq intlen (integer-length int))
-                  (setq new-exp (+ intlen (- IEEE-single-float-bias shift))))
+                  (setq new-exp (+ intlen (- single-float-decode-bias shift))))
                 (when (> new-exp IEEE-single-float-normal-exponent-max)
                   (error (make-condition 'floating-point-overflow
                                          :operation 'short-float
@@ -587,7 +587,7 @@
     (flet 
       ((doit (new-big)
          (let* ((int-len (bignum-integer-length new-big)))
-           (when (>= int-len (- 2047 IEEE-double-float-bias)) ; args?
+           (when (>= int-len (- 2047 double-float-decode-bias)) ; args?
              (error (make-condition 'floating-point-overflow 
                                     :operation 'float :operands (list big))))
            (if (> int-len 53)
@@ -607,12 +607,12 @@
                      (setq hi (%ilsr 1 hi))
                      (setq lo (%ilsr 1 lo))
                      (if bit (setq lo (%ilogior #x8000000 lo))))))
-               (make-float-from-fixnums hi lo (+ IEEE-double-float-bias int-len)(if minusp -1 1) result))
+               (make-float-from-fixnums hi lo (+ double-float-decode-bias int-len)(if minusp -1 1) result))
              (let* ((hi (ldb (byte 25  (- int-len  25)) new-big))
                     (lobits (min (- int-len 25) 28))
                     (lo (ldb (byte lobits (- int-len (+ lobits 25))) new-big)))
                (if (< lobits 28) (setq lo (ash lo (- 28 lobits))))
-               (make-float-from-fixnums hi lo (+ IEEE-double-float-bias int-len) (if minusp -1 1) result))))))
+               (make-float-from-fixnums hi lo (+ double-float-decode-bias int-len) (if minusp -1 1) result))))))
       (declare (dynamic-extent #'doit))
       (with-one-negated-bignum-buffer big doit))))
 
@@ -622,7 +622,7 @@
     (flet 
       ((doit (new-big)
          (let* ((int-len (bignum-integer-length new-big)))
-           (when (>= int-len (- 255 IEEE-single-float-bias)) ; args?
+           (when (>= int-len (- 255 single-float-decode-bias)) ; args?
              (error (make-condition 'floating-point-overflow 
                                     :operation 'float :operands (list big 1.0s0))))
            (if t ;(> int-len IEEE-single-float-digits) ; always true
@@ -635,7 +635,7 @@
                  (when (%ilogbitp 24 lo) ; got bigger
                    (setq int-len (1+ int-len))
                    (setq lo (%ilsr 1 lo))))
-               (make-short-float-from-fixnums  lo (+ IEEE-single-float-bias int-len)(if minusp -1 1) result))
+               (make-short-float-from-fixnums  lo (+ single-float-decode-bias int-len)(if minusp -1 1) result))
              ))))
       (declare (dynamic-extent #'doit))
       (with-one-negated-bignum-buffer big doit))))
@@ -647,7 +647,7 @@
     (flet 
       ((doit (new-big)
          (let* ((int-len (bignum-integer-length new-big)))
-           (when (>= int-len (- 255 IEEE-single-float-bias)) ; args?
+           (when (>= int-len (- 255 single-float-decode-bias)) ; args?
              (error (make-condition 'floating-point-overflow 
                                     :operation 'float :operands (list big 1.0s0))))
            (if t ;(> int-len IEEE-single-float-digits) ; always true
@@ -660,7 +660,7 @@
                  (when (%ilogbitp 24 lo) ; got bigger
                    (setq int-len (1+ int-len))
                    (setq lo (%ilsr 1 lo))))
-               (make-short-float-from-fixnums  lo (+ IEEE-single-float-bias int-len)(if minusp -1 1)))
+               (make-short-float-from-fixnums  lo (+ single-float-decode-bias int-len)(if minusp -1 1)))
              ))))
       (declare (dynamic-extent #'doit))
       (with-one-negated-bignum-buffer big doit))))
@@ -998,14 +998,14 @@
              (log-s 0)
              (s 1))
          (if (typep m 'short-float)
-           (let ((expon (- (%short-float-exp m) IEEE-single-float-bias)))
+           (let ((expon (- (%short-float-exp m) single-float-decode-bias)))
              (cond ((> expon 126)
                     (setq log-s double-float-log2^23)
                     (setq s #.(ash 1 23)))
                    ((< expon -124)
                     (setq log-s #.(- double-float-log2^23))
                     (setq s #.(/ 1.0s0 (ash 1 23))))))
-           (let ((expon (- (%double-float-exp m) IEEE-double-float-bias)))
+           (let ((expon (- (%double-float-exp m) double-float-decode-bias)))
              (cond ((> expon 1022)
                     (setq log-s double-float-log2^23)
                     (setq s #.(ash 1 23)))
