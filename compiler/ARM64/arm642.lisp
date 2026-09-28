@@ -1979,7 +1979,7 @@
       (if needs-memoization
         (arm642-aset2-via-gvset seg vreg xfer array i j new safe type-keyword constval simple)
         (let* ((constidx
-                (and *arm642-reckless*
+                (and *arm642-reckless* simple
                      dim0 dim1 i-known-fixnum j-known-fixnum
                      (>= i-known-fixnum 0)
                      (>= j-known-fixnum 0)
@@ -2095,7 +2095,7 @@
            (unscaled-k)
            (val-reg (arm642-target-reg-for-aset vreg type-keyword))
            (constidx
-            (and *arm642-reckless*
+            (and *arm642-reckless* simple
                  (not needs-memoization) dim0 dim1 dim2 i-known-fixnum j-known-fixnum k-known-fixnum
                  (>= i-known-fixnum 0)
                  (>= j-known-fixnum 0)
@@ -2170,8 +2170,8 @@
            (unscaled-j)
            (unscaled-k)
            (constidx
-            (and *arm642-reckless*
-                 dim0 dim1 i-known-fixnum j-known-fixnum k-known-fixnum
+            (and *arm642-reckless* simple
+                 dim0 dim1 dim2 i-known-fixnum j-known-fixnum k-known-fixnum
                  (>= i-known-fixnum 0)
                  (>= j-known-fixnum 0)
                  (>= k-known-fixnum 0)
