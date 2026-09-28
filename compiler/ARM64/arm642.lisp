@@ -9324,9 +9324,6 @@
                                (the fixnum (logand (lognot 1)
                                                    (the fixnum (1+ single-words))))))))
         (declare (fixnum single-words total-words))
-        (when (> total-words 490)         ;alloc-c-frame SUB imm12 reach
-          (compiler-bug "aapcs64-ff-call: c-frame too large (~s words)"
-                        total-words))
         (setq single-float-offset (+ other-offset nother-words))
         (setq double-float-offset
               (logand (lognot 1)
@@ -9765,6 +9762,9 @@
                   n-c-arg-words         ;outgoing stack arguments
                   4)))                  ;reserved boundary lisp frame
     (logandc2 (1+ words) 1)))           ;round up to even
+
+(defun arm642-c-frame-bytes (n-c-arg-words)
+  (ash (arm642-c-frame-words n-c-arg-words) arm64::word-shift))
 
 (defun arm642-c-frame-header (n-c-arg-words)
   (logior (ash (1- (arm642-c-frame-words n-c-arg-words)) arm64::num-subtag-bits)

@@ -314,13 +314,23 @@
 ;;; With the frame in place, savefn will be kept alive and our caller
 ;;; won't be gc'd out from under us.
 
-;;; Allocate a C frame whose size is known at compile-time.  A big
-;;; frame, beyond the stp scaled-imm7 reach (>63 words), must use
-;;; alloc-variable-c-frame.
+;;; Allocate a C frame whose size is known at compile-time.
+;;;
+;;; One pre-indexed STP publishes a small frame atomically.  That
+;;; displacement is a signed 7-bit field scaled by eight, so it reaches 512
+;;; bytes and no further.  A larger frame moves SP first with a register
+;;; SUB, which keeps asynchronous signal delivery out of the frame memory,
+;;; and then stores the header and the saved SP at the new SP.  PC-LUSER-XP
+;;; completes that pair store when a suspension lands in the window between
+;;; the two instructions.  The store is idempotent, so the thread simply
+;;; repeats it on resume and the collector always sees a complete frame.
+;;;
+;;; ALLOC-VARIABLE-C-FRAME remains for a size known only at run time.
 (define-arm64-vinsn (alloc-c-frame) (()
                                      ((n-c-args :u16const))
                                      ((header :u64)
-                                      (prevsp :imm)))
+                                      (prevsp :imm)
+                                      (size :u64)))
   (mov prevsp sp)
   (movz header (:$ (:apply logand (:apply arm642-c-frame-header n-c-args)
                            #xffff)))
@@ -329,9 +339,21 @@
                                    -16)
                            #xffff)
                 :lsl 16))
-  (stp header prevsp
-       (:@! sp (:$ (:apply - (:apply ash (:apply arm642-c-frame-words n-c-args)
-                                     arm64::word-shift))))))
+  ((:pred <= (:apply arm642-c-frame-bytes n-c-args) 512)
+   (stp header prevsp
+        (:@! sp (:$ (:apply - (:apply arm642-c-frame-bytes n-c-args))))))
+  ((:pred > (:apply arm642-c-frame-bytes n-c-args) 512)
+   (movz size (:$ (:apply logand (:apply arm642-c-frame-bytes n-c-args)
+                          #xffff)))
+   ((:pred /= (:apply logand #xffff
+                      (:apply ash (:apply arm642-c-frame-bytes n-c-args) -16))
+            0)
+    (movk size (:$ (:apply logand #xffff
+                           (:apply ash (:apply arm642-c-frame-bytes n-c-args)
+                                   -16))
+                :lsl 16)))
+   (sub sp sp size)
+   (stp header prevsp (:@ sp (:$ 0)))))
 
 ;;; Allocate a C frame whose size is specified at run-time.  We can't
 ;;; write stp imm0, imm1, [sp, sizereg]! because pre-indexing only
