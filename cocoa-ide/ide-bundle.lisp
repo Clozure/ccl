@@ -199,8 +199,7 @@ Keep this in step with OSVERSION in lisp-kernel/darwinx8664/Makefile.")
          #+mac-app-store
          (bundle-version "111800")      ;1.11.8
          (needles `(("OPENMCL-KERNEL" . ,kernel-name)
-		    ("OPENMCL-ICONS" . #+mac-app-store "store.icns"
-				     #-mac-app-store "openmcl-icon.icns")
+		    ("OPENMCL-ICONS" . "store.icns")
 		    ("HELP-BOOK-FOLDER" . #+mac-app-store "nohelpbookfolder"
 					#-mac-app-store "CFBundleHelpBookFolder")
 		    ("HELP-BOOK-NAME" . #+mac-app-store "nohelpbookname"
