@@ -1030,6 +1030,20 @@ handle_unimplemented_instruction(ExceptionInformation *xp,
   return false;
 }
 
+/*
+ * Run a process interrupt.  The interrupted code may be about to read
+ * errno (e.g., to check for EINTR after an ff-call), so preserve it
+ * across the interrupt function, as x86's callback_for_interrupt does.
+ */
+static void
+callback_for_interrupt(ExceptionInformation *xp)
+{
+  int save_errno = errno;
+
+  callback_for_trap(nrs_CMAIN.vcell, xp, 0, 0, NULL);
+  errno = save_errno;
+}
+
 Boolean
 handle_exception(int xnum, 
                  ExceptionInformation *xp, 
@@ -1077,7 +1091,7 @@ handle_exception(int xnum,
     }
   } else if (xnum == SIGNAL_FOR_PROCESS_INTERRUPT) {
     tcr->interrupt_pending = 0;
-    callback_for_trap(nrs_CMAIN.vcell, xp, 0, 0, NULL);
+    callback_for_interrupt(xp);
     return true;
   }
 
@@ -1185,7 +1199,7 @@ handle_uuo(ExceptionInformation *xp, siginfo_t *info, opcode the_uuo)
 
     case 4:
       tcr->interrupt_pending = 0;
-      callback_for_trap(nrs_CMAIN.vcell, xp, 0, 0, NULL);
+      callback_for_interrupt(xp);
       handled = true;
       break;
     default:

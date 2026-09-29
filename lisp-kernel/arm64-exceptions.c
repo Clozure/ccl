@@ -1385,6 +1385,22 @@ handle_unimplemented_instruction(ExceptionInformation *xp,
   return -1;
 }
 
+/*
+ * Run process-interrupt.  The interrupted code may be about to read
+ * errno (e.g., to check for EINTR after an ff-call), so preserve it
+ * across the interrupt function, just as x86's callback_for_interrupt
+ * does.
+ */
+static void
+callback_for_interrupt(LispObj callback_macptr, ExceptionInformation *xp,
+                       pc where, natural arg1)
+{
+  int save_errno = errno;
+
+  callback_for_trap(callback_macptr, xp, where, arg1, 0, 0);
+  errno = save_errno;
+}
+
 OSStatus
 PMCL_exception_handler(int xnum,
                        ExceptionInformation *xp,
@@ -1425,11 +1441,8 @@ PMCL_exception_handler(int xnum,
     }
   } else if (xnum == SIGNAL_FOR_PROCESS_INTERRUPT) {   /* ppc:1309-1313 */
     tcr->interrupt_pending = 0;
-    /* ARM64-DEVIATION: PPC passed the magic TRI_instruction(TO_GT,nargs,0)
-       word as the "trap" argument so lisp's trap-decode recognizes a
-       process-interrupt (ppc:1311); the ARM64 marker is the
-       take-deferred-interrupt udf. */
-    callback_for_trap(nrs_CMAIN.vcell, xp, 0, DEFERRED_INTERRUPT_INSTRUCTION, 0, 0);
+    callback_for_interrupt(nrs_CMAIN.vcell, xp, 0,
+                           DEFERRED_INTERRUPT_INSTRUCTION);
     status = 0;
   }
 
@@ -1843,12 +1856,14 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
       break;
 
     case uuo_misc_interrupt_now:
-      /* ppc:1659-1668: the explicit take-deferred-interrupt trap:
-         reset interrupt level/pending, then tell cmain. */
+      /*
+       * The explicit take-deferred-interrupt trap: reset interrupt
+       * level/pending, then tell cmain.
+       */
       if (cmain_is_macptr) {
         TCR_INTERRUPT_LEVEL(tcr) = 0;
         tcr->interrupt_pending = 0;
-        callback_for_trap(cmain, xp, where, (natural) the_uuo, 0, 0);
+        callback_for_interrupt(cmain, xp, where, (natural) the_uuo);
         status = 0;
       }
       break;
