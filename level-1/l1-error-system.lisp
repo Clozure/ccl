@@ -391,13 +391,18 @@
 	     (format s "Restart ~s is not active" (slot-value c 'restart-name)))))
 
 (define-condition lock-protocol-error (control-error)
-  ((lock :initarg :lock)))
+  ((lock :initarg :lock)
+   ;; Plist of the lock's kernel-side bookkeeping, from
+   ;; %LOCK-STATE-SNAPSHOT, sampled where the error was signalled.
+   ;; NIL if the signaller didn't supply one.
+   (state :initarg :state :initform nil)))
 
 (define-condition not-lock-owner (lock-protocol-error)
   ()
   (:report (lambda (c s)
-	     (format s "Current process ~s does not own lock ~s"
-		     *current-process* (slot-value c 'lock)))))
+	     (format s "Current process ~s does not own lock ~s; state: ~s"
+		     *current-process* (slot-value c 'lock)
+		     (slot-value c 'state)))))
 
 (define-condition not-locked (lock-protocol-error)
   ()

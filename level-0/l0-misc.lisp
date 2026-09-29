@@ -819,12 +819,28 @@
 
 
 
+;;; Create snapshot of lock state as a plist.  The process of reading
+;;; the state isn't serialized, so the results may be inconsistent.
+(defun %lock-state-snapshot (lock)
+  (let* ((ptr (%svref lock target::lock._value-cell)))
+    (case (%svref lock target::lock.kind-cell)
+      (recursive-lock
+       (list :count (%get-natural ptr target::lockptr.count)
+             :avail (%get-natural ptr target::lockptr.avail)
+             :owner (%get-natural ptr target::lockptr.owner)))
+      (read-write-lock
+       (list :state (%get-signed-natural ptr target::rwlock.state)
+             :writer (%get-natural ptr target::rwlock.writer)
+             :blocked-readers (%get-natural ptr target::rwlock.blocked-readers)
+             :blocked-writers (%get-natural
+                               ptr target::rwlock.blocked-writers))))))
+
 #-futex
 (defun %unlock-recursive-lock-ptr (ptr lock)
   (with-macptrs ((signal (%get-ptr ptr target::lockptr.signal))
                  (spin (%inc-ptr ptr target::lockptr.spinlock)))
     (unless (eql (%get-object ptr target::lockptr.owner) (%current-tcr))
-      (error 'not-lock-owner :lock lock))
+      (error 'not-lock-owner :lock lock :state (%lock-state-snapshot lock)))
     (without-interrupts
      (when (eql 0 (decf (the fixnum
                           (%get-natural ptr target::lockptr.count))))
@@ -847,7 +863,7 @@
 #+futex
 (defun %unlock-recursive-lock-ptr (ptr lock)
   (unless (eql (%get-object ptr target::lockptr.owner) (%current-tcr))
-    (error 'not-lock-owner :lock lock))
+    (error 'not-lock-owner :lock lock :state (%lock-state-snapshot lock)))
   (without-interrupts
    (when (eql 0 (decf (the fixnum
                         (%get-natural ptr target::lockptr.count))))
@@ -863,7 +879,7 @@
   (with-macptrs ((signal (%get-ptr ptr target::lockptr.signal))
                  (spin (%inc-ptr ptr target::lockptr.spinlock)))
     (unless (eql (%get-object ptr target::lockptr.owner) (%current-tcr))
-      (error 'not-lock-owner :lock lock))
+      (error 'not-lock-owner :lock lock :state (%lock-state-snapshot lock)))
     (without-interrupts
      (when (eql 0 (decf (the fixnum
                           (%get-natural ptr target::lockptr.count))))
@@ -1135,7 +1151,7 @@
        (cond ((> state 0)
               (unless (eql tcr (%get-object ptr target::rwlock.writer))
                 (%release-spin-lock ptr)
-                (error 'not-lock-owner :lock lock))
+                (error 'not-lock-owner :lock lock :state (%lock-state-snapshot lock)))
               (decf state))
              ((< state 0) (incf state))
              (t (%release-spin-lock ptr)
@@ -1191,7 +1207,7 @@
        (cond ((> state 0)
               (unless (eql tcr (%get-object ptr target::rwlock.writer))
                 (%unlock-futex ptr)
-                (error 'not-lock-owner :lock lock))
+                (error 'not-lock-owner :lock lock :state (%lock-state-snapshot lock)))
               (decf state))
              ((< state 0) (incf state))
              (t (%unlock-futex ptr)
@@ -1253,7 +1269,7 @@
                     (%unlock-futex ptr)
                     #-futex
                     (%release-spin-lock ptr)
-                    (error 'not-lock-owner :lock lock))))
+                    (error 'not-lock-owner :lock lock :state (%lock-state-snapshot lock)))))
                ((= state 0)
                 #+futex (%unlock-futex ptr)
                 #-futex (%release-spin-lock ptr)
