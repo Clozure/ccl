@@ -2592,6 +2592,48 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
   }
 
   /*
+   * A control-stack frame whose size is in a register (ALLOC-VARIABLE-
+   * C-FRAME, and SAVE-NFP for a large frame) is pushed with
+   *
+   *   sub  sp, sp, Xm
+   *   stp  Xt, Xt2, [sp]      // header, element 0
+   *
+   * Between the sub and the stp, sp points at a frame whose first two
+   * words are junk.  Do the stp's stores here; the stp repeats them when
+   * the thread resumes.
+   *
+   * Unlike the tstack (see rollback_tsp_frame_push()), the control stack
+   * has no guard pages on arm64 (PROTECT_CSTACK isn't defined), so these
+   * stores can't fault: the entry check keeps sp above cs_limit, and
+   * these frames are much smaller than the unprotected soft and hard
+   * zones below it.  (An nfp frame is at most 32KB.  The compiler
+   * rejects a constant-size C frame of 64KB or more; run-time sizes
+   * come from foreign-call argument lists.)  If the control stack ever
+   * gets guard pages, this should roll the push back instead.
+   *
+   * sub sp, sp, Xm (extended register)
+   *  0xCB200000 | (Rm<<16) | (option<<13) | (imm3<<10) | (Rn<<5) | Rd,
+   *  with Rn = Rd = 31 (sp)
+   *  mask Rm, option, imm3: mask 0xFFE003FF, match 0xCB2003FF
+   *
+   * stp Xt, Xt2, [sp] (signed offset, 64-bit, imm7 = 0)
+   *  mask Rt (4:0) and Rt2 (14:10): mask 0xFFFF83E0, match 0xA90003E0
+   */
+#define IS_SUB_SP_SP_REG(i) (((i) & 0xFFE003FF) == 0xCB2003FF)
+#define IS_STP_PAIR_TO_SP0(i) (((i) & 0xFFFF83E0) == 0xA90003E0)
+
+  if (IS_STP_PAIR_TO_SP0(instr) &&
+      IS_SUB_SP_SP_REG(program_counter[-1])) {
+    unsigned rt = instr & 0x1f, rt2 = (instr >> 10) & 0x1f;
+    LispObj *slots = (LispObj *)ptr_from_lispobj(xpSP(xp));
+
+    /* Register 31 in a transfer register field is XZR. */
+    slots[0] = (rt == 31) ? 0 : xpGPR(xp, rt);
+    slots[1] = (rt2 == 31) ? 0 : xpGPR(xp, rt2);
+    return;
+  }
+
+  /*
    * Ensure GC safety when building lisp frames on the control stack
    *
    * The canonical way to build a lisp frame on the control stack is

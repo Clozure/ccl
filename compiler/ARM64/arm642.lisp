@@ -9378,15 +9378,19 @@
                                (the fixnum (logand (lognot 1)
                                                    (the fixnum (1+ single-words))))))))
         (declare (fixnum single-words total-words))
-        (when (> total-words 490)         ;alloc-c-frame SUB imm12 reach
-          (compiler-bug "aapcs64-ff-call: c-frame too large (~s words)"
-                        total-words))
+        (arm642-check-c-frame-size total-words)
         (setq single-float-offset (+ other-offset nother-words))
         (setq double-float-offset
               (logand (lognot 1)
                       (the fixnum (1+ (the fixnum (+ single-float-offset
                                                      nsingle-floats))))))
-        (! alloc-c-frame total-words)
+        ;; Nothing has been evaluated yet, so arg_z (and the imm
+        ;; registers that alloc-variable-c-frame uses) are free.
+        (if (arm642-small-c-frame-p total-words)
+          (! alloc-c-frame total-words)
+          (progn
+            (arm642-lri seg arm64::arg_z (ash total-words arm64::fixnumshift))
+            (! alloc-variable-c-frame arm64::arg_z)))
         ;; Nonlocal exits crossing this point pop the frame via his
         ;; generic cstack-diff adjust-sp (header note).
         (setq *arm642-cstack*
@@ -9824,6 +9828,23 @@
   (logior (ash (1- (arm642-c-frame-words n-c-arg-words)) arm64::num-subtag-bits)
           arm64::subtag-u64-vector))
 
+;;; Return true if we can use alloc-c-frame (a single stp instruction).
+;;; The scaled imm7 displacement reaches 512 bytes (64 words).
+(defun arm642-small-c-frame-p (n-c-arg-words)
+  (<= (arm642-c-frame-words n-c-arg-words) 64))
+
+;;; Complain if the C frame is too big.  This is to avoid control
+;;; stack overflow.  We choose 64KB because this is well within the
+;;; unprotected zones below cs_limit.  (pc_luser_xp in the lisp kernel
+;;; depends on this: it stores into a frame that's being pushed.)
+(defun arm642-check-c-frame-size (n-c-arg-words)
+  (let* ((nbytes (ash (arm642-c-frame-words n-c-arg-words)
+                      arm64::word-shift)))
+    (unless (< nbytes 65536)
+      (nx-error "Foreign function call needs a ~d-byte C stack frame, ~
+                 which exceeds the 64KB limit."
+                nbytes))))
+
 ;;; --- arm64 port: definitions upstream does not carry ---
 
 (defun acode-condition-to-arm64-cond-bit (cond)
@@ -10054,46 +10075,23 @@
       (! %current-frame-ptr target)))
   (^))
 
-;;; WITH-C-FRAME: allocate a c-frame of the default size around BODY.
-;;; The fixed-size half of the pair below; every other back end defines
-;;; both (ppc2.lisp ppc2-with-c-frame / arm2.lisp arm2-with-c-frame /
-;;; x862.lisp x862-with-c-frame), and this one is byte-for-byte the
-;;; x86-64 shape because arm64, like x86-64, has a single c-frame vinsn
-;;; and no EABI variant to ecase over.
+;;; WITH-C-FRAME and WITH-VARIABLE-C-FRAME allocate a C frame on the
+;;; control stack around BODY, which binds a variable to the frame's
+;;; base (see NX1-WITH-VARIABLE-C-FRAME).  The frame's size is given as
+;;; a number of words of outgoing stack arguments: zero for
+;;; WITH-C-FRAME, the value of SIZE for WITH-VARIABLE-C-FRAME.  The
+;;; interpreted %FF-CALL (arm64-def.lisp) and the Objective-C bridge
+;;; use them.
 ;;;
-;;; The only in-tree caller is the objc-bridge (objc-runtime.lisp:3207,
-;;; 3223), which is Darwin-only -- so this is latent on linuxarm64.  It
-;;; is NOT latent on darwinarm64: arm642.lisp is the back end for both
-;;; arm64 targets, so without this handler the bridge has no locative
-;;; for the operator and simply cannot compile there.
-(defarm642 arm642-with-c-frame with-c-frame (seg vreg xfer body &aux
-                                                 (old-stack (arm642-encode-stack)))
-  (! alloc-c-frame 0)
-  (arm642-open-undo $undo-arm64-c-frame)
-  (arm642-undo-body seg vreg xfer body old-stack))
-
-;;; WITH-VARIABLE-C-FRAME: allocate a c-frame of SIZE param words around
-;;; BODY.  Model: x862-with-variable-c-frame (x862.lisp); the
-;;; interpreter-side %ff-call (arm64-def.lisp) is the only in-tree
-;;; linuxarm64 user.  The undo machinery already knew how to pop it —
-;;; $undo-arm64-c-frame => (! discard-c-frame) in the nlexit walker
-;;; below (previously dead: nothing opened that undo) — and the pop is
-;;; DYNAMIC (sp <- the frame's savedsp word at [sp,#8]), which is
-;;; correct both while the frame is live and after .SPffcall
-;;; (SUBPRIM-POPS) has replaced it with %%ff-result's fixed rebalance
-;;; frame.  All exits reach it: opening the undo bumps the same counter
-;;; arm642-unwind-stack treats as the catch diff, so normal falls into
-;;; arm642-nlexit, and arm642-do-return drains open undos the same way.
+;;; If the size is a compile-time constant small enough for
+;;; ALLOC-C-FRAME's single pre-indexed STP, we use that vinsn; otherwise
+;;; we use ALLOC-VARIABLE-C-FRAME.  A constant size of 64KB or more is a
+;;; compile-time error (see ARM642-CHECK-C-FRAME-SIZE).
 ;;;
-;;; ARM64-DEVIATION (vinsn choice, not operator semantics): a
-;;; compile-time-constant SIZE uses the constant alloc-c-frame vinsn,
-;;; whose single pre-indexed stp is ATOMIC w.r.t. suspension.  The
-;;; runtime-size alloc-variable-c-frame vinsn has a sub-sp/stp window
-;;; that pc_luser_xp does not finish yet (the vinsn pins header/prevsp
-;;; to imm0/imm1 for that recognizer; arm64-exceptions.c never grew the
-;;; case).  %ff-call always passes a constant; the runtime-size path has
-;;; no linuxarm64 caller today (objc-bridge is Darwin-only).  RATIFY:
-;;; implement the pc_luser_xp case before a runtime-size caller lands.
+;;; The frame is an undo point.  However BODY exits, DISCARD-C-FRAME
+;;; pops the frame by restoring the saved SP in element 0, not by using
+;;; the header's element count, which a foreign call changes (see
+;;; ARM642-C-FRAME-WORDS).
 (defarm642 arm642-with-c-frame with-c-frame (seg vreg xfer body &aux
                                                  (old-stack (arm642-encode-stack)))
   (! alloc-c-frame 0)
@@ -10103,10 +10101,12 @@
 (defarm642 arm642-with-variable-c-frame with-variable-c-frame (seg vreg xfer size body &aux
                                                                    (old-stack (arm642-encode-stack)))
   (let* ((fix (acode-fixnum-form-p size)))
+    (when (and fix (typep fix 'fixnum) (>= fix 0))
+      (arm642-check-c-frame-size fix))
     (if (and fix
              (typep fix 'fixnum)
              (>= fix 0)
-             (<= (arm642-c-frame-words fix) 63)) ;stp scaled-imm7 reach
+             (arm642-small-c-frame-p fix))
       (! alloc-c-frame fix)
       (let* ((reg (arm642-one-untargeted-reg-form seg size arm64::arg_z)))
         (! alloc-variable-c-frame reg))))

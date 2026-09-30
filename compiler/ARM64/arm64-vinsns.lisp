@@ -53,16 +53,22 @@
 ;;; ARM642-NFP-FRAME-SIZE): [header][saved tcr.nfp = element 0][data...].
 ;;;
 ;;; The frame is constant-size (ARM642-MAX-NFP-DEPTH is known at
-;;; compile time), so the pre-indexed STP builds it atomically: a GC
-;;; at any instruction boundary sees either the old SP or a complete
-;;; self-describing ivector whose header covers the whole (unboxed)
-;;; frame, so skip_over_ivector skips it.
+;;; compile time).  A frame of up to 512 bytes, the reach of the STP's
+;;; scaled imm7 displacement, is built atomically by one pre-indexed
+;;; STP: a GC at any instruction boundary sees either the old SP or a
+;;; complete self-describing ivector whose header covers the whole
+;;; (unboxed) frame, so skip_over_ivector skips it.
 ;;;
-;;; The frame must fit the STP scaled-imm7 reach (<= 512 bytes).
+;;; A larger frame is pushed with SUB SP, SP, SIZE followed by an STP
+;;; of the header and link at [SP]; pc_luser_xp completes that STP if
+;;; the thread stops between the two.  The frame is at most 32KB (the
+;;; reach of the NFP accessors' scaled offsets), so its size fits in a
+;;; MOVZ.
 (define-arm64-vinsn save-nfp (()
                               ()
                               ((header :u64)
-                               (nfp :imm)))
+                               (nfp :imm)
+                               (size :u64)))
   ((:pred > (:apply arm642-max-nfp-depth) 0)
    (ldr nfp (:@ rcontext (:$ arm64::tcr.nfp)))    ;nfp = old tcr.nfp (the link)
    (movz header (:$ (:apply logand (:apply arm642-nfp-header) #xffff)))
@@ -70,8 +76,14 @@
                             (:apply ash (:apply arm642-nfp-header) -16)
                             #xffff)
                  :lsl 16))
-   ;; create u64-vector in one instruction
-   (stp header nfp (:@! sp (:$ (:apply - (:apply arm642-nfp-frame-size)))))
+   ((:pred <= (:apply arm642-nfp-frame-size) 512)
+    ;; create u64-vector in one instruction
+    (stp header nfp (:@! sp (:$ (:apply - (:apply arm642-nfp-frame-size))))))
+   ((:pred > (:apply arm642-nfp-frame-size) 512)
+    (movz size (:$ (:apply arm642-nfp-frame-size)))
+    (sub sp sp size)
+    ;; pc_luser_xp completes this stp if we're stopped before it
+    (stp header nfp (:@ sp (:$ 0))))
    (add nfp sp (:$ 0))                           ;nfp = new frame base
    (str nfp (:@ rcontext (:$ arm64::tcr.nfp))))) ;tcr.nfp = frame base
 
@@ -82,7 +94,12 @@
   ((:pred > (:apply arm642-max-nfp-depth) 0)
    (ldr nfp (:@ sp (:$ arm64::node-size)))        ;nfp = saved link (element 0)
    (str nfp (:@ rcontext (:$ arm64::tcr.nfp)))    ;restore tcr.nfp
-   (add sp sp (:$ (:apply arm642-nfp-frame-size)))))
+   ((:pred <= (:apply arm642-nfp-frame-size) 4095)
+    (add sp sp (:$ (:apply arm642-nfp-frame-size))))
+   ((:pred > (:apply arm642-nfp-frame-size) 4095)
+    ;; beyond ADD's imm12; see SAVE-NFP for why MOVZ suffices
+    (movz nfp (:$ (:apply arm642-nfp-frame-size)))
+    (add sp sp nfp))))
 
 ;;; NFP single-float access.  The datum lives at frame-base + dnode-size +
 ;;; offset -- past the u64-vector header word and the saved-nfp link (element
@@ -281,8 +298,9 @@
 ;;; won't be gc'd out from under us.
 
 ;;; Allocate a C frame whose size is known at compile-time.  A big
-;;; frame, beyond the stp scaled-imm7 reach (>63 words), must use
-;;; alloc-variable-c-frame.
+;;; frame, beyond the stp scaled-imm7 reach (more than 64 words, or
+;;; 512 bytes), must use alloc-variable-c-frame; see
+;;; ARM642-SMALL-C-FRAME-P.
 (define-arm64-vinsn (alloc-c-frame) (()
                                      ((n-c-args :u16const))
                                      ((header :u64)
@@ -301,11 +319,10 @@
 
 ;;; Allocate a C frame whose size is specified at run-time.  We can't
 ;;; write stp imm0, imm1, [sp, sizereg]! because pre-indexing only
-;;; works with an immediate offset.
-;;;
-;;; The header and prevsp registers are pinned to imm0/imm1 so
-;;; pc_luser_xp can recognize the stp by its exact encoding and know
-;;; which registers to read from the saved context.
+;;; works with an immediate offset.  Instead, we move SP first and then
+;;; store the header and prevsp at [SP]; pc_luser_xp completes that stp
+;;; if the thread stops between the two.  AAPCS64-FF-CALL also uses this
+;;; for a frame too large for ALLOC-C-FRAME.
 (define-arm64-vinsn (alloc-variable-c-frame) (()
                                               ((n-c-args :lisp))
                                               ((header (:u64 #.arm64::imm0))
@@ -329,10 +346,6 @@
                                                ;; size and `sub sp,sp,size'
                                                ;; zeroed SP (observed in a
                                                ;; boot core, sp=0 at the stp).
-                                               ;; imm0/imm1 must keep their
-                                               ;; wiring: pc_luser_xp
-                                               ;; recognizes the stp below by
-                                               ;; its exact encoding.
                                                (size (:u64 #.arm64::imm2))
                                                (prevsp (:u64 #.arm64::imm1))))
   (add size n-c-args (:$ '6))        ;+ header + prevsp + 4-word frame
@@ -344,8 +357,7 @@
   (add header header (:$ arm64::subtag-u64-vector))
   (mov prevsp sp)
   (sub sp sp size)
-  ;; If the gc runs here, it would ordinarily get confused, but
-  ;; pc_luser_xp recognizes this case and will finish the stp.
+  ;; pc_luser_xp completes this stp if we're stopped before it
   (stp header prevsp (:@ sp (:$ 0))))
 
 ;;; Pop a C frame by restoring the saved previous SP (element 0, at SP+8).
