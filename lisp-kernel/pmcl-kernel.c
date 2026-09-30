@@ -240,11 +240,6 @@ allocate_lisp_stack(natural useable,
 {
   void *allocate_stack(natural);
   void free_stack(void *);
-  /* Guard sizes in area.h are historically 4KiB-oriented (e.g.
-     VSTACK_HARDPROT=4096, CSTACK_SOFTPROT=100<<10).  Round up to the
-     OS page size so mprotect cannot EINVAL on 16KiB Darwin arm64. */
-  softsize = (unsigned)align_to_power_of_2(softsize, log2_page_size);
-  hardsize = (unsigned)align_to_power_of_2(hardsize, log2_page_size);
   natural size = useable+softsize+hardsize;
   natural overhead;
   BytePtr base, softlimit, hardlimit;
@@ -303,6 +298,13 @@ allocate_lisp_stack_area(area_code stack_type,
   Ptr h;
   area *a = NULL;
   protected_area_ptr soft_area=NULL, hard_area=NULL;
+
+  /* The guard sizes in area.h are multiples of 4KiB.  Round them up to
+     the OS page size, so that the guard areas can be protected, and so
+     that the limits recorded in the area agree with what is actually
+     protected. */
+  softsize = (unsigned)align_to_power_of_2(softsize, log2_page_size);
+  hardsize = (unsigned)align_to_power_of_2(hardsize, log2_page_size);
 
   bottom = allocate_lisp_stack(usable, 
                                softsize, 
