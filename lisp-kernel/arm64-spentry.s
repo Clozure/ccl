@@ -738,10 +738,7 @@ spentry stack_misc_alloc
         mov     imm3, #tstack_alloc_limit
         cmp     imm1, imm3
         b.hs    9f                    /* cmplri (ppc:1093) is UNSIGNED; b.ge accepted a bit-63 size */
-        /* Push a boxed frame of imm1 bytes (built below the live tsp and
-         * published atomically).  "_nz": imm1 always includes the frame
-         * overhead + object header, so the data area is never empty. */
-        TSP_Alloc_Var_Boxed imm1, temp4
+        TSP_Alloc_Var_Boxed imm1, imm2
         str     imm0, [tsp, #tsp_frame.data_offset]  /* object header */
         add     arg_z, tsp, #(tsp_frame.data_offset + fulltag_misc)
         ret
@@ -758,7 +755,7 @@ spentry stack_misc_alloc
          * temp-frame still has a frame to pop, then heap-cons via
          * misc_alloc instead; arg_y/arg_z are unchanged, matching
          * misc_alloc's own (count, subtag) calling convention. */
-        TSP_Alloc_Fixed_Unboxed 0, temp4
+        TSP_Alloc_Fixed_Unboxed 0, imm2
         b       _SPmisc_alloc
 endsp stack_misc_alloc
 
@@ -774,9 +771,8 @@ spentry makestackblock
         mov     imm1, #tstack_alloc_limit
         cmp     imm0, imm1
         b.hs    1f                    /* cmplri (ppc:3300) is UNSIGNED; b.ge accepted a bit-63 size */
-        /* Push a raw/unboxed frame of imm0 bytes (built below the live tsp
-         * and published atomically -- see arm64-macros.s). */
-        TSP_Alloc_Var_Unboxed imm0, temp4
+        /* Push a raw/unboxed frame of imm0 bytes (see arm64-macros.s). */
+        TSP_Alloc_Var_Unboxed imm0, imm1
         mov     imm0, #macptr_header
         add     imm1, tsp, #(tsp_frame.data_offset + macptr.size)
         str     imm0, [tsp, #tsp_frame.data_offset]
@@ -787,7 +783,7 @@ spentry makestackblock
         ret
 1:      /* Too big: push one empty unboxed tsp frame, then heap-cons via
          * %new-gcable-ptr (ppc-spentry.s:3317-3321). */
-        TSP_Alloc_Fixed_Unboxed 0, temp4
+        TSP_Alloc_Fixed_Unboxed 0, imm1
         mov     nargs, #(1 << fixnumshift)      /* ppc:3319 set_nargs(1)          */
         ref_nrs_symbol fname, new_gcable_ptr    /* ppc:3320 li fname,nrs.new_gcable_ptr */
         ldr     nfn, [fname, #symbol.fcell]     /* ppc:3321 jump_fname()          */
@@ -807,11 +803,7 @@ spentry makestacklist
         cmp     imm0, imm3
         add     imm0, imm0, #tsp_frame.fixed_overhead
         b.hs    3f                    /* cmplri (ppc:3353) is UNSIGNED; b.ge accepted a bit-63 size */
-        /* Push a boxed frame of imm0 bytes (built below the live tsp and
-         * published atomically).  imm0 == fixed_overhead when arg_y=0, so the
-         * data area may be empty -- the leading-test TSP_Alloc_Var_Boxed (not
-         * the "_nz" do-while) handles that. */
-        TSP_Alloc_Var_Boxed imm0, temp4
+        TSP_Alloc_Var_Boxed imm0, imm1
         mov     imm1, arg_y                       /* count */
         cmp     imm1, #0
         mov     arg_y, arg_z                       /* initial value */
@@ -830,7 +822,7 @@ spentry makestacklist
 3:      /* Too big for the tstack: push one empty BOXED tsp frame
          * (TSP_Alloc_Fixed_Boxed(0), ppc-spentry.s:3377), then heap-cons
          * cell by cell via Cons. */
-        TSP_Alloc_Fixed_Boxed 0, temp4
+        TSP_Alloc_Fixed_Boxed 0, imm1
         mov     imm1, arg_y
         mov     arg_y, arg_z
         mov     arg_z, rnil
@@ -847,34 +839,26 @@ spentry makestacklist
         ret
 endsp makestacklist
 
-/* On entry: arg_x = element count, arg_y = subtag, arg_z = initial value
+/*
+ * On entry: arg_x = element count, arg_y = subtag, arg_z = initial value
  * (all boxed).  Allocate via misc_alloc, then tail-call %init-misc% to fill
  * the contents with the initial value.
- * ported from ppc-spentry.s:5231-5247.  lisp_frame is a plain native-SP call
- * frame (PROPOSED-CONSTANTS above); AArch64 needs no PPC-style mflr/mtlr
- * dance since x30 (lr) is directly readable/writable, so build/discard_
- * lisp_frame collapse to a plain sub/str.../ldr.../add sp sequence. */
+ */
 spentry misc_alloc_init
-        /* 16m41 PARITY NOTE: this twin keeps PPC's temp0 park and is CORRECT,
-         * but only because _SPmisc_alloc preserves temp0 -- registers survive
-         * the allocation trap, and the initval is a node, so a GC there
-         * relocates it in place.  The TSTACK twin below could not keep it:
-         * _SPstack_misc_alloc uses temp0 as its frame-zeroing cursor.  If
-         * misc_alloc ever grows a temp0 use, this breaks the same way. */
         build_lisp_frame imm0
         mov     fn, xzr
         mov     temp0, arg_z                       /* initval */
-        mov     arg_z, arg_y                        /* subtag */
-        mov     arg_y, arg_x                         /* element-count */
+        mov     arg_z, arg_y                       /* subtag */
+        mov     arg_y, arg_x                       /* element-count */
         bl      _SPmisc_alloc
         ldr     lr,  [sp, #lisp_frame.savelr]
         ldr     fn,  [sp, #lisp_frame.savefn]
         ldr     vsp, [sp, #lisp_frame.savevsp]
         add     sp, sp, #lisp_frame.size
-        mov     arg_y, temp0                    /* ppc:5246 mr arg_y,temp0        */
-        mov     nargs, #(2 << fixnumshift)      /* ppc:5245 set_nargs(2)          */
-        ref_nrs_symbol fname, init_misc         /* ppc:5244 li fname,nrs.init_misc */
-        ldr     nfn, [fname, #symbol.fcell]     /* ppc:5247 jump_fname()          */
+        mov     arg_y, temp0
+        mov     nargs, #(2 << fixnumshift)
+        ref_nrs_symbol fname, init_misc
+        ldr     nfn, [fname, #symbol.fcell]
         ldr     temp0, [nfn, #_function.code_vector]
         br      temp0
 endsp misc_alloc_init
@@ -882,16 +866,6 @@ endsp misc_alloc_init
 /* As misc_alloc_init above, but allocates on the tstack via
  * stack_misc_alloc.  ported from ppc-spentry.s:5251-5267. */
 spentry stack_misc_alloc_init
-        /* 16m41 BUG FIX (regression stage 11, DYNAMIC-EXTENT.13/14): PPC parks
-         * the initval in temp0 across the alloc (ppc:5266 mr arg_y,temp0) and
-         * that does NOT port -- our _SPstack_misc_alloc uses temp0 as the
-         * ZEROING CURSOR for the new tsp frame (`mov temp0,tsp' / `str xzr,
-         * [temp0,#8]!'), so the initval came back as a raw tstack address and
-         * init_misc type-errored.  ARM64-DEVIATION: park it on the VSTACK
-         * instead, which no callee can clobber and which the GC scans as a node
-         * (unlike a register whose safety depends on the callee's clobber set --
-         * see the note on the heap twin above).  The push precedes savevsp so an
-         * unwind restores a vsp that still covers the parked word. */
         str     arg_z, [vsp, #-node_size]!      /* park the initval */
         build_lisp_frame imm0
         mov     fn, xzr
@@ -923,11 +897,11 @@ spentry makestackblock0
         mov     imm1, #tstack_alloc_limit
         cmp     imm0, imm1
         b.hs    makestackblock0_too_big  /* cmplri (ppc:3327) is UNSIGNED; b.ge accepted a bit-63 size */
-        /* Push a raw/unboxed frame of imm0 bytes (built below the live tsp
-         * and published atomically).  The frame stays raw, so the GC skips
+        /* Push a raw/unboxed frame of imm0 bytes (see arm64-macros.s).
+         * The frame stays raw, so the GC skips
          * it -- the data-zeroing below is for the block's contents (clear-p),
          * not GC safety. */
-        TSP_Alloc_Var_Unboxed imm0, temp4
+        TSP_Alloc_Var_Unboxed imm0, imm1
         /* Zero the data area [data_offset .. old_tsp).  old_tsp = tsp + imm0
          * (Var_Unboxed preserves imm0); end (old_tsp-8) in imm1, cursor imm0. */
         add     imm1, tsp, imm0
@@ -953,7 +927,7 @@ makestackblock0_too_big:
         /* Too big: push one empty unboxed tsp frame, then heap-cons via
          * %new-gcable-ptr with clear-p=T (ppc-spentry.s:3340-3347).
          * Two args: arg_y=size, arg_z=t_value (clear-p). */
-        TSP_Alloc_Fixed_Unboxed 0, temp4
+        TSP_Alloc_Fixed_Unboxed 0, imm1
         mov     arg_y, arg_z                    /* ppc:3343 mr arg_y,arg_z (save block size) */
         add     arg_z, rnil, #t_offset          /* ppc:3344 li arg_z,t_value (clear-p = T)   */
         mov     nargs, #(2 << fixnumshift)      /* ppc:3345 set_nargs(2)          */
@@ -1026,8 +1000,8 @@ endsp makestackblock0
 
 /* (The local tsp_alloc_var_boxed macro that lived here -- which flipped the
    frame to boxed BEFORE zeroing its data, exposing garbage nodes to the GC --
-   has been replaced by TSP_Alloc_Var_Boxed in arm64-macros.s, which builds the
-   frame below the live tsp and publishes it atomically.) */
+   has been replaced by TSP_Alloc_Var_Boxed in arm64-macros.s, which keeps the
+   frame raw until its data has been zeroed.) */
 
 /*
  * The EGC write barrier family
@@ -1998,11 +1972,6 @@ spentry stkgvector
         asr imm3, temp0, #fixnumshift            /* unbox subtag */
         orr imm2, imm3, imm2                     /* header = (element_count << num_subtag_bits) | subtag */
         dnode_align imm0, imm0, (node_size + tsp_frame.fixed_overhead)
-        /* Push a boxed frame of imm0 bytes (built below the live tsp and
-           published atomically).  "_nz": imm0 always covers frame overhead +
-           object header, so the data area is never empty.  (An earlier bare
-           `sub tsp' dropped the backlink and fed tsp:=0 into a later
-           TSP_Unlink -- 16m5k wall, gdb-observed 2026-07-17.) */
         TSP_Alloc_Var_Boxed imm0, imm4
         str imm2, [tsp, #tsp_frame.data_offset]  /* store header (data_offset=16) */
         add arg_z, tsp, #(tsp_frame.data_offset + fulltag_misc)

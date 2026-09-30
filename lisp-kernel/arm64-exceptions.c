@@ -1138,6 +1138,51 @@ darwin_arm64_describe_fn(LispObj fn)
 }
 #endif
 
+/*
+ * A variable-size tsp frame push (TSP_Alloc_Var_Unboxed and
+ * TSP_Alloc_Var_Boxed in arm64-macros.s) moves tsp first and then
+ * stores the new frame's backlink and type:
+ *
+ *   mov  tmp, tsp
+ *   sub  tsp, tsp, size
+ *   stp  tmp, tmp, [tsp]
+ *
+ * Between the sub and the stp, tsp points at a frame whose backlink
+ * and type are junk.  If xp is stopped there, undo the sub and back
+ * the pc up to it, so that the push starts over when the thread
+ * resumes.  Neither tmp nor size has changed since the sub, so
+ * re-executing it is exact.  Undoing the push rather than completing
+ * the stp means that we never store to the tstack, which may be the
+ * guard page.
+ *
+ * sub tsp, tsp, Xm (shifted register, no shift)
+ *  0xCB000000 | (Rm<<16) | (Rn<<5) | Rd, with Rn = Rd = 24 (tsp)
+ *  mask Rm (20:16): mask 0xFFE0FFFF, match 0xCB000318
+ *
+ * stp Xt, Xt2, [tsp] (signed offset, 64-bit, imm7 = 0)
+ *  0xA9000000 | (Rt2<<10) | (Rn<<5) | Rt, with Rn = 24 (tsp)
+ *  mask Rt (4:0) and Rt2 (14:10): mask 0xFFFF83E0, match 0xA9000300
+ */
+#define IS_SUB_TSP_TSP_REG(i) (((i) & 0xFFE0FFFF) == 0xCB000318)
+#define IS_STP_PAIR_TO_TSP0(i) (((i) & 0xFFFF83E0) == 0xA9000300)
+
+static Boolean
+rollback_tsp_frame_push(ExceptionInformation *xp)
+{
+  pc program_counter = xpPC(xp);
+
+  if (IS_STP_PAIR_TO_TSP0(program_counter[0]) &&
+      IS_SUB_TSP_TSP_REG(program_counter[-1])) {
+    unsigned rm = (program_counter[-1] >> 16) & 0x1f;
+
+    /* Register 31 in the Rm field is XZR. */
+    xpGPR(xp, Rtsp) += (rm == 31) ? 0 : xpGPR(xp, rm);
+    xpPC(xp) = program_counter - 1;
+    return true;
+  }
+  return false;
+}
+
 OSStatus
 handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr, int old_valence)
 {                                 /* ppc-exceptions.c:927-974 */
@@ -1217,6 +1262,17 @@ handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr,
     }
   }
 #endif
+
+  /*
+   * A fault on the stp of a variable-size tsp frame push leaves tsp
+   * pointing at a frame with no backlink.  Roll back construction of
+   * the tsp frame before we run lisp code (which may itself push tsp
+   * frames or run the gc) on this thread.  pc_luser_xp() won't do it
+   * for us: it isn't applied to this thread's own fault context.  (If
+   * pc_luser_xp() already rolled it back while we were waiting for the
+   * exception lock, the pc is at the sub and this does nothing.)
+   */
+  rollback_tsp_frame_push(xp);
 
   if (is_write_fault(xp,info)) {                  /* ppc:956-969 */
     area = find_protected_area(addr);
@@ -2526,6 +2582,12 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     /* Barrier subprims are leaves: returning to LR skips the remaining
        asm barrier (the memoization just happened here).  ppc:1977 */
     set_xpPC(xp, xpLR(xp));
+    return;
+  }
+
+  /* Were we between the sub and the stp of a variable-size tsp frame
+     push?  If so, undo the push; it will start over on resume. */
+  if (rollback_tsp_frame_push(xp)) {
     return;
   }
 
