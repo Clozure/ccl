@@ -2045,7 +2045,8 @@
            (unscaled-i)
            (unscaled-j)
            (constidx
-            (and dim0 dim1 i-known-fixnum j-known-fixnum
+            (and *arm642-reckless*
+                 dim0 dim1 i-known-fixnum j-known-fixnum
                  (>= i-known-fixnum 0)
                  (>= j-known-fixnum 0)
                  (< i-known-fixnum dim0)

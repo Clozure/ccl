@@ -2343,7 +2343,7 @@
         (x862-aset2-via-gvset seg vreg xfer array i j new safe type-keyword
                               constval simple)
         (let* ((constidx
-                 (and simple
+                 (and *x862-reckless* simple
                       dim0 dim1 i-known-fixnum j-known-fixnum
                       (>= i-known-fixnum 0)
                       (>= j-known-fixnum 0)
@@ -2438,7 +2438,7 @@
            (unscaled-k)
            (val-reg (x862-target-reg-for-aset vreg type-keyword))
            (constidx
-            (and simple
+            (and *x862-reckless* simple
                  dim0 dim1 dim2 i-known-fixnum j-known-fixnum k-known-fixnum
                  (>= i-known-fixnum 0)
                  (>= j-known-fixnum 0)
@@ -2528,7 +2528,7 @@
            (unscaled-j)
            (continue-label (backend-get-next-label))
            (constidx
-            (and simple
+            (and *x862-reckless* simple
                  dim0 dim1 i-known-fixnum j-known-fixnum
                  (>= i-known-fixnum 0)
                  (>= j-known-fixnum 0)
@@ -2592,7 +2592,7 @@
            (unscaled-j)
            (unscaled-k)
            (constidx
-            (and simple
+            (and *x862-reckless* simple
                  dim0 dim1 dim2 i-known-fixnum j-known-fixnum k-known-fixnum
                  (>= i-known-fixnum 0)
                  (>= j-known-fixnum 0)
