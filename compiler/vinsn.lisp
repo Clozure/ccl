@@ -306,6 +306,7 @@
     :nfp                                ; references the nfp
     :predicatable                       ; all instructions can be predicated, no instructions set or test condition codes.
     :sets-lr                            ; uses the link register, if there is one.
+    :nfp-two-words                      ; uses a two-word nfp slot (e.g., complex-double-float)
     )))
 
 

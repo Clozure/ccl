@@ -42,7 +42,7 @@
                 (when (and v (vinsn-succ v))    ;not elided
                   (let* ((depth (+ (the fixnum
                                         (svref (vinsn-variable-parts v) 1))
-                                   (if (vinsn-attribute-p v :uses-frame-pointer)
+                                   (if (vinsn-attribute-p v :nfp-two-words)
                                      16
                                      8))))
                     (declare (fixnum depth))
@@ -56,11 +56,20 @@
 ;;;   word 2.. (elt 1..): unboxed NFP data (ARM642-MAX-NFP-DEPTH bytes)
 ;;; Data therefore lives at frame-base + (2 * node-size) + offset.  The whole
 ;;; frame is rounded up to a dnode so SP stays 16-byte aligned.
+;;;
+;;; The frame is pushed after the function's control-stack overflow
+;;; check, so limit it to 32KB, to keep it well within the unprotected
+;;; zones below cs_limit (see also ARM642-CHECK-C-FRAME-SIZE).
 (defun arm642-nfp-frame-size ()
-  (logandc2 (+ (arm642-max-nfp-depth)
-               (* 2 arm64::node-size)           ;header + saved-nfp
-               (1- arm64::dnode-size))
-            (1- arm64::dnode-size)))
+  (let* ((nbytes (logandc2 (+ (arm642-max-nfp-depth)
+                              (* 2 arm64::node-size) ;header + saved-nfp
+                              (1- arm64::dnode-size))
+                           (1- arm64::dnode-size))))
+    (when (> nbytes 32768)
+      (nx-error "Function needs a ~d-byte frame for unboxed temporaries, ~
+                 which exceeds the 32KB limit."
+                nbytes))
+    nbytes))
 
 (defun arm642-nfp-header ()
   ;; u64-vector header whose element count covers the whole frame, so
@@ -243,7 +252,7 @@
                       :u64)))
          (setq vinsn
                (if nested
-                 (! nfp-load-unboxed-word-nested reg offset)
+                 (! nfp-load-unboxed-word-nested reg offset arm64::nargs)
                  (! nfp-load-unboxed-word reg offset))))
         (#. memspec-nfp-type-double-float
          (unless (and (eql vreg-class hard-reg-class-fpr)
@@ -253,7 +262,7 @@
                       :double-float)))
          (setq vinsn
                (if nested
-                 (! nfp-load-double-float-nested reg offset)
+                 (! nfp-load-double-float-nested reg offset arm64::nargs)
                  (! nfp-load-double-float reg offset))))
         (#. memspec-nfp-type-single-float
          (unless (and (eql vreg-class hard-reg-class-fpr)
@@ -263,7 +272,7 @@
                       :single-float)))
          (setq vinsn
                (if nested
-                 (! nfp-load-single-float-nested reg offset)
+                 (! nfp-load-single-float-nested reg offset arm64::nargs)
                  (! nfp-load-single-float  reg offset))))
         (#. memspec-nfp-type-complex-double-float
          (unless (and (eql vreg-class hard-reg-class-fpr)
@@ -274,8 +283,8 @@
                       :complex-double-float)))
          (setq vinsn
                (if nested
-                 (! nfp-load-complex-double-float-nested reg offset)
-                 (! nfp-load-complex-double-float reg offset))))
+                 (! nfp-load-complex-double-float-nested reg offset arm64::nargs)
+                 (! nfp-load-complex-double-float reg offset arm64::nargs))))
         (#. memspec-nfp-type-complex-single-float
          (unless (and (eql vreg-class hard-reg-class-fpr)
                       (eql vreg-mode
@@ -285,7 +294,7 @@
                       :complex-single-float)))
          (setq vinsn
                (if nested
-                 (! nfp-load-complex-single-float-nested reg offset)
+                 (! nfp-load-complex-single-float-nested reg offset arm64::nargs)
                  (! nfp-load-complex-single-float  reg offset)))))
       (when (memspec-single-ref-p ea)
         (let* ((push-vinsn
@@ -343,23 +352,23 @@
       (ecase (logand #x7 ea)
         (#. memspec-nfp-type-natural
             (if nested
-              (! nfp-store-unboxed-word-nested reg offset)
+              (! nfp-store-unboxed-word-nested reg offset arm64::nargs)
               (! nfp-store-unboxed-word reg offset)))
         (#. memspec-nfp-type-double-float
             (if nested
-              (! nfp-store-double-float-nested reg offset)
+              (! nfp-store-double-float-nested reg offset arm64::nargs)
               (! nfp-store-double-float reg offset)))
         (#. memspec-nfp-type-single-float
             (if nested
-              (! nfp-store-single-float-nested reg offset)
+              (! nfp-store-single-float-nested reg offset arm64::nargs)
               (! nfp-store-single-float  reg offset)))
         (#. memspec-nfp-type-complex-double-float
             (if nested
-              (! nfp-store-complex-double-float-nested reg offset)
-              (! nfp-store-complex-double-float reg offset)))
+              (! nfp-store-complex-double-float-nested reg offset arm64::nargs)
+              (! nfp-store-complex-double-float reg offset arm64::nargs)))
         (#. memspec-nfp-type-complex-single-float
             (if nested
-              (! nfp-store-complex-single-float-nested reg offset)
+              (! nfp-store-complex-single-float-nested reg offset arm64::nargs)
               (! nfp-store-complex-single-float reg offset)))))))
 
 ;;; Depending on the variable's type and other attributes, maybe
@@ -3318,7 +3327,7 @@
                   (case fpr-mode-name
                     ((:double-float :complex-single-float)
                      (if nested
-                       (! nfp-store-double-float-nested areg offset)
+                       (! nfp-store-double-float-nested areg offset arm64::nargs)
                        (! nfp-store-double-float areg offset)))
                     (:complex-double-float
                      ;; Store the 16-byte value at OFFSET (its slot base), THEN
@@ -3330,15 +3339,15 @@
                      ;; at the slot base.
                      (prog1
                          (if nested
-                           (! nfp-store-complex-double-float-nested areg offset)
-                           (! nfp-store-complex-double-float areg offset))
+                           (! nfp-store-complex-double-float-nested areg offset arm64::nargs)
+                           (! nfp-store-complex-double-float areg offset arm64::nargs))
                        (incf offset 8)))
                     (:single-float
                      (if nested
-                       (! nfp-store-single-float-nested areg offset)
+                       (! nfp-store-single-float-nested areg offset arm64::nargs)
                        (! nfp-store-single-float areg offset))))
                   (if nested
-                    (! nfp-store-unboxed-word-nested areg offset)
+                    (! nfp-store-unboxed-word-nested areg offset arm64::nargs)
                     (! nfp-store-unboxed-word areg offset))))
           (push vinsn *arm642-all-nfp-pushes*)
           (incf offset 8)
@@ -3372,19 +3381,19 @@
                   (case fpr-mode-name
                     ((:double-float :complex-single-float)
                      (if nested
-                       (! nfp-load-double-float-nested areg offset)
+                       (! nfp-load-double-float-nested areg offset arm64::nargs)
                        (! nfp-load-double-float areg offset)))
                     (:complex-double-float
                      (decf offset 8)
                      (if nested
-                       (! nfp-load-complex-double-float-nested areg offset)
-                       (! nfp-load-complex-double-float areg offset)))
+                       (! nfp-load-complex-double-float-nested areg offset arm64::nargs)
+                       (! nfp-load-complex-double-float areg offset arm64::nargs)))
                     (:single-float
                      (if nested
-                       (! nfp-load-single-float-nested areg offset)
+                       (! nfp-load-single-float-nested areg offset arm64::nargs)
                        (! nfp-load-single-float areg offset))))
                   (if nested
-                    (! nfp-load-unboxed-word-nested areg offset)
+                    (! nfp-load-unboxed-word-nested areg offset arm64::nargs)
                     (! nfp-load-unboxed-word areg offset))))
           (setq *arm642-nfp-depth* offset)))
       vinsn)))
@@ -3499,7 +3508,7 @@
               (when pair
                 (setf (car pair) nil)))
             (when nested
-              (let* ((size (if (vinsn-attribute-p push-vinsn :uses-frame-pointer)
+              (let* ((size (if (vinsn-attribute-p push-vinsn :nfp-two-words)
                              16
                              8)))
                 (declare (fixnum size))
