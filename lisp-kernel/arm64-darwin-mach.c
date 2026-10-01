@@ -130,6 +130,7 @@ typedef struct {
 extern void pseudo_sigreturn(void);
 extern Boolean create_system_thread(size_t, void *, void *(*)(void *), void *);
 extern void signal_handler(int, siginfo_t *, ExceptionInformation *, TCR *, int);
+extern void raise_pending_interrupt(TCR *);
 extern Boolean use_mach_exception_handling;
 void fatal_mach_error(char *format, ...);
 
@@ -294,8 +295,11 @@ do_pseudo_sigreturn(mach_port_t thread, TCR *tcr, native_thread_state_t *out)
     if (fxs)
       tcr->last_lisp_frame = fxs->saved_last_lisp_frame;
     restore_mach_thread_state(thread, xp, out);
-    if ((TCR_INTERRUPT_LEVEL(tcr) >= 0) && tcr->interrupt_pending)
-      pthread_kill((pthread_t)(tcr->osid), SIGNAL_FOR_PROCESS_INTERRUPT);
+    /* An interrupt that arrived while this thread was handling the
+       exception was deferred by setting its interrupt level to 1 (see
+       interrupt_handler); re-raise it, as signal_handler does on the
+       Unix signal path. */
+    raise_pending_interrupt(tcr);
   } else {
     Bug(NULL, "no xp here!\n");
   }
