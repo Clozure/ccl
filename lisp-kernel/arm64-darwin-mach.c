@@ -422,6 +422,22 @@ catch_mach_exception_raise(mach_port_t exception_port,
   return KERN_FAILURE;
 }
 
+/*
+ * Is a handler other than SIG_DFL or SIG_IGN installed for SIGNUM?
+ * This runs on the exception server thread, not in a signal context,
+ * while the faulting thread is suspended.
+ */
+static Boolean
+foreign_signal_handler_installed(int signum)
+{
+  struct sigaction sa;
+
+  if (sigaction(signum, NULL, &sa) != 0) {
+    return false;
+  }
+  return (sa.sa_handler != SIG_DFL) && (sa.sa_handler != SIG_IGN);
+}
+
 kern_return_t
 catch_mach_exception_raise_state(mach_port_t exception_port,
                                  exception_type_t exception,
@@ -540,7 +556,24 @@ catch_mach_exception_raise_state(mach_port_t exception_port,
         signum = SIGSEGV;
       break;
     case EXC_BAD_INSTRUCTION:
-      /* udf #n → EXC_ARM_UNDEFINED → SIGILL (UUO path). */
+      /*
+       * An illegal instruction in foreign code that has installed its
+       * own SIGILL handler is that code's business: OpenSSL, for one,
+       * probes for CPU features by executing instructions that may
+       * not exist and catching the SIGILL.  Decline the exception, so
+       * that the kernel delivers a SIGILL to that handler.  (Because
+       * we catch illegal instruction exceptions here via Mach
+       * exception handling, CCL doesn't install a SIGILL handler.)
+       */
+      if ((tcr->valence == TCR_STATE_FOREIGN) &&
+          foreign_signal_handler_installed(SIGILL)) {
+        /* leave signum at 0 */
+        break;
+      }
+      /*
+       * A udf #n instruction (which we use for UUOs) lands here.
+       * Other illegal instructions do too, of course.
+       */
       signum = SIGILL;
       break;
     case EXC_SOFTWARE:
@@ -564,6 +597,11 @@ catch_mach_exception_raise_state(mach_port_t exception_port,
                                 ts,
                                 out_ts);
     } else {
+      /*
+       * Decline the exception.  I believe that any reply other than
+       * KERN_SUCCESS suffices to do that; 17 is what previous CCL
+       * ports have used, so cargo-cult it forward.
+       */
       kret = 17;
     }
   }
