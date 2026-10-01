@@ -49,7 +49,7 @@ ASMOBJ = arm64-asmutils.o arm64-imports.o
 COBJ  = pmcl-kernel.o gc-common.o arm64-gc.o bits.o  arm64-exceptions.o \
 	image.o thread_manager.o lisp-debug.o memory.o unix-calls.o
 
-DEBUGOBJ = lispdcmd.o plprint.o plsym.o albt.o arm64-print.o
+DEBUGOBJ = lispdcmd.o plprint.o plsym.o arm64-lbt.o arm64-print.o
 KERNELOBJ= $(COBJ) arm64-asmutils.o  arm64-imports.o
 
 SPINC =	lisp.s arm64-constants.h arm64-macros.s errors.s arm64-uuo.s \

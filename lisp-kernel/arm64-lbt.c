@@ -1,32 +1,15 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 /*
- * Copyright 1994-2009 Clozure Associates
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Lisp backtrace for arm64.  (albt.c is the 32-bit ARM version.)
  */
 
 #include "lispdcmd.h"
-#ifdef LINUX
-#define __USE_GNU 1
-#endif
-
-#ifndef WINDOWS
 #include <dlfcn.h>
-#endif
-
 
 extern Boolean lisp_frame_p(lisp_frame *);
 
-void
+static void
 print_lisp_frame(lisp_frame *frame)
 {
   LispObj fun = frame->savefn, rpc = frame->savelr;
@@ -36,7 +19,6 @@ print_lisp_frame(lisp_frame *frame)
 
   if ((fun == 0) || (fun == fulltag_misc)) {
     spname = "unknown ?";
-#ifndef STATIC
     if (dladdr((void *)ptr_from_lispobj(rpc), &info)) {
       spname = (char *)(info.dli_sname);
 #ifdef DARWIN
@@ -45,33 +27,33 @@ print_lisp_frame(lisp_frame *frame)
       }
 #endif
     }
-#endif
-    Dprintf("(#x%08X) #x%08X : (subprimitive %s)", frame, rpc, spname);
+    Dprintf("(#x%016lX) #x%016lX : (subprimitive %s)", (natural)frame, rpc,
+            spname);
   } else {
     if ((fulltag_of(fun) != fulltag_misc) ||
         (header_subtag(header_of(fun)) != subtag_function)) {
-      Dprintf("(#x%08X) #x%08X : (not a function!)", frame, rpc);
+      Dprintf("(#x%016lX) #x%016lX : (not a function!)", (natural)frame, rpc);
     } else {
-      LispObj code_vector = deref(fun, 2);
-      
+      /* A function is a header followed by its code vector. */
+      LispObj code_vector = deref(fun, 1);
+
       if ((rpc >= (code_vector+misc_data_offset)) &&
-          (rpc < ((code_vector+misc_data_offset)+(header_element_count(header_of(code_vector))<<2)))) {
+          (rpc < ((code_vector+misc_data_offset) +
+                  (header_element_count(header_of(code_vector))<<2)))) {
         delta = (rpc - (code_vector+misc_data_offset));
       }
-      Dprintf("(#x%08X) #x%08X : %s + %d", frame, rpc, print_lisp_object(fun), delta);
+      Dprintf("(#x%016lX) #x%016lX : %s + %d", (natural)frame, rpc,
+              print_lisp_object(fun), delta);
     }
   }
 }
 
-
-
-
-/* Walk frames from "start" to "end". 
-   Say whatever can be said about foreign frames and lisp frames.
-*/
-
-void
-walk_stack_frames(lisp_frame *start, lisp_frame *end) 
+/*
+ * Walk frames from "start" to "end".  Say whatever can be said about
+ * foreign frames and lisp frames.
+ */
+static void
+walk_stack_frames(lisp_frame *start, lisp_frame *end)
 {
   lisp_frame *next;
   Dprintf("\n");
@@ -79,7 +61,7 @@ walk_stack_frames(lisp_frame *start, lisp_frame *end)
 
     if (lisp_frame_p(start)) {
       print_lisp_frame(start);
-      next = start + 1;      
+      next = start + 1;
     } else {
       LispObj *current = (LispObj *)start,
         header = *current;
@@ -96,7 +78,7 @@ walk_stack_frames(lisp_frame *start, lisp_frame *end)
       } else if (header == stack_alloc_marker) {
         next = (lisp_frame *)(current[1]);
       } else {
-        fprintf(dbgout, "Bad frame! (0x%x)\n", start);
+        fprintf(dbgout, "Bad frame! (0x%lx)\n", (natural)start);
         next = end;
       }
     }
@@ -104,7 +86,7 @@ walk_stack_frames(lisp_frame *start, lisp_frame *end)
   }
 }
 
-char *
+static char *
 interrupt_level_description(TCR *tcr)
 {
   signed_natural level = (signed_natural) TCR_INTERRUPT_LEVEL(tcr);
@@ -119,15 +101,16 @@ interrupt_level_description(TCR *tcr)
   }
 }
 
-void
-walk_other_areas()
+static void
+walk_other_areas(void)
 {
   TCR *start = (TCR *)get_tcr(true), *tcr = start->next;
   area *a;
-  char *ilevel = interrupt_level_description(tcr);
+  char *ilevel;
 
   while (tcr != start) {
     a = tcr->cs_area;
+    ilevel = interrupt_level_description(tcr);
     Dprintf("\n\n TCR = 0x%lx, cstack area #x%lx,  native thread ID = 0x%lx, interrupts %s", tcr, a,  tcr->native_thread_id, ilevel);
     walk_stack_frames((lisp_frame *) (a->active), (lisp_frame *) (a->high));
     tcr = tcr->next;
@@ -138,26 +121,23 @@ void
 plbt_sp(LispObj currentSP)
 {
   area *cs_area;
-  
-{
-    TCR *tcr = (TCR *)get_tcr(true);
-    char *ilevel = interrupt_level_description(tcr);
-    cs_area = tcr->cs_area;
-    if ((((LispObj) ptr_to_lispobj(cs_area->low)) > currentSP) ||
-        (((LispObj) ptr_to_lispobj(cs_area->high)) < currentSP)) {
-      Dprintf("\nStack pointer [#x%lX] in unknown area.", currentSP);
-    } else {
-      fprintf(dbgout, "current thread: tcr = 0x%lx, native thread ID = 0x%lx, interrupts %s\n", tcr, tcr->native_thread_id, ilevel);
-      walk_stack_frames((lisp_frame *) ptr_from_lispobj(currentSP), (lisp_frame *) (cs_area->high));
-      walk_other_areas();
-    }
-  } 
+
+  TCR *tcr = (TCR *)get_tcr(true);
+  char *ilevel = interrupt_level_description(tcr);
+  cs_area = tcr->cs_area;
+  if ((((LispObj) ptr_to_lispobj(cs_area->low)) > currentSP) ||
+      (((LispObj) ptr_to_lispobj(cs_area->high)) < currentSP)) {
+    Dprintf("\nStack pointer [#x%lX] in unknown area.", currentSP);
+  } else {
+    fprintf(dbgout, "current thread: tcr = 0x%lx, native thread ID = 0x%lx, interrupts %s\n", tcr, tcr->native_thread_id, ilevel);
+    walk_stack_frames((lisp_frame *) ptr_from_lispobj(currentSP),
+                      (lisp_frame *) (cs_area->high));
+    walk_other_areas();
+  }
 }
 
-  
 void
 plbt(ExceptionInformation *xp)
 {
-  plbt_sp(xpGPR(xp, Rsp));
+  plbt_sp(xpSP(xp));
 }
-    

@@ -1,0 +1,20 @@
+# load with "command source <this file>"
+
+process handle --notify false --pass true --stop false SIGKILL SIGILL SIGSEGV SIGBUS SIGFPE SIGUSR1 SIGUSR2 SIGEMT
+
+command alias arg_x expr print_lisp_object($x9)
+command alias arg_y expr print_lisp_object($x10)
+command alias arg_z expr print_lisp_object($x11)
+command alias fn expr print_lisp_object($x7)
+
+command alias lbt expr plbt_sp($sp)
+
+# this doesn't work until a target is defined
+target stop-hook add --one-liner "disassemble --pc"
+
+# Ignore certain Mach exceptions (separated by the pipe character)
+# Use for debugging Unix signal handlers
+#settings set platform.plugin.darwin.ignored-exceptions EXC_BAD_INSTRUCTION|EXC_BAD_ACCESS
+
+# Might want this sometimes
+# settings set target.disable-aslr false
