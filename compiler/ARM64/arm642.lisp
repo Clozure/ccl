@@ -8850,6 +8850,7 @@
 
 (defarm642 arm642-lambda-bind lambda-bind (seg vreg xfer vals req rest keys-p auxen body p2decls)
   (let* ((old-stack (arm642-encode-stack))
+         (*arm642-nfp-depth* *arm642-nfp-depth*)
          (nreq (list-length req))
          (rest-arg (nthcdr nreq vals))
          (apply-body (arm642-eliminate-&rest body rest keys-p auxen rest-arg)))
