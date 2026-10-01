@@ -369,15 +369,24 @@ a given process."
   (let* ((exited nil)
 	 (kill (handler-case
 		   (restart-case
-		    (let ((values
-                           (multiple-value-list
-                            (apply (car initial-form)
-                                   (cdr (the list initial-form)))))
-                          (result (process-result process)))
-                      (setf (cdr result) values
-                            (car result) t)
-		      (setq exited t)
-		      nil)
+                    (progn
+                      ;; Now that interrupts are enabled, and the
+                      ;; restarts and handlers that interrupt functions
+                      ;; may use are in place, let THREAD-INTERRUPT
+                      ;; signal us, and run any interrupts that it
+                      ;; queued while we were starting.
+                      (thread-change-state (process-thread process)
+                                           :starting :run)
+                      (thread-handle-interrupts)
+                      (let ((values
+                             (multiple-value-list
+                              (apply (car initial-form)
+                                     (cdr (the list initial-form)))))
+                            (result (process-result process)))
+                        (setf (cdr result) values
+                              (car result) t)
+                        (setq exited t)
+                        nil))
                     (abort-break () :report "Reset this thread")
 		    (abort () :report "Kill this thread" (setq exited t)))
 		 (process-reset (condition)

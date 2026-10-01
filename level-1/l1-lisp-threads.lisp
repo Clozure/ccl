@@ -164,6 +164,8 @@
   
 (defun thread-make-startup-function (thread tcr)
   #'(lambda ()
+      ;; A thread that THREAD-ENABLE activated stays :STARTING until
+      ;; RUN-PROCESS-INITIAL-FORM is ready for interrupts.
       (thread-change-state thread :reset :run)
       (let* ((*current-lisp-thread* thread)
 	     (initial-function (lisp-thread.initial-function.args thread)))
@@ -366,6 +368,14 @@
 	     (push (cons function args)
 		   (lisp-thread.interrupt-functions thread))
 	     (eql 0 (%tcr-interrupt tcr))))))
+      (:starting
+       ;; The thread has been enabled, but isn't ready to take an
+       ;; interrupt yet.  Queue the function; the thread runs it just
+       ;; before its initial function (see RUN-PROCESS-INITIAL-FORM).
+       (with-lock-grabbed ((lisp-thread.interrupt-lock thread))
+	 (push (cons function args)
+	       (lisp-thread.interrupt-functions thread)))
+       t)
       (:reset
        ;; Preset the thread with a function that'll return to the :reset
        ;; state
@@ -410,6 +420,10 @@
         (%set-tcr-toplevel-function
          tcr
          (lisp-thread.startup-function thread))
+        ;; The thread stays :STARTING until RUN-PROCESS-INITIAL-FORM is
+        ;; ready for interrupts, so that THREAD-INTERRUPT won't mistake
+        ;; it for a thread that's in the :RESET state.
+        (thread-change-state thread :reset :starting)
         (%activate-tcr tcr termination-semaphore allocation-quantum)
         thread))))
 			      
@@ -418,6 +432,9 @@
   (let* ((flags (%fixnum-ref tcr (- target::tcr.flags
 				    target::tcr-bias))))
     (declare (fixnum flags))
+    ;; A thread that exits before RUN-PROCESS-INITIAL-FORM gets going
+    ;; is still :STARTING.
+    (thread-change-state thread :starting :run)
     (if (logbitp arch::tcr-flag-bit-awaiting-preset flags)
       (thread-change-state thread :run :reset)
       (with-lock-grabbed ((lisp-thread.state-change-lock thread))
