@@ -682,21 +682,56 @@ update_area_active (area **aptr, BytePtr value)
   }
 }
 
+static Boolean foreign_exception_context_p(TCR *);
+
+/*
+ * Return the context holding a suspended tcr's lisp state (its sp,
+ * vsp, allocptr, and so on), or NULL if the thread is in foreign
+ * code and that state is in the tcr itself.
+ *
+ * - If the thread was taking an exception from lisp code, then
+ *   pending_exception_context is the context of the exception.
+ *
+ * - If the thread was taking an exception from foreign code, then
+ *   pending_exception_context's registers belong to C code.  The
+ *   thread is in foreign code as far as lisp is concerned.
+ *
+ * - If the thread was just minding its own business running lisp
+ *   code, then suspend_context holds its registers at the moment of
+ *   suspension.
+ *
+ * - If the thread was in foreign code (an ff-call, or the exception
+ *   handler's own C code), then the code that left lisp saved the
+ *   lisp state in the tcr.
+ */
+static ExceptionInformation *
+tcr_lisp_context(TCR *tcr)
+{
+  if (tcr->pending_exception_context) {
+    if (foreign_exception_context_p(tcr)) {
+      return NULL;
+    }
+    return tcr->pending_exception_context;
+  }
+  if (tcr->valence == TCR_STATE_LISP) {
+    return tcr->suspend_context;
+  }
+  return NULL;
+}
+
+/*
+ * Return the address of the suspended tcr's youngest lisp frame on
+ * the control stack, i.e., where a backtrace of that thread should
+ * start.
+ */
 LispObj *
 tcr_frame_ptr(TCR *tcr)
 {
-  ExceptionInformation *xp;
-  LispObj *bp = NULL;
+  ExceptionInformation *xp = tcr_lisp_context(tcr);
 
-  if (tcr->pending_exception_context)
-    xp = tcr->pending_exception_context;
-  else {
-    xp = tcr->suspend_context;
-  }
-  if (xp) {
-    bp = (LispObj *) xpGPR(xp, Rsp);
-  }
-  return bp;
+  if (xp)
+    return (LispObj *) xpGPR(xp, Rsp);
+  return (LispObj *) tcr->last_lisp_frame;
 }
 
 void
@@ -769,16 +804,7 @@ gc_like_from_xp(ExceptionInformation *xp,
 
 
   for (other_tcr = tcr->next; other_tcr != tcr; other_tcr = other_tcr->next) {
-    if (other_tcr->pending_exception_context) {
-      other_tcr->gc_context = other_tcr->pending_exception_context;
-    } else if (other_tcr->valence == TCR_STATE_LISP) {
-      other_tcr->gc_context = other_tcr->suspend_context;
-    } else {
-      /* no pending exception, didn't suspend in lisp state:
-	 must have executed a synchronous ff-call. 
-      */
-      other_tcr->gc_context = NULL;
-    }
+    other_tcr->gc_context = tcr_lisp_context(other_tcr);
     normalize_tcr(other_tcr->gc_context, other_tcr, true);
   }
     
@@ -1371,6 +1397,53 @@ handle_error(ExceptionInformation *xp, unsigned arg1, unsigned arg2, int *bumpP)
    (This is to handle the case where another thread is trying
    to GC before this thread is able to sieze the exception lock.)
 */
+/*
+ * While a thread isn't running lisp code, its lisp frames on the
+ * control stack start at tcr->last_lisp_frame.  The code that leaves
+ * lisp (ff-call, callbacks) maintains that, and so must an exception
+ * handler.
+ *
+ * An exception taken in lisp code leaves lisp at the faulting sp, so
+ * that's where the lisp frames start.  An exception taken in foreign
+ * code (or in a handler's own C code) leaves last_lisp_frame alone:
+ * the faulting sp is somewhere in C frames below it.  In that case,
+ * the exception context's registers say nothing about the thread's
+ * lisp state either, so set TCR_FLAG_BIT_FOREIGN_EXCEPTION_CONTEXT
+ * to tell the GC to treat the thread as it would any other thread in
+ * foreign code.
+ *
+ * Callers save last_lisp_frame and the flag before calling this, and
+ * restore them with restore_exception_boundary() when the handler
+ * returns.
+ */
+static void
+note_exception_boundary(TCR *tcr, ExceptionInformation *xp, int old_valence)
+{
+  if (old_valence == TCR_STATE_LISP) {
+    tcr->last_lisp_frame = xpGPR(xp, Rsp);
+    CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_FOREIGN_EXCEPTION_CONTEXT);
+  } else {
+    SET_TCR_FLAG(tcr, TCR_FLAG_BIT_FOREIGN_EXCEPTION_CONTEXT);
+  }
+}
+
+static void
+restore_exception_boundary(TCR *tcr, natural last_lisp_frame, Boolean foreign)
+{
+  tcr->last_lisp_frame = last_lisp_frame;
+  if (foreign) {
+    SET_TCR_FLAG(tcr, TCR_FLAG_BIT_FOREIGN_EXCEPTION_CONTEXT);
+  } else {
+    CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_FOREIGN_EXCEPTION_CONTEXT);
+  }
+}
+
+static Boolean
+foreign_exception_context_p(TCR *tcr)
+{
+  return (tcr->flags & (1L << TCR_FLAG_BIT_FOREIGN_EXCEPTION_CONTEXT)) != 0;
+}
+
 int
 prepare_to_wait_for_exception_lock(TCR *tcr, ExceptionInformation *context)
 {
@@ -1419,7 +1492,8 @@ raise_pending_interrupt(TCR *tcr)
 }
 
 void
-exit_signal_handler(TCR *tcr, int old_valence, natural old_last_lisp_frame)
+exit_signal_handler(TCR *tcr, int old_valence, natural old_last_lisp_frame,
+                    Boolean old_foreign)
 {
 #ifndef ANDROID
   sigset_t mask;
@@ -1431,7 +1505,7 @@ exit_signal_handler(TCR *tcr, int old_valence, natural old_last_lisp_frame)
   pthread_sigmask(SIG_SETMASK,(sigset_t *)&mask, NULL);
   tcr->valence = old_valence;
   tcr->pending_exception_context = NULL;
-  tcr->last_lisp_frame = old_last_lisp_frame;
+  restore_exception_boundary(tcr, old_last_lisp_frame, old_foreign);
 }
 
 
@@ -1455,10 +1529,15 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
     */
     
     natural  old_last_lisp_frame = tcr->last_lisp_frame;
-    int old_valence;
+    Boolean old_foreign = foreign_exception_context_p(tcr);
+    int old_valence = tcr->valence;
 
-    tcr->last_lisp_frame = xpGPR(context,Rsp);
-    old_valence = prepare_to_wait_for_exception_lock(tcr, context);
+    note_exception_boundary(tcr, context, old_valence);
+    prepare_to_wait_for_exception_lock(tcr, context);
+#else
+    /* The Mach exception code that called this (no longer present)
+       saved last_lisp_frame itself. */
+    Boolean old_foreign = foreign_exception_context_p(tcr);
 #endif
 
   if (tcr->flags & (1<<TCR_FLAG_BIT_PENDING_SUSPEND)) {
@@ -1483,7 +1562,7 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
      be updated.  (That's only of concern if it happens before we
      can return to the kernel/to the Mach exception handler).
   */
-  exit_signal_handler(tcr, old_valence, old_last_lisp_frame);
+  exit_signal_handler(tcr, old_valence, old_last_lisp_frame, old_foreign);
   raise_pending_interrupt(tcr);
 }
 
@@ -1907,8 +1986,9 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 	  int old_valence;
           signed_natural disp=0;
           natural old_last_lisp_frame = tcr->last_lisp_frame;
+          Boolean old_foreign = foreign_exception_context_p(tcr);
 	  
-          tcr->last_lisp_frame = xpGPR(context,Rsp);
+          note_exception_boundary(tcr, context, TCR_STATE_LISP);
 	  pc_luser_xp(context, tcr, &disp);
 	  old_valence = prepare_to_wait_for_exception_lock(tcr, context);
 	  wait_for_exception_lock_in_handler(tcr, context, &xframe_link);
@@ -1917,7 +1997,8 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
             xpGPR(context,allocptr) -= disp;
           }
 	  unlock_exception_lock_in_handler(tcr);
-	  exit_signal_handler(tcr, old_valence, old_last_lisp_frame);
+	  exit_signal_handler(tcr, old_valence, old_last_lisp_frame,
+                              old_foreign);
 	}
       }
     }
