@@ -150,144 +150,31 @@ darwin_arm64_ptr_in_purify_source(BytePtr p, BytePtr low, BytePtr high)
 }
 #endif
 
-/* PROPOSED (ratify with Matt): arm64-constants.h defines
- * subtag_lisp_frame_marker = SUBTAG(fulltag_imm_1,5) but no
- * stack_alloc_marker yet (it exists only in the STALE high-tag
- * arm64-constants.s:112).  ARM32 keeps the two adjacent
- * (arm-constants.h:245-246); propose the next imm_1 slot.              */
-#ifndef stack_alloc_marker
-#define stack_alloc_marker SUBTAG(fulltag_imm_1, 6)
-#endif
-
-/* The marker lisp_frame C overlay lives in platform-linuxarm64.h
- * (albt.c and arm64-exceptions.c consume it too). */
-
-/* ===== cstack walk trail: make a walk failure name its own cause ==========
- *
- * KEEP (16m41).  The bare Bug() this replaced named the function and NOTHING
- * else -- not which of the walk's five strides overshot, not the word it strode
- * on, not whether the region leading in was a frame, an nfp ivector or a
- * stack-consed vector -- and that cost two sessions.  With the trail, ONE run
- * named the cause: three marker frames, then an x29 hop and four zero words
- * (i.e. C frames), then a spilled 0.9d0 read as an ivector header.  That is the
- * whole diagnosis of the missing lisp<->foreign boundary protocol (see
- * spentry-E-ffi.s), and it cost a single stage-11 cycle instead of a build per
- * question.  The cost on the healthy path is a few stores per stride over a
- * walk that is hundreds of steps long: keep it.
- *
- * Reports, then Bug()s -- the walk has no way to continue correctly, and the
- * clamp-and-continue used during the 16m41 diagnosis leaves marking INCOMPLETE
- * (it exists only so a diagnostic run can show the pattern across GCs; set
- * CSTACK_MAX_REPORTS > 1 to get it back).                                    */
-enum {
-  CB_FRAME = 0,                 /* lisp_frame_marker: stride sizeof(lisp_frame) */
-  CB_MARKER0,                   /* stack_alloc_marker or 0: stride 2 */
-  CB_NODE,                      /* nodeheader: stride 1+elements (+pad) */
-  CB_IMM,                       /* immheader: skip_over_ivector (nfp frames) */
-  CB_BACKLINK,                  /* (word & fixnummask)==0: current = word */
-  CB_NBRANCH
-};
-
-static const char *cstack_branch_name[CB_NBRANCH] = {
-  "lisp_frame", "marker/zero", "nodeheader", "immheader", "backlink"
-};
-
-typedef struct {
-  LispObj at, word, next;
-  int br;
-} cstack_step;
-
-#define CSTACK_TRAIL 12
-#define CSTACK_MAX_REPORTS 1    /* >1 = diagnostic mode: clamp and keep going */
-
-static natural cstack_walk_reports = 0;
-
-#define CSTACK_TRAIL_DECL \
-  cstack_step _ctrail[CSTACK_TRAIL]; \
-  natural _cnsteps = 0, _chisto[CB_NBRANCH] = {0, 0, 0, 0, 0}; \
-  LispObj *_cfrom = NULL
-
-/* The parameter is _br, not br: a macro parameter is substituted after `->'
-   too, so naming it `br' turns `_s->br' into `_s->CB_FRAME'. */
-#define CSTACK_TRAIL_STEP(_br)                                  \
-  do {                                                          \
-    cstack_step *_s = _ctrail + (_cnsteps % CSTACK_TRAIL);       \
-    _s->at = (LispObj)_cfrom;                                   \
-    _s->word = header;                                          \
-    _s->next = (LispObj)current;                                \
-    _s->br = (_br);                                             \
-    _cnsteps++;                                                 \
-    _chisto[_br]++;                                             \
-  } while (0)
-
-/* Returns 1 if the caller may clamp and keep walking, 0 if it must Bug out. */
-static int
-cstack_walk_report(const char *who, const char *why, area *a,
-                   LispObj *current, LispObj *limit,
-                   cstack_step *trail, natural nsteps, natural *histo)
+/*
+ * The control stack contains only lisp frames (word 0 is
+ * lisp_frame_marker) and u64-vectors: nfp frames, C frames, and the
+ * vectors that start_lisp and callbacks push to cover foreign frames.
+ * Given a non-frame word at "current", return the address just past
+ * the u64-vector it heads.  Anything else means the stack is corrupt.
+ */
+static LispObj *
+skip_cstack_vector(LispObj *current, LispObj *limit)
 {
-  natural i, first = (nsteps > CSTACK_TRAIL) ? nsteps - CSTACK_TRAIL : 0;
-  LispObj *p;
+  LispObj header = *current, *next;
 
-  fprintf(dbgout, "\n*** %s: %s (report %lu of %d)\n",
-          who, why, (unsigned long)cstack_walk_reports + 1, CSTACK_MAX_REPORTS);
-  fprintf(dbgout, "  area    low=0x%lx active=0x%lx high=0x%lx  (walked range = %ld words)\n",
-          (unsigned long)a->low, (unsigned long)a->active, (unsigned long)a->high,
-          (long)(((LispObj *)a->high) - ((LispObj *)a->active)));
-  fprintf(dbgout, "  walk    current=0x%lx limit=0x%lx  past-limit=%ld words  steps=%lu\n",
-          (unsigned long)current, (unsigned long)limit,
-          (long)(current - limit), (unsigned long)nsteps);
-  /* Owner state.  nfp says whether an nfp ivector frame was live at the
-     safepoint (compare it against the step bases below), last_lisp_frame and an
-     odd valence say whether this thread was in foreign code -- which is the
-     other way a->active can name a word the walk cannot classify. */
-  if (a->owner) {
-    TCR *tcr = a->owner;
-    fprintf(dbgout, "  owner   tcr=0x%lx valence=%ld%s nfp=0x%lx last_lisp_frame=0x%lx\n"
-                    "          save_vsp=0x%lx save_tsp=0x%lx cs_limit=0x%lx\n",
-            (unsigned long)tcr, (long)tcr->valence,
-            (tcr->valence & 1) ? " (ODD = in foreign code)" : "",
-            (unsigned long)tcr->nfp, (unsigned long)tcr->last_lisp_frame,
-            (unsigned long)tcr->save_vsp, (unsigned long)tcr->save_tsp,
-            (unsigned long)tcr->cs_limit);
+  if (header_subtag(header) != subtag_u64_vector) {
+    Bug(NULL, "Unexpected word 0x" LISP " on control stack at 0x" LISP "\n",
+        header, (LispObj)current);
+    return limit;
   }
-  fprintf(dbgout, "  strides taken:");
-  for (i = 0; i < CB_NBRANCH; i++) {
-    fprintf(dbgout, " %s=%lu", cstack_branch_name[i], (unsigned long)histo[i]);
+  next = skip_over_ivector((natural)current, header);
+  if (next > limit) {
+    Bug(NULL, "Control stack vector at 0x" LISP " extends past 0x" LISP "\n",
+        (LispObj)current, (LispObj)limit);
+    return limit;
   }
-  fprintf(dbgout, "\n");
-
-  if (nsteps == 0) {
-    fprintf(dbgout, "  NO steps taken -- the FIRST word at a->active failed; a->active is the suspect\n");
-  } else {
-    fprintf(dbgout, "  last %lu steps (oldest first):\n", (unsigned long)(nsteps - first));
-    for (i = first; i < nsteps; i++) {
-      cstack_step *s = trail + (i % CSTACK_TRAIL);
-      fprintf(dbgout, "    at 0x%lx word 0x%-18lx %-12s -> 0x%lx (%+ld words)\n",
-              (unsigned long)s->at, (unsigned long)s->word,
-              cstack_branch_name[s->br], (unsigned long)s->next,
-              (long)(((LispObj *)s->next) - ((LispObj *)s->at)));
-    }
-    /* The region the overshooting stride flew over, read raw. */
-    p = (LispObj *)(trail[(nsteps - 1) % CSTACK_TRAIL].at);
-    fprintf(dbgout, "  raw words from the last step's base:\n");
-    for (i = 0; i < 10 && (p + i) < limit; i++) {
-      fprintf(dbgout, "    [0x%lx] = 0x%lx\n",
-              (unsigned long)(p + i), (unsigned long)p[i]);
-    }
-  }
-  fprintf(dbgout, "  raw words at the top of the area:\n");
-  for (p = limit - 6; p < limit; p++) {
-    if (p >= (LispObj *)a->low) {
-      fprintf(dbgout, "    [0x%lx] = 0x%lx%s\n", (unsigned long)p,
-              (unsigned long)*p,
-              (*p == lisp_frame_marker) ? "   <- lisp_frame_marker" : "");
-    }
-  }
-  fflush(dbgout);
-  return (++cstack_walk_reports < CSTACK_MAX_REPORTS);
+  return next;
 }
-/* ===== end 16m41 TEMPORARY DIAG ========================================== */
 
 /* Heap sanity checking. */
 
@@ -1307,85 +1194,26 @@ mark_vstack_area(area *a)                            /* ppc-gc.c:997-1013 */
   mark_simple_area_range(start, end);
 }
 
-
 /*
-  Mark lisp frames on the control stack.
-
-  ARM64-DEVIATION (whole function; ppc-gc.c:1021-1049 walks PPC backlink
-  frames): arm64 uses MARKER frames â€” the walk is arm-gc.c:889-928, with
-  one correction: the nodeheader/immheader tests are moved BEFORE the
-  `(header & fixnummask) == 0' raw-pointer test.  ARM32's order is unsafe
-  here because arm64 immheader_1(12) â‰¡ 0 (mod 4): a stack-consed ivector
-  header (e.g. simple_base_string, header fulltag 12) would be misread as
-  a raw backlink.  Raw stack addresses are 16-aligned (fulltag 0 =
-  even_fixnum), so they can never be mistaken for headers by the moved
-  tests.
-*/
-
+ * Mark lisp frames on the control stack.  See skip_cstack_vector for
+ * what else the control stack contains.
+ */
 void
-mark_cstack_area(area *a)                            /* arm-gc.c:889-928 */
+mark_cstack_area(area *a)
 {
-  LispObj *current = (LispObj *)(a->active)
-    , *limit = (LispObj*)(a->high), header;
+  LispObj *current = (LispObj *)(a->active), *limit = (LispObj*)(a->high);
   lisp_frame *frame;
-  CSTACK_TRAIL_DECL;                                 /* 16m41 DIAG */
 
   while(current < limit) {
-    header = *current;
-    _cfrom = current;                                /* 16m41 DIAG */
-
-    if (header == lisp_frame_marker) {
+    if (*current == lisp_frame_marker) {
       frame = (lisp_frame *)current;
 
       mark_root(frame->savevsp); /* likely a fixnum */
       mark_root(frame->savefn);
       mark_pc_root(frame->savelr);
       current += sizeof(lisp_frame)/sizeof(LispObj);
-      CSTACK_TRAIL_STEP(CB_FRAME);                   /* 16m41 DIAG */
-    } else if ((header == stack_alloc_marker) || (header == 0)) {
-      current += 2;
-      CSTACK_TRAIL_STEP(CB_MARKER0);                 /* 16m41 DIAG */
-    } else if (nodeheader_tag_p(fulltag_of(header))) { /* REORDERED, see above */
-      natural elements = header_element_count(header);
-
-      current++;
-      while(elements--) {
-        mark_root(*current++);
-      }
-      if (((natural)current) & sizeof(natural)) {
-        current++;
-      }
-      CSTACK_TRAIL_STEP(CB_NODE);                    /* 16m41 DIAG */
-    } else if (immheader_tag_p(fulltag_of(header))) {  /* REORDERED, see above */
-      current=(LispObj *)skip_over_ivector((natural)current,header);
-      CSTACK_TRAIL_STEP(CB_IMM);                     /* 16m41 DIAG */
-    } else if ((header & fixnummask) == 0) {
-      /* 16m40: the note here claimed fixnummask=3 was "suspected ARM32
-         copy-pasta, report OPEN #3", justified as a 4-aligned test.  STALE:
-         at this pin arm64-constants.h:32 is DEFCONST(fixnummask, 7), correct
-         for fixnumshift=3, so this is an 8-aligned test and OPEN #3 is moot.
-         Do NOT re-open it.
-         What IS true, and is the live hazard: this branch cannot tell a boxed
-         FIXNUM from a raw backlink -- with fixnumshift=3 both have the low 3
-         bits clear -- so a fixnum on the cstack is followed as a pointer.
-         That is a property of this linear-scan shape, not of the mask.  See
-         comms/ARM64-CSTACK-WALK-DECISION.md before touching it. */
-      current = (LispObj *)header;
-      CSTACK_TRAIL_STEP(CB_BACKLINK);                /* 16m41 DIAG */
     } else {
-      /* 16m41 DIAG: dump the trail before dying -- the shape leading in says
-         more about an unclassifiable word than the word itself does. */
-      cstack_walk_report("mark_cstack_area", "UNKNOWN STACK WORD", a,
-                         current, limit, _ctrail, _cnsteps, _chisto);
-      Bug(NULL, "Unknown stack word at 0x" LISP ":\n", current);
-    }
-    /* 16m41 DIAG: report AT the overshooting step, not after the loop. */
-    if (current > limit) {
-      if (!cstack_walk_report("mark_cstack_area", "RAN OFF THE END of cstack area",
-                              a, current, limit, _ctrail, _cnsteps, _chisto)) {
-        Bug(NULL, "Ran off the end of cstack area\n");
-      }
-      current = limit;                  /* clamp: marking is now INCOMPLETE */
+      current = skip_cstack_vector(current, limit);
     }
   }
   if (current != limit) {
@@ -1774,25 +1602,16 @@ forward_vstack_area(area *a)                         /* ppc-gc.c:1348-1363 */
 }
 
 void
-forward_cstack_area(area *a)                         /* arm-gc.c:1179-1223 */
+forward_cstack_area(area *a)
 {
-  /* ARM64-DEVIATION (whole function; ppc-gc.c:1365-1384 walks backlink
-     frames): marker-frame walk, case order corrected as in
-     mark_cstack_area. */
-  LispObj *current = (LispObj *)(a->active)
-    , *limit = (LispObj*)(a->high), header;
+  LispObj *current = (LispObj *)(a->active), *limit = (LispObj*)(a->high);
   lisp_frame *frame;
-  unsigned subtag;
-  CSTACK_TRAIL_DECL;                                 /* 16m41 DIAG */
 
   GCforward_context = "cstack"; GCforward_reg = -1;
   GCforward_slot = NULL; GCforward_branch = "(cstack, pre-slot)";
 
   while (current < limit) {
-    header = *current;
-    _cfrom = current;                                /* 16m41 DIAG */
-
-    if (header == lisp_frame_marker) {
+    if (*current == lisp_frame_marker) {
       frame = (lisp_frame *)current;
 
       GCforward_slot = &(frame->savefn);
@@ -1802,54 +1621,12 @@ forward_cstack_area(area *a)                         /* arm-gc.c:1179-1223 */
       GCforward_branch = "lisp_frame.savelr";
       update_locref(&(frame->savelr));
       current += sizeof(lisp_frame)/sizeof(LispObj);
-      CSTACK_TRAIL_STEP(CB_FRAME);                   /* 16m41 DIAG */
-    } else if ((header == stack_alloc_marker) || (header == 0)) {
-      current += 2;
-      CSTACK_TRAIL_STEP(CB_MARKER0);                 /* 16m41 DIAG */
-    } else if (nodeheader_tag_p(fulltag_of(header))) { /* REORDERED, see mark_cstack_area */
-      natural elements = header_element_count(header);
-
-      current++;
-      /* OPEN-ENTRYPOINT (arm-gc.c:1203-1209) */
-      subtag = header_subtag(header);
-      if (subtag == subtag_function) {
-        GCforward_slot = current;
-        GCforward_branch = "stack gvector fn entrypoint";
-        update_locref(current);
-        current++;
-        elements--;
-      }
-      GCforward_branch = "stack gvector slot";
-      while(elements--) {
-        GCforward_slot = current;
-        update_noderef(current);
-        current++;
-      }
-      if (((natural)current) & sizeof(natural)) {
-        current++;
-      }
-      CSTACK_TRAIL_STEP(CB_NODE);                    /* 16m41 DIAG */
-    } else if (immheader_tag_p(fulltag_of(header))) {  /* REORDERED */
-      current=(LispObj *)skip_over_ivector((natural)current,header);
-      CSTACK_TRAIL_STEP(CB_IMM);                     /* 16m41 DIAG */
-    } else if ((header & fixnummask) == 0) {
-      current = (LispObj *)header;
-      CSTACK_TRAIL_STEP(CB_BACKLINK);                /* 16m41 DIAG */
     } else {
-      cstack_walk_report("forward_cstack_area", "UNKNOWN STACK WORD", a,
-                         current, limit, _ctrail, _cnsteps, _chisto);
-      Bug(NULL, "Unknown stack word at 0x" LISP ":\n", current);
+      current = skip_cstack_vector(current, limit);
     }
-    /* ARM64-DEVIATION (16m41): the reference walk has no end-of-area assertion
-       here (asymmetric with mark_cstack_area), so an overshoot in the FORWARD
-       pass was silent -- and a forward pass that skips a region leaves stale
-       pointers into freed space, i.e. silent corruption instead of a crash we
-       can read.  Report and die: loud failure beats a corrupted heap. */
-    if (current > limit) {
-      cstack_walk_report("forward_cstack_area", "RAN OFF THE END of cstack area",
-                         a, current, limit, _ctrail, _cnsteps, _chisto);
-      Bug(NULL, "Ran off the end of cstack area (forward)\n");
-    }
+  }
+  if (current != limit) {
+    Bug(NULL, "Ran off the end of cstack area\n");
   }
 }
 
@@ -2405,56 +2182,20 @@ purify_vstack_area(area *a, BytePtr low, BytePtr high, area *to)
 
 void
 purify_cstack_area(area *a, BytePtr low, BytePtr high, area *to)
-{                                                    /* arm-gc.c:1670-1716 */
-  /* ARM64-DEVIATION (whole function; ppc-gc.c:1880-1900 walks backlink
-     frames): marker-frame walk, case order corrected as in
-     mark_cstack_area. */
-  LispObj *current = (LispObj *)(a->active)
-    , *limit = (LispObj*)(a->high), header;
+{
+  LispObj *current = (LispObj *)(a->active), *limit = (LispObj*)(a->high);
   lisp_frame *frame;
-  unsigned subtag;
 
   while(current < limit) {
-    header = *current;
-
-    if (header == lisp_frame_marker) {
+    if (*current == lisp_frame_marker) {
       frame = (lisp_frame *)current;
 
       copy_ivector_reference(&(frame->savevsp), low, high, to); /* likely a fixnum */
       copy_ivector_reference(&(frame->savefn), low, high, to);
       purify_locref(&(frame->savelr), low, high, to);
       current += sizeof(lisp_frame)/sizeof(LispObj);
-    } else if ((header == stack_alloc_marker) || (header == 0)) {
-      current += 2;
-    } else if (nodeheader_tag_p(fulltag_of(header))) { /* REORDERED, see mark_cstack_area */
-      natural elements = header_element_count(header);
-
-      current++;
-      /* OPEN-ENTRYPOINT (arm-gc.c:1696-1702) */
-      subtag = header_subtag(header);
-      if (subtag == subtag_function) {
-        purify_locref(current, low, high, to);
-        current++;
-        elements--;
-      }
-      while(elements--) {
-        copy_ivector_reference(current, low, high, to);
-        current++;
-      }
-      if (((natural)current) & sizeof(natural)) {
-        current++;
-      }
-    } else if (immheader_tag_p(fulltag_of(header))) {  /* REORDERED */
-      current=(LispObj *)skip_over_ivector((natural)current,header);
-    } else if ((header & fixnummask) == 0) {
-      current = (LispObj *)header;
     } else {
-      Bug(NULL, "Unknown stack word at 0x" LISP ":\n", current);
-    }
-    /* Match mark_cstack_area: a bad stride must not silently skip frames. */
-    if (current > limit) {
-      Bug(NULL, "Ran off the end of cstack area\n");
-      current = limit;
+      current = skip_cstack_vector(current, limit);
     }
   }
   if (current != limit) {
@@ -2653,56 +2394,20 @@ impurify_noderef(LispObj *p, LispObj low, LispObj high, signed_natural delta)
 
 void
 impurify_cstack_area(area *a, LispObj low, LispObj high, signed_natural delta)
-{                                                    /* arm-gc.c:1889-1934 */
-  /* ARM64-DEVIATION (whole function; ppc-gc.c:2082-2104 walks backlink
-     frames): marker-frame walk, case order corrected as in
-     mark_cstack_area. */
-  LispObj *current = (LispObj *)(a->active)
-    , *limit = (LispObj*)(a->high), header;
+{
+  LispObj *current = (LispObj *)(a->active), *limit = (LispObj*)(a->high);
   lisp_frame *frame;
-  unsigned subtag;
 
   while(current < limit) {
-    header = *current;
-
-    if (header == lisp_frame_marker) {
+    if (*current == lisp_frame_marker) {
       frame = (lisp_frame *)current;
 
       impurify_noderef(&(frame->savevsp), low, high,delta); /* likely a fixnum */
       impurify_noderef(&(frame->savefn), low, high, delta);
       impurify_locref(&(frame->savelr), low, high, delta);
       current += sizeof(lisp_frame)/sizeof(LispObj);
-    } else if ((header == stack_alloc_marker) || (header == 0)) {
-      current += 2;
-    } else if (nodeheader_tag_p(fulltag_of(header))) { /* REORDERED, see mark_cstack_area */
-      natural elements = header_element_count(header);
-
-      current++;
-      /* OPEN-ENTRYPOINT (arm-gc.c:1914-1920) */
-      subtag = header_subtag(header);
-      if (subtag == subtag_function) {
-        impurify_locref(current, low, high, delta);
-        current++;
-        elements--;
-      }
-      while(elements--) {
-        impurify_noderef(current, low, high, delta);
-        current++;
-      }
-      if (((natural)current) & sizeof(natural)) {
-        current++;
-      }
-    } else if (immheader_tag_p(fulltag_of(header))) {  /* REORDERED */
-      current=(LispObj *)skip_over_ivector((natural)current,header);
-    } else if ((header & fixnummask) == 0) {
-      current = (LispObj *) header;
     } else {
-      Bug(NULL, "Unknown stack word at 0x" LISP ":\n", current);
-    }
-    /* Match mark_cstack_area: a bad stride must not silently skip frames. */
-    if (current > limit) {
-      Bug(NULL, "Ran off the end of cstack area\n");
-      current = limit;
+      current = skip_cstack_vector(current, limit);
     }
   }
   if (current != limit) {

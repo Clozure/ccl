@@ -43,9 +43,6 @@ typedef ucontext_t ExceptionInformation;
 #ifndef slot_unbound
 #define slot_unbound slot_unbound_marker
 #endif
-#ifndef stack_alloc_marker
-#define stack_alloc_marker SUBTAG(fulltag_imm_1, 6)
-#endif
 
 #ifndef ABI_VERSION_CURRENT
 #define ABI_VERSION_MIN 1046

@@ -49,8 +49,12 @@ print_lisp_frame(lisp_frame *frame)
 }
 
 /*
- * Walk frames from "start" to "end".  Say whatever can be said about
- * foreign frames and lisp frames.
+ * Walk frames from "start" to "end".
+ *
+ * The lisp part of the control stack contains only lisp frames and
+ * u64-vectors (nfp frames, C frames, and the vectors that start_lisp
+ * and callbacks use to cover foreign frames).  Anything else means
+ * we're not looking at a lisp stack region, so stop.
  */
 static void
 walk_stack_frames(lisp_frame *start, lisp_frame *end)
@@ -63,22 +67,16 @@ walk_stack_frames(lisp_frame *start, lisp_frame *end)
       print_lisp_frame(start);
       next = start + 1;
     } else {
-      LispObj *current = (LispObj *)start,
-        header = *current;
-      int tag = fulltag_of(header);
-      natural elements;
+      LispObj header = *(LispObj *)start;
 
-      if (immheader_tag_p(tag)) {
-        next = (lisp_frame *)skip_over_ivector((natural)current, header);
-      } else if (nodeheader_tag_p(tag)) {
-        elements = (header_element_count(header)+2)&~1;
-        next = (lisp_frame *)(current+elements);
-      } else if ((header & fixnummask) == 0) {
-        next = (lisp_frame *)header;
-      } else if (header == stack_alloc_marker) {
-        next = (lisp_frame *)(current[1]);
+      if (header_subtag(header) == subtag_u64_vector) {
+        next = (lisp_frame *)skip_over_ivector((natural)start, header);
       } else {
-        fprintf(dbgout, "Bad frame! (0x%lx)\n", (natural)start);
+        next = NULL;
+      }
+      if ((next <= start) || (next > end)) {
+        fprintf(dbgout, "Bad frame at %p (word #x%016lX)\n", (void *)start,
+                header);
         next = end;
       }
     }

@@ -71,12 +71,6 @@ typedef ucontext_t ExceptionInformation;   /* platform-linuxarm.h:31 */
 #ifndef slot_unbound
 #define slot_unbound slot_unbound_marker   /* ARM32 precedent (arm-constants.h:251) */
 #endif
-/* stack-consed-object marker (albt.c stack walker; ARM32:
-   arm-constants.h:245 SUBTAG(fulltag_imm,1)).  PROPOSED value in Matt's
-   imm_1 subtag space, next free after lisp_frame_marker(5). */
-#ifndef stack_alloc_marker
-#define stack_alloc_marker SUBTAG(fulltag_imm_1, 6)
-#endif
 /* Image ABI version (image.c): fresh number for the new target; ARM32
    uses 1045, PPC64 1040.  PROPOSED: 1046 (next free). */
 #ifndef ABI_VERSION_CURRENT
