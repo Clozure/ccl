@@ -379,7 +379,7 @@ pipe_read(HANDLE hfile, void *buf, unsigned int count)
     navail = 0;
     if (PeekNamedPipe(hfile, NULL, 0, NULL, &navail, NULL) == 0) {
       err = GetLastError();
-      if (err = ERROR_HANDLE_EOF) {
+      if ((err == ERROR_BROKEN_PIPE) || (err == ERROR_HANDLE_EOF)) {
         return 0;
       } else {
         _dosmaperr(err);
