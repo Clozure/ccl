@@ -4760,7 +4760,7 @@ _endfn
 /*	       (funcall fn)) */
 /*            (return nil)))) */
 
-_startfn(toplevel_loop)
+_exportfn(C(toplevel_loop))
         __(build_lisp_frame(imm0))
 	__(b local_label(test))
 local_label(loop):
@@ -4818,7 +4818,7 @@ _exportfn(C(start_lisp))
         __(mov imm0,#TCR_STATE_LISP)
         __(str imm0,[rcontext,#tcr.valence])
         __(ldr allocptr,[rcontext,#tcr.save_allocptr])
-        __(bl toplevel_loop)
+        __(bl C(toplevel_loop))
         __(ldr imm1,[sp,#(9*8)+4])
         __(mov imm0,#TCR_STATE_FOREIGN)
         __(str imm1,[rcontext,#tcr.last_lisp_frame])

@@ -37,7 +37,7 @@ print_lisp_frame(lisp_frame *frame)
   if ((fun == 0) || (fun == fulltag_misc)) {
     spname = "unknown ?";
 #ifndef STATIC
-    if (dladdr((void *)ptr_from_lispobj(rpc), &info)) {
+    if (dladdr((void *)ptr_from_lispobj(rpc), &info) && info.dli_sname) {
       spname = (char *)(info.dli_sname);
 #ifdef DARWIN
       if (spname[-1] != '_') {
