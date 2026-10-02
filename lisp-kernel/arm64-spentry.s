@@ -2735,9 +2735,9 @@ endsp aset3
 .set error_throw_tag_missing, 3          /* errors.s:23  */
 .set error_propagate_suspend, 10         /* errors.s:28  */
 
-/* tcr.flags bit for a suspend that arrived while interrupts were disabled.
-   ppc-constants64.h / x86-constants64.s TCR_FLAG_BIT_PENDING_SUSPEND. */
-.set TCR_FLAG_BIT_PENDING_SUSPEND, 7
+/* tcr.flags bit for a suspend that arrived while suspension was
+   deferred.  Must agree with constants.h. */
+.set TCR_FLAG_BIT_PENDING_SUSPEND, (fixnumshift+7)
 
 /* value-cell header: def_header(value_cell_header,1,subtag_value_cell),
    ppc-constants64.s:368 -- same (count<<num_subtag_bits)|subtag formula as
