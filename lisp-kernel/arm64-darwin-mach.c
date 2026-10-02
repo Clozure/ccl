@@ -113,7 +113,6 @@ typedef struct {
   mach_port_t ports[NUM_LISP_EXCEPTIONS_HANDLED];
   exception_behavior_t behaviors[NUM_LISP_EXCEPTIONS_HANDLED];
   thread_state_flavor_t flavors[NUM_LISP_EXCEPTIONS_HANDLED];
-  natural saved_last_lisp_frame;
   /*
    * Imitate a sigaltstack-flavored per-thread exception stack.  We
    * will build a synthetic signal frame here when the control stack
@@ -146,6 +145,19 @@ void fatal_mach_error(char *format, ...);
 
 #define ts_pc(t) ((t)->__pc)
 
+/*
+ * The context in a synthetic signal frame, followed by the tcr state
+ * that do_pseudo_sigreturn() restores when the handler returns.
+ * Keeping that state in the frame, rather than in a per-thread slot,
+ * lets nested exceptions each restore their own.
+ */
+typedef struct {
+  ExceptionInformation context; /* must be first */
+  signed_natural saved_valence;
+  natural saved_last_lisp_frame;
+  Boolean saved_foreign;
+} pseudo_signal_frame;
+
 /* Size of the altstack-style per-thread exception stack */
 #define DARWIN_ARM64_EXCEPTION_STACK_SIZE (64 << 10)
 
@@ -171,7 +183,7 @@ choose_exception_frame_sp(LispObj sp, area *cs_area, TCR *tcr)
   MACH_foreign_exception_state *fxs =
     (MACH_foreign_exception_state *)tcr->native_thread_info;
   BytePtr bsp;
-  natural need = sizeof(siginfo_t) + sizeof(ExceptionInformation)
+  natural need = sizeof(siginfo_t) + sizeof(pseudo_signal_frame)
     + 1024 /* mcontext + slop */ + C_REDZONE_LEN + 64;
 
   /*
@@ -285,15 +297,15 @@ kern_return_t
 do_pseudo_sigreturn(mach_port_t thread, TCR *tcr, native_thread_state_t *out)
 {
   ExceptionInformation *xp;
-  MACH_foreign_exception_state *fxs =
-    (MACH_foreign_exception_state *)tcr->native_thread_info;
 
   xp = tcr->pending_exception_context;
   if (xp) {
+    pseudo_signal_frame *frame = (pseudo_signal_frame *)xp;
+
     tcr->pending_exception_context = NULL;
-    tcr->valence = TCR_STATE_LISP;
-    if (fxs)
-      tcr->last_lisp_frame = fxs->saved_last_lisp_frame;
+    tcr->valence = frame->saved_valence;
+    restore_exception_boundary(tcr, frame->saved_last_lisp_frame,
+                               frame->saved_foreign);
     restore_mach_thread_state(thread, xp, out);
     /* An interrupt that arrived while this thread was handling the
        exception was deferred by setting its interrupt level to 1 (see
@@ -323,7 +335,7 @@ create_thread_context_frame(mach_port_t thread,
   stackp = TRUNC_DOWN(stackp, sizeof(siginfo_t), C_STK_ALIGN);
   if (info_ptr)
     *info_ptr = (siginfo_t *)stackp;
-  stackp = TRUNC_DOWN(stackp, sizeof(*pseudosigcontext), C_STK_ALIGN);
+  stackp = TRUNC_DOWN(stackp, sizeof(pseudo_signal_frame), C_STK_ALIGN);
   pseudosigcontext = (ExceptionInformation *)ptr_from_lispobj(stackp);
 
   stackp = TRUNC_DOWN(stackp, sizeof(*mc), C_STK_ALIGN);
@@ -361,17 +373,17 @@ setup_signal_frame(mach_port_t thread,
                    native_thread_state_t *new_ts)
 {
   ExceptionInformation *pseudosigcontext;
+  pseudo_signal_frame *frame;
   int old_valence = tcr->valence;
   natural stackp, *stackpp;
   siginfo_t *info;
-  MACH_foreign_exception_state *fxs =
-    (MACH_foreign_exception_state *)tcr->native_thread_info;
-
-  if (fxs)
-    fxs->saved_last_lisp_frame = tcr->last_lisp_frame;
 
   pseudosigcontext =
     create_thread_context_frame(thread, &stackp, &info, tcr, ts);
+  frame = (pseudo_signal_frame *)pseudosigcontext;
+  frame->saved_valence = old_valence;
+  frame->saved_last_lisp_frame = tcr->last_lisp_frame;
+  frame->saved_foreign = foreign_exception_context_p(tcr);
   bzero(info, sizeof(*info));
   info->si_code = code;
   info->si_addr = (void *)(UC_MCONTEXT(pseudosigcontext)->__es.__far);
@@ -383,9 +395,9 @@ setup_signal_frame(mach_port_t thread,
   pseudosigcontext->uc_stack.ss_flags = 0;
   pseudosigcontext->uc_link = NULL;
   pseudosigcontext->uc_mcsize = sizeof(*UC_MCONTEXT(pseudosigcontext));
+  note_exception_boundary(tcr, pseudosigcontext, old_valence);
   tcr->pending_exception_context = pseudosigcontext;
   tcr->valence = TCR_STATE_EXCEPTION_WAIT;
-  tcr->last_lisp_frame = (natural)ptr_to_lispobj(ts->__sp);
 
   /* AAPCS64: x0..x4 = handler args; lr = pseudo_sigreturn; sp 16-aligned. */
   bzero(new_ts, sizeof(*new_ts));

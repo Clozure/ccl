@@ -122,6 +122,15 @@ plbt_sp(LispObj currentSP)
 
   TCR *tcr = (TCR *)get_tcr(true);
   char *ilevel = interrupt_level_description(tcr);
+
+  /*
+   * If we're not running lisp code (e.g., we're in the kernel
+   * debugger after an exception), currentSP may point into C frames.
+   * The thread's lisp frames start at last_lisp_frame.
+   */
+  if (tcr->valence != TCR_STATE_LISP) {
+    currentSP = (LispObj)tcr->last_lisp_frame;
+  }
   cs_area = tcr->cs_area;
   if ((((LispObj) ptr_to_lispobj(cs_area->low)) > currentSP) ||
       (((LispObj) ptr_to_lispobj(cs_area->high)) < currentSP)) {

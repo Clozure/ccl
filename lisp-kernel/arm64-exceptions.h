@@ -4,6 +4,10 @@
 
 void enable_fp_exceptions(void);
 
+void note_exception_boundary(TCR *, ExceptionInformation *, int);
+void restore_exception_boundary(TCR *, natural, Boolean);
+Boolean foreign_exception_context_p(TCR *);
+
 #ifdef DARWIN
 typedef arm_thread_state64_t native_thread_state_t;
 #define NATIVE_THREAD_STATE_COUNT ARM_THREAD_STATE64_COUNT
