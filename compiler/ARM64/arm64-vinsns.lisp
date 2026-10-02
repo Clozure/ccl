@@ -4471,16 +4471,18 @@
 ;;; sub's imm12 (PPC64 has the equivalent constraint via la simm16).
 (define-arm64-vinsn %alloc-misc-fixed (((dest :lisp))
                                        ((Rheader :u64)
-                                        (nbytes :u32const)))
+                                        (nbytes :u32const))
+                                       ((immtemp0 :u64)))
   ;; ARM64-DEVIATION: `sub Xd,Xn,#imm' takes a 12-bit unsigned immediate,
   ;; optionally shifted left by 12, so a request over 4095 bytes cannot be
   ;; spelled in ONE sub and the assembler refuses the vinsn:
   ;;   vinsn immediate 4324 (shift 0) out of range for operand class :AIMM
   ;; (compiling arm64-asm.lisp: a 539-element gvector literal).  PPC64's
-  ;; donor never hits this -- its `la' displacement is simm16.  Split into
-  ;; the u12<<12 lane plus the u12 lane; the `(:$ v :lsl 12)' spelling is
-  ;; live in the assembler (vinsn-parse-immediate, :aimm accepts shift 12),
-  ;; and 0081's own note at the lri site documents both lanes.
+  ;; donor never hits this -- its `la' displacement is simm16.
+  ;; A larger size goes into a register, and allocptr moves in ONE `sub'.
+  ;; The alloc trap and pc_luser_xp decode only the single `sub' before the
+  ;; `cmp' (immediate or register form), so two immediate `sub's made a trap
+  ;; size the object from the low twelve bits alone.
   ((:pred <= (:apply - (:apply logand (lognot 15)
                                                (:apply + (+ 15 8) nbytes))
                                      arm64::fulltag-misc) 4095)
@@ -4490,12 +4492,16 @@
   ((:not (:pred <= (:apply - (:apply logand (lognot 15)
                                                (:apply + (+ 15 8) nbytes))
                                      arm64::fulltag-misc) 4095))
-   (sub allocptr allocptr (:$ (:apply ash (:apply - (:apply logand (lognot 15)
+   (movz immtemp0 (:$ (:apply logand #xffff (:apply - (:apply logand (lognot 15)
                                                (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc) -12) :lsl 12))
-   (sub allocptr allocptr (:$ (:apply logand 4095 (:apply - (:apply logand (lognot 15)
+                                     arm64::fulltag-misc))))
+   ((:pred /= 0 (:apply logand #xffff (:apply ash (:apply - (:apply logand (lognot 15)
                                                (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc)))))
+                                     arm64::fulltag-misc) -16)))
+    (movk immtemp0 (:$ (:apply logand #xffff (:apply ash (:apply - (:apply logand (lognot 15)
+                                               (:apply + (+ 15 8) nbytes))
+                                     arm64::fulltag-misc) -16)) :lsl 16)))
+   (sub allocptr allocptr immtemp0))
   (cmp allocptr allocbase)
   (b.hi :no-trap)
   (uuo-alloc-trap)
@@ -4540,10 +4546,11 @@
   ;; spelled in ONE sub and the assembler refuses the vinsn:
   ;;   vinsn immediate 4324 (shift 0) out of range for operand class :AIMM
   ;; (compiling arm64-asm.lisp: a 539-element gvector literal).  PPC64's
-  ;; donor never hits this -- its `la' displacement is simm16.  Split into
-  ;; the u12<<12 lane plus the u12 lane; the `(:$ v :lsl 12)' spelling is
-  ;; live in the assembler (vinsn-parse-immediate, :aimm accepts shift 12),
-  ;; and 0081's own note at the lri site documents both lanes.
+  ;; donor never hits this -- its `la' displacement is simm16.
+  ;; A larger size goes into a register, and allocptr moves in ONE `sub'.
+  ;; The alloc trap and pc_luser_xp decode only the single `sub' before the
+  ;; `cmp' (immediate or register form), so two immediate `sub's made a trap
+  ;; size the object from the low twelve bits alone.
   ((:pred <= (:apply - (:apply logand (lognot 15)
                                                (:apply + (+ 15 8) nbytes))
                                      arm64::fulltag-misc) 4095)
@@ -4553,12 +4560,16 @@
   ((:not (:pred <= (:apply - (:apply logand (lognot 15)
                                                (:apply + (+ 15 8) nbytes))
                                      arm64::fulltag-misc) 4095))
-   (sub allocptr allocptr (:$ (:apply ash (:apply - (:apply logand (lognot 15)
+   (movz immtemp0 (:$ (:apply logand #xffff (:apply - (:apply logand (lognot 15)
                                                (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc) -12) :lsl 12))
-   (sub allocptr allocptr (:$ (:apply logand 4095 (:apply - (:apply logand (lognot 15)
+                                     arm64::fulltag-misc))))
+   ((:pred /= 0 (:apply logand #xffff (:apply ash (:apply - (:apply logand (lognot 15)
                                                (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc)))))
+                                     arm64::fulltag-misc) -16)))
+    (movk immtemp0 (:$ (:apply logand #xffff (:apply ash (:apply - (:apply logand (lognot 15)
+                                               (:apply + (+ 15 8) nbytes))
+                                     arm64::fulltag-misc) -16)) :lsl 16)))
+   (sub allocptr allocptr immtemp0))
   (cmp allocptr allocbase)
   ;;; ARM64-DEVIATION: PPC's single `tdlt allocptr allocbase' has no
   ;;; ARM64 analog (no trap-on-condition instruction), so it becomes
