@@ -1,0 +1,33 @@
+;; Synthetic constants for modern Apple SDKs.
+;; objc.h now does `#define YES __objc_yes` / `#define NO __objc_no`
+;; (compiler builtins), so ffigen macros never evaluate to 0/1 and
+;; FILTER_FFI_MACROS=frameworks also drops usr/include/objc macros.
+;; Clozure's historical cocoa CDBs had YES=1 NO=0 from older
+;; `#define YES ((BOOL)1)`.  objc-bridge (#$YES/#$NO) needs these.
+(enum-ident ("" 0) "YES" 1)
+(enum-ident ("" 0) "NO" 0)
+
+;; Deprecated NS*KeyMask names (macOS 10.12+).  Modern SDK maps them to
+;; NSEventModifierFlag* via macros / static const that ffigen records as
+;; `(static)` foreign vars — not linkable, so #$NSShiftKeyMask fails.
+;; Values match NSEventModifierFlag* enum (AppKit NSEvent.h).
+(enum-ident ("" 0) "NSAlphaShiftKeyMask" 65536)
+(enum-ident ("" 0) "NSShiftKeyMask" 131072)
+(enum-ident ("" 0) "NSControlKeyMask" 262144)
+(enum-ident ("" 0) "NSAlternateKeyMask" 524288)
+(enum-ident ("" 0) "NSCommandKeyMask" 1048576)
+(enum-ident ("" 0) "NSNumericPadKeyMask" 2097152)
+(enum-ident ("" 0) "NSHelpKeyMask" 4194304)
+(enum-ident ("" 0) "NSFunctionKeyMask" 8388608)
+(enum-ident ("" 0) "NSDeviceIndependentModifierFlagsMask" 4294901760)
+
+;; NSControlStateValue (NSCell.h).  Modern SDK uses `static const`
+;; (including deprecated NSOffState / NSOnState / NSMixedState aliases).
+;; ffigen records them as unlinkable `(static)` vars — no initializer —
+;; so #$NSOffState dies in resolve-foreign-variable.  Fixed ABI values.
+(enum-ident ("" 0) "NSControlStateValueMixed" -1)
+(enum-ident ("" 0) "NSControlStateValueOff" 0)
+(enum-ident ("" 0) "NSControlStateValueOn" 1)
+(enum-ident ("" 0) "NSMixedState" -1)
+(enum-ident ("" 0) "NSOffState" 0)
+(enum-ident ("" 0) "NSOnState" 1)

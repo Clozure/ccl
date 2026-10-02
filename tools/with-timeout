@@ -1,0 +1,85 @@
+#!/bin/sh
+# Run a command with a hard wall-clock timeout.
+# Usage: with-timeout SECONDS command [args...]
+# Exit: command's status, or 124 on timeout (GNU timeout convention).
+# Prints TIMEOUT: … to stderr so the caller sees why the run stopped.
+#
+# Process model (portable perl path):
+#   - Child runs in its own process group so timeout can kill the whole tree.
+#   - Parent stays in the caller's process group (do NOT setpgrp the waiter —
+#     that used to orphan dx86cl64/darm64cl when the rebuild job was reaped).
+#   - TERM/INT/HUP on the waiter are forwarded to the child group.
+
+if [ $# -lt 2 ]; then
+  echo "usage: $0 SECONDS command [args...]" >&2
+  exit 2
+fi
+SECS=$1
+shift
+
+if ! expr "$SECS" : '[0-9][0-9]*$' >/dev/null 2>&1; then
+  echo "with-timeout: SECONDS must be a non-negative integer (got: $SECS)" >&2
+  exit 2
+fi
+
+if command -v gtimeout >/dev/null 2>&1; then
+  exec gtimeout --foreground -k 5 "$SECS" "$@"
+fi
+if command -v timeout >/dev/null 2>&1; then
+  # Prefer GNU-style; if --foreground is unsupported, fall through to perl.
+  if timeout --help 2>&1 | grep -q -- '--foreground'; then
+    exec timeout --foreground -k 5 "$SECS" "$@"
+  fi
+fi
+
+# Portable: perl alarm.  Always exit 124 on timeout.
+export WITH_TIMEOUT_SECS="$SECS"
+exec perl -e '
+  use strict;
+  use warnings;
+  my $secs = $ENV{WITH_TIMEOUT_SECS};
+  my @cmd = @ARGV;
+  my $child;
+
+  sub kill_tree {
+    my ($sig) = @_;
+    return unless defined $child;
+    kill $sig, -$child;   # process group
+    kill $sig, $child;    # in case setpgrp failed
+  }
+
+  $SIG{ALRM} = sub {
+    print STDERR "TIMEOUT: killed after ${secs}s: @cmd\n";
+    kill_tree("TERM");
+    select undef, undef, undef, 2;
+    kill_tree("KILL");
+    exit 124;
+  };
+  for my $sig (qw(TERM INT HUP)) {
+    $SIG{$sig} = sub {
+      kill_tree("TERM");
+      select undef, undef, undef, 1;
+      kill_tree("KILL");
+      exit 128 + ($sig eq "TERM" ? 15 : $sig eq "INT" ? 2 : 1);
+    };
+  }
+
+  alarm $secs;
+  $child = fork;
+  die "fork: $!\n" unless defined $child;
+  if ($child == 0) {
+    setpgrp(0, 0) or die "setpgrp: $!\n";
+    exec @cmd;
+    exit 127;
+  }
+  # Parent: stay in caller process group so job control / SIGHUP reap us
+  # together with the rebuild script — then our handlers can kill the child.
+  my $pid = waitpid($child, 0);
+  my $status = $?;
+  alarm 0;
+  exit 127 if $pid < 0;
+  if ($status & 127) {
+    exit 128 + ($status & 127);
+  }
+  exit $status >> 8;
+' "$@"
