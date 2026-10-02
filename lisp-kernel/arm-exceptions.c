@@ -1770,6 +1770,31 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
   
   if (allocptr_tag != tag_fixnum) {
     alloc_instruction_id state = classify_alloc_instruction(xp);
+    if (state == ID_alloc_trap_instruction) {
+      /*
+       * We're at the alloc trap: allocptr has been decremented and
+       * is <= allocbase.  The thread may already have taken the trap
+       * and be waiting for the exception lock with this context
+       * pending, so leave the pc at the trap and keep allocptr
+       * tagged; handle_alloc_trap uses the tag to decide what to
+       * allocate.  (disp is negative: minus the amount subtracted
+       * from allocptr.)
+       */
+      signed_natural disp = allocptr_displacement(xp);
+
+      if (alloc_disp) {
+        /* Interrupt: restore allocptr to its value before the sub,
+           and let interrupt_handler redo the sub afterwards. */
+        *alloc_disp = -disp;
+        xpGPR(xp, allocptr) = cur_allocptr - disp;
+      } else {
+        /* GC: account for what was allocated, and make the trap
+           allocate from a fresh segment. */
+        update_bytes_allocated(tcr, (void *)(cur_allocptr - disp));
+        xpGPR(xp, allocptr) = VOID_ALLOCPTR + disp;
+      }
+      return;
+    }
     if (state != ID_unrecognized_alloc_instruction) {
 
       if (state == ID_finish_allocation) {
@@ -1787,12 +1812,6 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
         restart_allocation(xp);
       }
       xpGPR(xp,allocptr) = VOID_ALLOCPTR;
-#if 0
-      if (state == 1777 + ID_alloc_trap_instruction) {
-        /* what a tangled web we weave */
-        xpGPR(xp,allocptr)+=allocptr_displacement(xp);
-      }
-#endif
     } else {
       Bug(xp, "urecognized allocation atate");
     }
