@@ -999,21 +999,16 @@ C(egc_set_hash_key_did_store):
         
 
 /*
-   Interrupt handling (in pc_luser_xp()) notes: 
-   If we are in this function and before the test which follows the
-   conditional (at egc_store_node_conditional), or at that test
-   and cr0`eq' is clear, pc_luser_xp() should just let this continue
-   (we either haven't done the store conditional yet, or got a
-   possibly transient failure.)  If we're at that test and the
-   cr0`EQ' bit is set, then the conditional store succeeded and
-   we have to atomically memoize the possible intergenerational
-   reference.  Note that the local labels 4 and 5 are in the
-   body of the next subprim (and at or beyond 'egc_write_barrier_end').
-
-   N.B: it's not possible to really understand what's going on just
-   by the state of the cr0`eq' bit.  A transient failure in the
-   conditional stores that handle memoization might clear cr0`eq'
-   without having completed the memoization.
+   Interrupt handling (in pc_luser_xp()) notes:
+   ldrex/strex need the address of the slot in a register, and that
+   derived pointer (imm2) goes stale if the GC moves the object.  If
+   a thread is stopped before the strex has succeeded (between the
+   _retry label and the _test label, or at _test with a non-zero
+   status in imm0), pc_luser_xp() moves the pc back to _retry, which
+   recomputes the address.  If it's stopped at or after a successful
+   strex, pc_luser_xp() does the memoization itself, sets arg_z to T,
+   and returns from the subprim.  The exits at labels 8 and 9 are at
+   or beyond egc_write_barrier_end, so pc_luser_xp() leaves them alone.
 */
 
             .globl C(egc_store_node_conditional)
@@ -1021,7 +1016,8 @@ C(egc_set_hash_key_did_store):
 _spentry(store_node_conditional)
 C(egc_store_node_conditional):
         __(vpop1(temp2))
-         
+        .globl C(egc_store_node_conditional_retry)
+C(egc_store_node_conditional_retry):
 1:      __(unbox_fixnum(imm2,temp2))
         __(add imm2,imm2,arg_x)
         __(ldrex temp1,[imm2])
@@ -1083,6 +1079,8 @@ _spentry(set_hash_key_conditional)
 C(egc_set_hash_key_conditional):
         __(vpop1(temp2))
         __(unbox_fixnum(imm1,temp2))
+        .globl C(egc_set_hash_key_conditional_retry)
+C(egc_set_hash_key_conditional_retry):
 0:      __(add imm2,arg_x,imm1)
         __(ldrex temp1,[imm2])
         __(cmp temp1,arg_y)
@@ -2053,17 +2051,25 @@ _spentry(misc_alloc)
 
 
 
+/* arg_x = (fixnum) increment, arg_y = node, arg_z = (fixnum) byte offset.
+   ldrex/strex need the address of the slot in a register.  Keep that
+   derived pointer in an imm register, and leave arg_y and arg_z alone,
+   so that pc_luser_xp can move the pc back to atomic_incf_node_retry
+   if the store hasn't happened yet (and the GC might have moved the
+   node). */
 _spentry(atomic_incf_node)
-        __(build_lisp_frame(imm0))
-        __(add lr,arg_y,arg_z,asr #fixnumshift)
-0:      __(ldrex arg_z,[lr])
-        __(add arg_z,arg_z,arg_x)
-        __(strex imm0,arg_z,[lr])
+        .globl C(atomic_incf_node_retry)
+C(atomic_incf_node_retry):
+        __(add imm2,arg_y,arg_z,asr #fixnumshift)
+0:      __(ldrex imm1,[imm2])
+        __(add imm1,imm1,arg_x)
+        __(strex imm0,imm1,[imm2])
+        .globl C(atomic_incf_node_test)
+C(atomic_incf_node_test):
         __(cmp imm0,#0)
         __(bne 0b)
         __(dmb ish)
-       /* Return this way, to get something else in the lr */
-        __(restore_lisp_frame(imm0))
+        __(mov arg_z,imm1)
         __(bx lr)
         
 _spentry(unused1)

@@ -1622,15 +1622,43 @@ extern opcode
   egc_write_barrier_start,
   egc_write_barrier_end, 
   egc_store_node_conditional, 
+  egc_store_node_conditional_retry,
   egc_store_node_conditional_test,
   egc_set_hash_key, egc_set_hash_key_did_store,
   egc_gvset, egc_gvset_did_store,
   egc_rplaca, egc_rplaca_did_store,
   egc_rplacd, egc_rplacd_did_store,
   egc_set_hash_key_conditional,
+  egc_set_hash_key_conditional_retry,
   egc_set_hash_key_conditional_test,
+  atomic_incf_node_retry, atomic_incf_node_test,
   swap_lr_lisp_frame_temp0,
   swap_lr_lisp_frame_arg_z;
+
+/*
+ * Some subprims do a load/store-exclusive on a word at an offset from
+ * a lisp object.  ldrex/strex take only a register address, so the
+ * subprim has to hold object+offset, a derived pointer, in an imm
+ * register, where the GC won't update it.
+ *
+ * If a thread is stopped in the [retry, test) interval, or at test
+ * with a failed store-exclusive (non-zero status in imm0), the store
+ * hasn't happened.  Move the pc back to retry, so that object+offset
+ * is recomputed when the thread resumes, in case the GC moved the
+ * object.
+ */
+static Boolean
+restart_exclusive_store(ExceptionInformation *xp, pc retry, pc test)
+{
+  pc program_counter = xpPC(xp);
+
+  if (((program_counter >= retry) && (program_counter < test)) ||
+      ((program_counter == test) && (xpGPR(xp, imm0) != 0))) {
+    xpPC(xp) = retry;
+    return true;
+  }
+  return false;
+}
 
 
 extern opcode ffcall_return_window, ffcall_return_window_end;
@@ -1694,8 +1722,11 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
   lisp_frame *frame = (lisp_frame *)ptr_from_lispobj(xpGPR(xp,Rsp));
   LispObj cur_allocptr = xpGPR(xp, allocptr);
   int allocptr_tag = fulltag_of(cur_allocptr);
-  
 
+  if (restart_exclusive_store(xp, &atomic_incf_node_retry,
+                              &atomic_incf_node_test)) {
+    return;
+  }
 
   if ((program_counter < &egc_write_barrier_end) && 
       (program_counter >= &egc_write_barrier_start)) {
@@ -1704,22 +1735,26 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
     Boolean need_check_memo = true, need_memoize_root = false;
 
     if (program_counter >= &egc_set_hash_key_conditional) {
-      if ((program_counter < &egc_set_hash_key_conditional_test) ||
-	  ((program_counter == &egc_set_hash_key_conditional_test) &&
-           (xpGPR(xp,imm0) != 0))) {
+      if ((program_counter < &egc_set_hash_key_conditional_retry) ||
+          restart_exclusive_store(xp, &egc_set_hash_key_conditional_retry,
+                                  &egc_set_hash_key_conditional_test)) {
+        /* The store-exclusive hasn't happened yet. */
 	return;
       }
       root = xpGPR(xp,arg_x);
+      val = xpGPR(xp,arg_z);
       ea = (LispObj *) (root+unbox_fixnum(xpGPR(xp,temp2)));
       need_memoize_root = true;
+      xpGPR(xp,arg_z) = t_value;
     } else if (program_counter >= &egc_store_node_conditional) {
-      if ((program_counter < &egc_store_node_conditional_test) ||
-	  ((program_counter == &egc_store_node_conditional_test) &&
-	   (xpGPR(xp,imm0) != 0))) {
-	/* The conditional store either hasn't been attempted yet, or
-	   has failed.  No need to adjust the PC, or do memoization. */
+      if ((program_counter < &egc_store_node_conditional_retry) ||
+          restart_exclusive_store(xp, &egc_store_node_conditional_retry,
+                                  &egc_store_node_conditional_test)) {
+	/* The store-exclusive hasn't happened yet.  No memoization
+	   needed. */
 	return;
       }
+      val = xpGPR(xp,arg_z);
       ea = (LispObj*)(xpGPR(xp,arg_x) + unbox_fixnum(xpGPR(xp,temp2)));
       xpGPR(xp,arg_z) = t_value;
     } else if (program_counter >= &egc_set_hash_key) {
