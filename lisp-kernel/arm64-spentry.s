@@ -6802,6 +6802,7 @@ endsp spread_lexprz
  * nil_value/t_value are patched at initial heap mapping).
  * =========================================================================== */
         .globl C(start_lisp)
+        note_function_start C(start_lisp)
 C(start_lisp):
         stp     x29, x30, [sp, #-16]!   /* ppc:74 mflr/save               */
         mov     x29, sp
@@ -6876,6 +6877,7 @@ C(start_lisp):
         ldp     x19, x20, [sp], #16
         ldp     x29, x30, [sp], #16
         ret
+        note_function_end C(start_lisp)
 
 /* toplevel_loop: run the vpushed toplevel function under %toplevel-catch%
  * until it leaves NIL on the vstack.  ported from ppc-subprims.s:34-64.
@@ -6883,19 +6885,15 @@ C(start_lisp):
  * flow: mkcatch decodes it from [lr] and returns to lr+4 (spentry-C:286-294
  * protocol, same as PPC).  Called from start_lisp with the Lisp world live. */
         .globl C(toplevel_loop)
+        note_function_start C(toplevel_loop)
 C(toplevel_loop):
         /* A MARKER lisp_frame, not a raw AAPCS64 {x29,x30} pair (16m56).
          * start_lisp installs its C-region cover at exactly the SP it calls us
          * with (:865-872), so whatever this function pushes is the FIRST word an
          * ascending mark_cstack_area walk reaches BELOW that cover.  A saved x29
-         * is a 16-aligned cstack address: not lisp_frame_marker, not an
-         * immheader, so the walker's raw-backlink branch (arm64-gc.c:1343) sets
-         * current to it and jumps 176 bytes UP, straight over the cover, into
-         * the C chain -- the stage-3 `UNKNOWN STACK WORD'.  Measured: the walk's
-         * first backlink step was `+22 words' == the 176 bytes between this
-         * frame and start_lisp's x29 (its own {x29,x30} pair + 9 register pairs
-         * + the 16-byte cover pair).  A normal 32-byte lisp_frame strides
-         * exactly onto the cover header instead.
+         * is neither a lisp frame nor a u64-vector header, so the walker
+         * can't step over it.  A normal 32-byte lisp_frame strides exactly
+         * onto the cover header instead.
          *
          * There is no PPC64 frame to port: ppc-subprims.s:35-40 allocates NO
          * frame at all, storing lr into the CALLER's PowerOpen linkage slot
@@ -6933,6 +6931,7 @@ C(toplevel_loop):
         ldr     lr, [sp, #lisp_frame.savelr]    /* ppc:56-62 restore lr    */
         discard_lisp_frame              /* pop the 32-byte marker frame   */
         ret
+        note_function_end C(toplevel_loop)
 
 
 /*
