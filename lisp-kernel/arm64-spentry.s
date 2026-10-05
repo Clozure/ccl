@@ -6307,6 +6307,7 @@ spentry callback
         mov temp2, #0
         mov temp3, #0
         mov temp4, #0
+        mov temp5, #0
         mov save0, #0
         mov save1, #0
         mov save2, #0
