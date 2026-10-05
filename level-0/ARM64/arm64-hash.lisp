@@ -205,25 +205,16 @@
     (mov offset (:$ arm64::misc-data-offset))
     (getvheader header key)
     (header-size ndigits header)
-    (let ((next header))           ; reuse header reg as temp for loaded word
+    (let ((next header))
       @loop
-      ;; PPC64 uses cmpdi+bne with pre-decrement compare; ARM64: decrement
-      ;; then cbnz (equivalent: loop while count-after-decrement > 0).
       (sub ndigits ndigits (:$ 1))
-      ;; (lwzx next key offset) — 32-bit digit load; w3 = W alias of
-      ;; next/header/imm3/x3 (Matt's arm64-asm.lisp:146); avoids
-      ;; over-reading past the last digit.
-      (ldr w3 (:@ key offset))
+      (ldr (:w next) (:@ key offset))
       ;; (rotldi immhash immhash 13) — 64-bit rotate left by 13 = ror #51
       (ror immhash immhash (:$ 51))
-      ;; (addi offset offset 4)
       (add offset offset (:$ 4))
-      ;; (add immhash immhash next)
       (add immhash immhash next)
       (cbnz ndigits @loop))
-    ;; (clrrdi arg_z immhash ppc64::fixnumshift) — clear low 3 bits for
-    ;; fixnum; ldb wrap for Matt's negative-immediate encoder restriction.
-    (and arg_z immhash (:$ (ldb (byte 64 0) (lognot (1- (ash 1 arm64::fixnumshift))))))
+    (bic arg_z immhash (:$ arm64::fixnummask))
     (ret)))
 
 ;;; =====================================================================

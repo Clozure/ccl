@@ -241,28 +241,16 @@
     (mov offset (:$ arm64::misc-data-offset))
     (mov accum (:$ 0))
     @loop
-    ;; PPC64: (cmpri cr1 len '1) + (bne cr1 @loop) at end = loop while len>1.
-    ;; ARM64: decrement first, branch on nonzero result (equivalent).
     (sub len len (:$ arm64::fixnumone))
-    ;; (lwzx nextw str offset) — 32-bit load; w1 = W alias of nextw/imm1/x1
-    ;; (Matt's arm64-asm.lisp:144); avoids over-reading past the last char.
-    (ldr w1 (:@ str offset))
-    ;; (addi offset offset 4)
+    (ldr (:w nextw) (:@ str offset))
     (add offset offset (:$ 4))
     ;; (rotlwi accum accum 5) — 32-bit rotate left by 5, emulated
     (lsr imm4 accum (:$ 27))
     (lsl accum accum (:$ 5))
     (orr accum accum imm4)
     (and accum accum (:$ #xffffffff))
-    ;; (xor accum accum nextw)
     (eor accum accum nextw)
-    ;; loop while len > 0 (decremented above)
     (cbnz len @loop)
-    ;; Produce fixnum result:
-    ;; PPC64: (slri accum accum 5) then (srri arg_z accum (- 5 fixnumshift)).
-    ;; Those are 64-bit shifts (sldi/srdi) of a 32-bit-clean value: net
-    ;; effect is accum << fixnumshift with nothing dropped (35-bit result,
-    ;; a positive fixnum).  accum is 32-bit clean here, so same two shifts.
     (lsl accum accum (:$ 5))
     (lsr arg_z accum (:$ (- 5 arm64::fixnumshift)))
     @done
@@ -297,8 +285,7 @@
     (mov accum (:$ 0))
     @loop
     (sub len len (:$ arm64::fixnumone))
-    ;; (lwzx nextw str offset) — 32-bit load via w1 (see %pname-hash)
-    (ldr w1 (:@ str offset))
+    (ldr (:w nextw) (:@ str offset))
     (add offset offset (:$ 4))
     ;; (rotlwi accum accum 5) — 32-bit rotate left by 5, emulated
     ;; (see %pname-hash: 64-bit ror would leak bits 27-31 into 32-36)
