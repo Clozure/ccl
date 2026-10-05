@@ -1670,8 +1670,8 @@ spentry misc_ref
         and imm0, arg_y, #fulltagmask
         cmp imm0, #fulltag_misc
         b.ne misc_ref_invalid
-        and imm0, arg_z, #fixnummask
-        cbnz imm0, misc_ref_invalid
+        tst arg_z, #fixnummask
+        b.ne misc_ref_invalid
         /* Bounds check */
         ldr imm0, [arg_y, #misc_header_offset]
         lsr imm1, imm0, #num_subtag_bits
@@ -1750,45 +1750,41 @@ misc_ref_node:
 misc_ref_u8:
         lsr imm0, arg_z, #fixnumshift
         add imm0, imm0, #misc_data_offset
-        ldrb w0, [arg_y, imm0]
-        lsl arg_z, x0, #fixnumshift
+        ldrb wimm0, [arg_y, imm0]
+        lsl arg_z, imm0, #fixnumshift
         ret
 misc_ref_s8:
         lsr imm0, arg_z, #fixnumshift
         add imm0, imm0, #misc_data_offset
-        ldrsb x0, [arg_y, imm0]
-        lsl arg_z, x0, #fixnumshift
+        ldrsb imm0, [arg_y, imm0]
+        lsl arg_z, imm0, #fixnumshift
         ret
 misc_ref_u16:
-        lsr imm0, arg_z, #fixnumshift
-        lsl imm0, imm0, #1
+        lsr imm0, arg_z, #(fixnumshift - 1) /* unbox, but also scale by 2 */
         add imm0, imm0, #misc_data_offset
-        ldrh w0, [arg_y, imm0]
-        lsl arg_z, x0, #fixnumshift
+        ldrh wimm0, [arg_y, imm0]
+        lsl arg_z, imm0, #fixnumshift
         ret
 misc_ref_s16:
-        lsr imm0, arg_z, #fixnumshift
-        lsl imm0, imm0, #1
+        lsr imm0, arg_z, #(fixnumshift - 1)
         add imm0, imm0, #misc_data_offset
-        ldrsh x0, [arg_y, imm0]
-        lsl arg_z, x0, #fixnumshift
+        ldrsh imm0, [arg_y, imm0]
+        lsl arg_z, imm0, #fixnumshift
         ret
 misc_ref_u32:
-        lsr imm0, arg_z, #fixnumshift
-        lsl imm0, imm0, #2
+        lsr imm0, arg_z, #(fixnumshift - 2) /* unbox, but also scale by 4 */
         add imm0, imm0, #misc_data_offset
-        ldr w0, [arg_y, imm0]
-        lsl arg_z, x0, #fixnumshift
+        ldr wimm0, [arg_y, imm0]
+        lsl arg_z, imm0, #fixnumshift
         ret
 misc_ref_s32:
-        lsr imm0, arg_z, #fixnumshift
-        lsl imm0, imm0, #2
+        lsr imm0, arg_z, #(fixnumshift -2)
         add imm0, imm0, #misc_data_offset
-        ldrsw x0, [arg_y, imm0]
-        lsl arg_z, x0, #fixnumshift
+        ldrsw imm0, [arg_y, imm0]
+        lsl arg_z, imm0, #fixnumshift
         ret
 misc_ref_u64:
-        add imm0, arg_z, #misc_data_offset
+        add imm0, arg_z, #misc_data_offset /* fixnum already scaled by 8 */
         ldr imm0, [arg_y, imm0]
         b _SPmakeu64
 misc_ref_s64:
@@ -1801,11 +1797,11 @@ misc_ref_fixnum_vector:
         lsl arg_z, imm0, #fixnumshift
         ret
 misc_ref_string:
-        /* 32-bit chars (see misc_set_string); PPC64 misc_ref_new_string. */
-        lsr imm0, arg_z, #1             /* boxed idx -> idx*4              */
+        /* 32-bit chars (see misc_set_string) */
+        lsr imm0, arg_z, #1             /* boxed idx -> idx*4 */
         add imm0, imm0, #misc_data_offset
-        ldr w0, [arg_y, imm0]
-        lsl imm0, x0, #charcode_shift
+        ldr wimm0, [arg_y, imm0]
+        lsl imm0, imm0, #charcode_shift
         orr arg_z, imm0, #subtag_character
         ret
 misc_ref_bit_vector:
@@ -1814,107 +1810,46 @@ misc_ref_bit_vector:
         lsr imm2, imm0, #5
         lsl imm2, imm2, #2
         add imm2, imm2, #misc_data_offset
-        ldr w3, [arg_y, imm2]
+        ldr wimm3, [arg_y, imm2]
         and imm1, imm0, #31
-        lsr w3, w3, w1
-        and w3, w3, #1
-        lsl arg_z, x3, #fixnumshift
+        lsr wimm3, wimm3, wimm1
+        and wimm3, wimm3, #1
+        lsl arg_z, imm3, #fixnumshift
         ret
 misc_ref_single_float_vector:
         /* ppc:2757-2762.  32-bit elements, so the same index math as
            misc_ref_u32: boxed idx >> fixnumshift, then << 2. */
-        lsr imm0, arg_z, #fixnumshift
-        lsl imm0, imm0, #2
+        lsr imm0, arg_z, #(fixnumshift - 2) /* unbox and scale by 4 */
         add imm0, imm0, #misc_data_offset
-        ldr w0, [arg_y, imm0]
-        /* ppc:2761-2762 (rldicr 32,31 + ori).  Single-floats are IMMEDIATE on
-           arm64, the raw IEEE bits riding the high 32 with the tag in the low
-           byte.  NB the tag spelling: arm64-arch.lisp:83 defines
-           subtag-single-float AS fulltag-single-float, but that alias is
-           Lisp-side only -- arm64-constants.h defines fulltag_single_float and
-           has no subtag_ name, so #subtag_single_float does not assemble. */
-        lsl arg_z, x0, #32
+        ldr wimm0, [arg_y, imm0]
+        lsl arg_z, x0, #32      /* box single-float */
         orr arg_z, arg_z, #fulltag_single_float
         ret
 misc_ref_double_float_vector:
-        /* ppc:2700-2705.  64-bit elements: fixnumshift == word_shift == 3, so
-           the boxed index IS the byte offset, exactly as in misc_ref_u64. */
-        add imm0, arg_z, #misc_data_offset
+        add imm0, arg_z, #misc_data_offset /* fixnum already scaled by 8 */
         ldr imm0, [arg_y, imm0]
-        /* Unlike PPC, arm64-constants.h defines no double_float_header, so
-           build it here -- but the count is a LITERAL 2, not
-           double_float.element_count.  _endstructf derives element_count as
-           (size - header) / NODE_SIZE, and a header count is in the units of
-           the object's IVECTOR CLASS: double_float is ivector_class_32_bit
-           with an 8-byte payload, so the count is 2 thirty-two-bit elements
-           and the node-derived value is 1.  Both 64-bit reference ports
-           hardcode the literal for exactly this reason
-           (ppc-constants64.s:362, x86-constants64.s:691
-           def_header(double_float_header,2,...)); only the 32-bit ports
-           derive it, where node_size == the element size.  Deriving it here
-           made every kernel-boxed double claim one element, so (uvref d 1)
-           was out of bounds: DOUBLE-FLOAT-BITS -- on every float print path
-           -- signalled $XARROOB, and EQL against a Lisp-boxed double was
-           false because the two headers disagreed (16m45).
-           imm0 must survive Misc_Alloc_Fixed (including a uuo_alloc trip
-           through the allocator) -- PPC relies on exactly that, ppc:2701-2704. */
+        /* double-float header */
         mov imm1, #((2 << num_subtag_bits) | subtag_double_float)
         Misc_Alloc_Fixed arg_z, imm1, double_float.size
         str imm0, [arg_z, #double_float.value]
         ret
 misc_ref_complex_single_float_vector:
-        /* 16m41.  Vector element = 2 packed singles = 8 bytes, and the subtag
-           is in ivector_class_64_bit, so the boxed index IS the byte offset
-           (fixnumshift == 3), exactly as misc_ref_double_float_vector.  The
-           SCALAR complex_single_float is {realpart:4, imagpart:4}
-           (arm64-constants.h:344-347), i.e. the same 8-byte word, so one load
-           and one store carry both parts.
-           imm0 must survive Misc_Alloc_Fixed with the header in imm2 -- the
-           same guarantee makes128 relies on. */
-        add imm0, arg_z, #misc_data_offset
+        add imm0, arg_z, #misc_data_offset /* fixnum already scaled by 8 */
         ldr imm0, [arg_y, imm0]
-        /* Literal 2, not complex_single_float.element_count: ivector_class_32_bit
-           over an 8-byte payload, so the count is 2 thirty-two-bit elements
-           where _endstructf's node-derived value is 1.  x8664 canon:
-           setup-complex-single-float-allocation, (make-vheader 2 ...),
-           x8664-vinsns:2527 -- and our own complex-single-float->heap vinsn
-           already uses the literal.  See the note at
-           misc_ref_double_float_vector. */
-        mov imm2, #((2 << num_subtag_bits) | subtag_complex_single_float)
-        Misc_Alloc_Fixed arg_z, imm2, complex_single_float.size
+        /* complex-single-float header */
+        mov imm1, #((2 << num_subtag_bits) | subtag_complex_single_float)
+        Misc_Alloc_Fixed arg_z, imm1, complex_single_float.size
         str imm0, [arg_z, #complex_single_float.realpart]
         ret
 misc_ref_complex_double_float_vector:
-        /* 16m41.  Vector element = 2 doubles = 16 bytes; the subtag is in
-           ivector_class_other_bit, so compute the offset: 16i = boxed<<1.
-           16m48: the note here used to say "vector data starts right after
-           the header (no x8664-style pad)".  That is FALSE and it is the
-           MAKE-SEQUENCE.30 / SUBSEQ.SPECIALIZED-VECTOR.3 bug -- Matt's own
-           arm64-arch.lisp:259-261 declares the pad, and every LISP-side
-           writer already honours it.  See misc_complex_dfloat_offset above.
-           The SCALAR complex_double_float carries its own pad
-           (arm64-constants.h:349-353: {pad, realpart, imagpart}), so the
-           store side still uses .realpart. */
-        lsl imm3, arg_z, #1
+        lsl imm3, arg_z, #1     /* index now scaled by 16 */
         add imm3, imm3, #misc_complex_dfloat_offset
-        ldr imm0, [arg_y, imm3]
+        ldr imm0, [arg_y, imm3] /* real part */
         add imm3, imm3, #node_size
-        ldr imm1, [arg_y, imm3]
-        /* Literal 6, not complex_double_float.element_count: ivector_class_32_bit
-           over a 24-byte payload {pad, realpart, imagpart}, so 6 thirty-two-bit
-           elements where the node-derived value is 3.  Worse than the other two
-           here: an under-count of 3 makes the GC size this 32-byte object at 24
-           (8 + (3<<2), dnode-rounded), so a heap walk would resume INSIDE it.
-           x8664 canon: (make-vheader 6 ...), x8664-vinsns:2522 /
-           def_header(complex_double_float_header,6,...) in both 64-bit
-           constants files; our complex-double-float->heap vinsn already uses
-           the literal.  See the note at misc_ref_double_float_vector. */
+        ldr imm1, [arg_y, imm3] /* imag part */
+        /* complex-double-float header */
         mov imm2, #((6 << num_subtag_bits) | subtag_complex_double_float)
         Misc_Alloc_Fixed arg_z, imm2, complex_double_float.size
-        /* stur, not stp: _structf offsets are tag-biased (realpart = header +
-           pad - fulltag_misc), so the immediate is not a multiple of 8 and
-           ldp/stp -- which have no unscaled form -- will not assemble.  Same
-           reason the rest of this file reaches tagged slots with ldur/stur. */
         stur imm0, [arg_z, #complex_double_float.realpart]
         stur imm1, [arg_z, #(complex_double_float.realpart + 8)]
         ret
@@ -1930,8 +1865,8 @@ spentry subtag_misc_ref
         and imm0, arg_y, #fulltagmask
         cmp imm0, #fulltag_misc
         b.ne 1f
-        and imm0, arg_z, #fixnummask
-        cbnz imm0, 1f
+        tst arg_z, #fixnummask
+        b.ne 1f
         ldr imm0, [arg_y, #misc_header_offset]
         lsr imm1, imm0, #num_subtag_bits
         lsl imm1, imm1, #fixnumshift
@@ -2010,19 +1945,18 @@ spentry subtag_misc_set
         b _SPksignalerr
 endsp subtag_misc_set
 
-/* ===== misc_set ===== */
-/* ported from ppc-spentry.s:4873-6950 (PPC64 branch) - ~500 lines */
+/* arg_x = vector, arg_y = index, arg_z = value */
 spentry misc_set
         and imm0, arg_x, #fulltagmask
         cmp imm0, #fulltag_misc
         b.ne misc_set_invalid
-        and imm0, arg_y, #fixnummask
-        cbnz imm0, misc_set_invalid
+        tst arg_y, #fixnummask
+        b.ne misc_set_invalid
         ldr imm0, [arg_x, #misc_header_offset]
         lsr imm1, imm0, #num_subtag_bits
         lsl imm1, imm1, #fixnumshift
         cmp arg_y, imm1
-        b.hs misc_set_invalid           /* trlge (ppc:4877) is UNSIGNED; b.ge accepted a negative index */
+        b.hs misc_set_invalid
         and imm1, imm0, #subtagmask
 misc_set_common:
         /* Node vectors -> delegate to gvset for write barrier.  Class
@@ -2087,142 +2021,118 @@ misc_set_common:
         b.eq misc_set_u32
         b misc_set_invalid
 misc_set_u8:
-        and imm0, arg_z, #fixnummask
-        cbnz imm0, misc_set_bad
+        tst arg_z, #(~(0xff << fixnumshift)) /* fixnum in [0, 2^8)? */
+        b.ne misc_set_bad
         lsr imm0, arg_z, #fixnumshift
-        cmp imm0, #256
-        b.hs misc_set_bad
-        lsr imm4, arg_y, #fixnumshift   /* ppc:4297 idx                    */
+        lsr imm4, arg_y, #fixnumshift
         add imm4, imm4, #misc_data_offset
-        strb w0, [arg_x, imm4]          /* ppc:4301 stbx                   */
+        strb wimm0, [arg_x, imm4]
         ret
 misc_set_s8:
-        and imm2, arg_z, #fixnummask
-        cbnz imm2, misc_set_bad
-        asr imm0, arg_z, #fixnumshift
-        sxtb imm1, w0
-        cmp x0, x1
+        tst arg_z, #fixnummask
         b.ne misc_set_bad
-        lsr imm4, arg_y, #fixnumshift   /* ppc:4286 idx                    */
-        add imm4, imm4, #misc_data_offset
-        strb w0, [arg_x, imm4]          /* ppc:4293 stbx                   */
-        ret
-misc_set_u16:
-        and imm0, arg_z, #fixnummask
-        cbnz imm0, misc_set_bad
-        lsr imm0, arg_z, #fixnumshift
-        cmp imm0, #65536
-        b.hs misc_set_bad
-        lsr imm1, arg_y, #fixnumshift   /* ppc:4266 idx                    */
-        lsl imm1, imm1, #1              /* *2 bytes                        */
-        add imm1, imm1, #misc_data_offset
-        strh w0, [arg_x, imm1]
-        ret
-misc_set_s16:
-        and imm2, arg_z, #fixnummask
-        cbnz imm2, misc_set_bad
         asr imm0, arg_z, #fixnumshift
-        sxth imm1, w0
-        cmp x0, x1
+        cmp imm0, wimm0, sxtb           /* fits in 8 signed bits? */
         b.ne misc_set_bad
         lsr imm1, arg_y, #fixnumshift
-        lsl imm1, imm1, #1
         add imm1, imm1, #misc_data_offset
-        strh w0, [arg_x, imm1]
+        strb wimm0, [arg_x, imm1]
+        ret
+misc_set_u16:
+        tst arg_z, #(~(0xffff << fixnumshift)) /* fixnum in [0, 2^16)? */
+        b.ne misc_set_bad
+        lsr imm0, arg_z, #fixnumshift
+        lsr imm1, arg_y, #(fixnumshift - 1) /* unbox, scale index by 2 */
+        add imm1, imm1, #misc_data_offset
+        strh wimm0, [arg_x, imm1]
+        ret
+misc_set_s16:
+        tst arg_z, #fixnummask
+        b.ne misc_set_bad
+        asr imm0, arg_z, #fixnumshift
+        cmp imm0, wimm0, sxth           /* fits in 16 signed bits? */
+        b.ne misc_set_bad
+        lsr imm1, arg_y, #(fixnumshift - 1)
+        add imm1, imm1, #misc_data_offset
+        strh wimm0, [arg_x, imm1]
         ret
 misc_set_u32:
-        /* ppc:4256-4263.  extract_unsigned_byte_bits_(imm0,arg_z,32): on
-           a 64-bit target every (unsigned-byte 32) IS a fixnum, so a
-           non-fixnum is simply bad - there is no bignum arm (the old
-           old guard had a wrong premise). */
-        and imm2, arg_z, #fixnummask
-        cbnz imm2, misc_set_bad
-        asr imm1, arg_z, #fixnumshift
-        lsr imm2, imm1, #32             /* sign or high bits => not u32    */
-        cbnz imm2, misc_set_bad
-        lsr imm4, arg_y, #1             /* ppc:4258 boxed idx -> idx*4     */
+        /* A fixnum in [0, 2^32) has nothing set outside the 32 bits
+           above the tag, so one tst checks both fixnum-ness and range. */
+        tst arg_z, #(~(0xffffffff << fixnumshift))
+        b.ne misc_set_bad
+        lsr imm1, arg_z, #fixnumshift
+        lsr imm4, arg_y, #1
         add imm4, imm4, #misc_data_offset
-        str w1, [arg_x, imm4]           /* ppc:4262 stwx                   */
+        str wimm1, [arg_x, imm4]
         ret
 misc_set_s32:
-        /* ppc:4243-4255; fixnum-only for the same reason as u32. */
-        and imm2, arg_z, #fixnummask
-        cbnz imm2, misc_set_bad
+        tst arg_z, #fixnummask
+        b.ne misc_set_bad
         asr imm0, arg_z, #fixnumshift
-        sxtw imm1, w0                   /* ppc:4248-4249 sign-extend probe */
-        cmp x0, x1
+        cmp imm0, wimm0, sxtw           /* fits in 32 signed bits? */
         b.ne misc_set_bad
         lsr imm4, arg_y, #1             /* boxed idx -> idx*4              */
         add imm4, imm4, #misc_data_offset
-        str w0, [arg_x, imm4]           /* ppc:4254 stwx                   */
+        str wimm0, [arg_x, imm4]
         ret
 misc_set_u64:
-        /* ppc:4303-4332.  Value > most-positive-fixnum arrives as a 2- or
-           3-digit bignum.  ARM64-DEVIATION: PPC64 rotldi-swaps the two
-           32-bit digits after the 64-bit load (big-endian); little-endian
-           reads digit1:digit0 = the value directly - no rotate. */
-        and imm0, arg_z, #fixnummask
-        cbnz imm0, setu64_maybe_bignum  /* ppc:4310                        */
-        asr imm0, arg_z, #fixnumshift   /* ppc:4311                        */
-        tbnz imm0, #63, misc_set_bad    /* ppc:4312 blt (negative fixnum)  */
+        tst arg_z, #fixnummask
+        b.ne setu64_maybe_bignum
+        asr imm0, arg_z, #fixnumshift
+        tbnz imm0, #63, misc_set_bad
 2:      add imm4, arg_y, #misc_data_offset
-        str imm0, [arg_x, imm4]                 /* ppc:4313 stdx           */
+        str imm0, [arg_x, imm4]
         ret
-setu64_maybe_bignum:                    /* ppc:4315-4332                   */
+setu64_maybe_bignum:
         and imm2, arg_z, #fulltagmask
-        cmp imm2, #fulltag_misc         /* ppc:4308/4316                   */
+        cmp imm2, #fulltag_misc
         b.ne misc_set_bad
-        ldur imm1, [arg_z, #misc_header_offset] /* ppc:4317 getvheader     */
-        ldur imm0, [arg_z, #misc_data_offset]   /* ppc:4318 (no rotldi)    */
-        mov imm3, #two_digit_bignum_header      /* ppc:4320                */
+        ldur imm1, [arg_z, #misc_header_offset]
+        ldur imm0, [arg_z, #misc_data_offset]
+        mov imm3, #two_digit_bignum_header
         cmp imm1, imm3
         b.eq 3f
-        mov imm3, #three_digit_bignum_header    /* ppc:4321                */
+        mov imm3, #three_digit_bignum_header
         cmp imm1, imm3
-        b.ne misc_set_bad               /* ppc:4324                        */
-        ldur w3, [arg_z, #(misc_data_offset+8)] /* ppc:4325 third digit    */
-        cbnz w3, misc_set_bad           /* ppc:4326-4327 must be sign 0    */
-        b 2b                            /* ppc:4328 store                  */
-3:      tbnz imm0, #63, misc_set_bad    /* ppc:4330 2-digit must be >= 0   */
-        b 2b                            /* ppc:4331 store                  */
-misc_set_s64:
-        /* ppc:4369-4387; bignum arm = exactly a 2-digit bignum (LE: no
-           rotldi, see misc_set_u64). */
-        and imm2, arg_z, #fixnummask
-        cbnz imm2, sets64_maybe_bignum  /* ppc:4376                        */
-        asr imm0, arg_z, #fixnumshift   /* ppc:4372                        */
-2:      add imm4, arg_y, #misc_data_offset
-        str imm0, [arg_x, imm4]                 /* ppc:4377 stdx           */
-        ret
-sets64_maybe_bignum:                    /* ppc:4379-4387                   */
-        and imm3, arg_z, #fulltagmask
-        cmp imm3, #fulltag_misc         /* ppc:4374/4380                   */
         b.ne misc_set_bad
-        ldur imm1, [arg_z, #misc_header_offset] /* ppc:4381 getvheader     */
-        ldur imm0, [arg_z, #misc_data_offset]   /* ppc:4382 (no rotldi)    */
-        mov imm3, #two_digit_bignum_header      /* ppc:4383                */
+        ldur w3, [arg_z, #(misc_data_offset+8)]
+        cbnz w3, misc_set_bad
+        b 2b
+3:      tbnz imm0, #63, misc_set_bad
+        b 2b
+misc_set_s64:
+        tst arg_z, #fixnummask
+        b.ne sets64_maybe_bignum
+        asr imm0, arg_z, #fixnumshift
+2:      add imm4, arg_y, #misc_data_offset
+        str imm0, [arg_x, imm4]
+        ret
+sets64_maybe_bignum:
+        and imm3, arg_z, #fulltagmask
+        cmp imm3, #fulltag_misc
+        b.ne misc_set_bad
+        ldur imm1, [arg_z, #misc_header_offset]
+        ldur imm0, [arg_z, #misc_data_offset]
+        mov imm3, #two_digit_bignum_header
         cmp imm1, imm3
-        b.ne misc_set_bad               /* ppc:4385                        */
-        b 2b                            /* ppc:4386 store                  */
+        b.ne misc_set_bad
+        b 2b
 misc_set_fixnum_vector:
-        and imm2, arg_z, #fixnummask
-        cbnz imm2, misc_set_bad
+        tst arg_z, #fixnummask
+        b.ne misc_set_bad
         asr imm0, arg_z, #fixnumshift
         add imm4, arg_y, #misc_data_offset
         str imm0, [arg_x, imm4]
         ret
 misc_set_string:
-        /* ppc:4264-4272 misc_set_new_string: this design's strings are
-           32-BIT chars (subtag_simple_base_string is ivector-class-32-bit)
-           - the old byte-char body stored 1 byte at element 0 and masked
-           the code to 8 bits.  Character check = full low byte. */
-        and imm0, arg_z, #255           /* ppc:4265 extract_lowbyte        */
-        cmp imm0, #subtag_character     /* ppc:4267                        */
+        and imm0, arg_z, #255
+        cmp imm0, #subtag_character
         b.ne misc_set_bad
-        lsr imm0, arg_z, #charcode_shift        /* ppc:4269 code           */
-        lsr imm4, arg_y, #1             /* ppc:4266 boxed idx -> idx*4     */
+        lsr imm0, arg_z, #charcode_shift
+        lsr imm4, arg_y, #1
         add imm4, imm4, #misc_data_offset
-        str w0, [arg_x, imm4]           /* ppc:4271 stwx                   */
+        str w0, [arg_x, imm4]
         ret
 misc_set_bit_vector:
         /* ARM64 LSB0 bit order */
@@ -2243,20 +2153,15 @@ misc_set_bit_vector:
         str w3, [arg_x, imm2]
         ret
 misc_set_single_float_vector:
-        /* ppc:4234-4241.  arg_x=vector arg_y=boxed index arg_z=value. */
         and imm3, arg_z, #fulltagmask
-        cmp imm3, #fulltag_single_float  /* see misc_ref_single_float_vector  */
+        cmp imm3, #fulltag_single_float
         b.ne misc_set_bad
-        lsr imm4, arg_y, #1             /* ppc:4236 boxed idx -> idx*4     */
-        lsr imm0, arg_z, #32            /* ppc:4239 the IEEE bits ride high */
+        lsr imm4, arg_y, #1
+        lsr imm0, arg_z, #32
         add imm4, imm4, #misc_data_offset
-        str w0, [arg_x, imm4]           /* ppc:4240 stwx                   */
+        str w0, [arg_x, imm4]
         ret
 misc_set_double_float_vector:
-        /* ppc:4333-4339.  PPC's extract_typecode is tag-safe; we have no such
-           macro, so use this file's own precedent (setu64_maybe_bignum): check
-           fulltag_misc FIRST, or reading the header of an immediate faults
-           instead of signalling. */
         and imm2, arg_z, #fulltagmask
         cmp imm2, #fulltag_misc
         b.ne misc_set_bad
@@ -2264,15 +2169,12 @@ misc_set_double_float_vector:
         and imm1, imm1, #subtagmask
         cmp imm1, #subtag_double_float
         b.ne misc_set_bad
-        ldr imm0, [arg_z, #double_float.value]   /* ppc:4337 misc_dfloat_offset */
+        ldr imm0, [arg_z, #double_float.value]
         /* 64-bit elements: boxed index IS the byte offset (fixnumshift 3). */
         add imm4, arg_y, #misc_data_offset
-        str imm0, [arg_x, imm4]                  /* ppc:4338 stdx           */
+        str imm0, [arg_x, imm4]
         ret
 misc_set_complex_single_float_vector:
-        /* 16m41, parity twin of misc_ref_complex_single_float_vector.
-           Type-check like misc_set_double_float_vector: fulltag_misc FIRST,
-           or reading the header of an immediate faults instead of signalling. */
         and imm2, arg_z, #fulltagmask
         cmp imm2, #fulltag_misc
         b.ne misc_set_bad
@@ -2281,7 +2183,7 @@ misc_set_complex_single_float_vector:
         cmp imm1, #subtag_complex_single_float
         b.ne misc_set_bad
         ldr imm0, [arg_z, #complex_single_float.realpart]  /* both parts */
-        add imm4, arg_y, #misc_data_offset      /* boxed idx IS the byte offset */
+        add imm4, arg_y, #misc_data_offset
         str imm0, [arg_x, imm4]
         ret
 misc_set_complex_double_float_vector:
@@ -2292,10 +2194,10 @@ misc_set_complex_double_float_vector:
         and imm1, imm1, #subtagmask
         cmp imm1, #subtag_complex_double_float
         b.ne misc_set_bad
-        ldur imm0, [arg_z, #complex_double_float.realpart]   /* ldur: see the */
-        ldur imm1, [arg_z, #(complex_double_float.realpart + 8)] /* ref leg  */
-        lsl imm4, arg_y, #1                     /* 16i = boxed<<1 */
-        add imm4, imm4, #misc_complex_dfloat_offset  /* 16m48: pad; see ref leg */
+        ldur imm0, [arg_z, #complex_double_float.realpart]
+        ldur imm1, [arg_z, #(complex_double_float.realpart + 8)]
+        lsl imm4, arg_y, #1
+        add imm4, imm4, #misc_complex_dfloat_offset
         str imm0, [arg_x, imm4]
         add imm4, imm4, #node_size
         str imm1, [arg_x, imm4]
@@ -2303,11 +2205,11 @@ misc_set_complex_double_float_vector:
 misc_set_bad:
         mov arg_y, arg_z
         mov arg_z, arg_x
-        mov arg_x, #XNOTELT             /* errors.s:227 deferr           */
+        mov arg_x, #XNOTELT
         mov nargs, #(3<<fixnumshift)
         b _SPksignalerr
 misc_set_invalid:
-        mov temp0, #XSETBADVEC          /* errors.s:182 deferr           */
+        mov temp0, #XSETBADVEC
         mov nargs, #(4<<fixnumshift)
         b _SPksignalerr
 endsp misc_set
