@@ -2148,6 +2148,9 @@ main
   }
 
   gc_init();
+#if defined(DARWIN) && defined(ARM64)
+  init_jit_area(JIT_AREA_SIZE);
+#endif
 
   set_nil(load_image(image_name));
   lisp_heap_notify_threshold = lisp_global(GC_NOTIFY_THRESHOLD);

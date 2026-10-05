@@ -52,25 +52,75 @@
 #define DEBUG_MEMORY 0
 
 #if defined(DARWIN) && defined(ARM64)
-/* MAP_JIT code heap (AREA_CODE stand-in).  Executable lisp lives here or
-   in AREA_READONLY after purify — never in the RW dynamic heap. */
-BytePtr darwin_arm64_code_low = NULL;
-BytePtr darwin_arm64_code_active = NULL;
+/* The MAP_JIT code area.  Executable lisp lives here or in
+   AREA_READONLY after purify — never in the RW dynamic heap.
+
+   jit_area is not on the all_areas list: AREA_JIT sorts above
+   AREA_DYNAMIC, and the list must start with the dynamic area.  It
+   holds only code vectors, which contain no node references, so the
+   GC has no reason to walk it.  Code vectors here are never freed;
+   purify copies the live ones into AREA_READONLY.
+
+   Allocation is a bump of jit_area->active under jit_area_lock.  The
+   new vector is zeroed and given its header before active is
+   published, so [low, active) is always a sequence of well-formed
+   code vectors. */
+area *jit_area = NULL;
+static pthread_mutex_t jit_area_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void
-darwin_arm64_set_code_heap(void *low, void *active)
+init_jit_area(natural size)
 {
-  darwin_arm64_code_low = (BytePtr)low;
-  darwin_arm64_code_active = (BytePtr)active;
+  BytePtr p = mmap(NULL, size, PROT_READ|PROT_WRITE|PROT_EXEC,
+                   MAP_PRIVATE|MAP_ANON|MAP_JIT, -1, 0);
+
+  if (p == MAP_FAILED) {
+    Fatal("couldn't map JIT code area", strerror(errno));
+  }
+  jit_area = new_area(p, p+size, AREA_JIT);
+  if (jit_area == NULL) {
+    Fatal("couldn't allocate JIT code area", "");
+  }
+  jit_area->active = jit_area->low;
+}
+
+/* Allocate a code vector of element_count 32-bit words in the JIT
+   area.  The payload is zeroed (each word is a udf #0) until code is
+   installed with darwin_arm64_jit_install_code.  Returns the untagged
+   address of the vector's header, or NULL if the area is full. */
+void *
+alloc_jit_code_vector(natural element_count)
+{
+  natural header, nbytes;
+  BytePtr p = NULL;
+
+  if (element_count > (natural)(jit_area->high - jit_area->low) >> 2) {
+    return NULL;
+  }
+  header = (element_count << num_subtag_bits) | subtag_code_vector;
+  nbytes = align_to_power_of_2(node_size + (element_count << 2), dnode_shift);
+
+  pthread_mutex_lock(&jit_area_lock);
+  if (nbytes <= (natural)(jit_area->high - jit_area->active)) {
+    p = jit_area->active;
+    pthread_jit_write_protect_np(0);
+    memset(p, 0, nbytes);
+    *(natural *)p = header;
+    pthread_jit_write_protect_np(1);
+    sys_icache_invalidate(p, nbytes);
+    __atomic_store_n(&jit_area->active, p+nbytes, __ATOMIC_RELEASE);
+  }
+  pthread_mutex_unlock(&jit_area_lock);
+  return p;
 }
 
 Boolean
 darwin_arm64_in_code_heap(void *p)
 {
   BytePtr bp = (BytePtr)p;
-  return (darwin_arm64_code_low != NULL &&
-          bp >= darwin_arm64_code_low &&
-          bp < darwin_arm64_code_active);
+  return (jit_area != NULL &&
+          bp >= jit_area->low &&
+          bp < __atomic_load_n(&jit_area->active, __ATOMIC_ACQUIRE));
 }
 
 /* Install nbytes from src into a MAP_JIT code-vector payload at dest.
@@ -87,26 +137,6 @@ darwin_arm64_jit_install_code(void *dest, const void *src, size_t nbytes)
   pthread_jit_write_protect_np(1);
   if (nbytes) {
     sys_icache_invalidate(dest, nbytes);
-  }
-}
-
-/* Zero TOTAL bytes at dest and write an 8-byte uvector header at dest.
-   Used by %allocate-code-vector so header/clear never run under WP from lisp. */
-void
-darwin_arm64_jit_init_code_vector(void *dest, unsigned long long header, size_t total_bytes)
-{
-  pthread_jit_write_protect_np(0);
-  if (total_bytes) {
-    memset(dest, 0, total_bytes);
-  }
-  if (total_bytes >= sizeof(header)) {
-    memcpy(dest, &header, sizeof(header));
-  }
-  pthread_jit_write_protect_np(1);
-  /* Keep I/D coherent even before code bytes arrive via
-     darwin_arm64_jit_install_code (zeroed payload = udf #0 sentinels). */
-  if (total_bytes) {
-    sys_icache_invalidate(dest, total_bytes);
   }
 }
 #endif

@@ -1279,6 +1279,7 @@
   managed-static                        ; growable static area
   static                                ; static data in application
   dynamic                               ; dynmaic (heap) data in application
+  jit                                   ; Darwin/arm64 MAP_JIT code; not on the area list
 )
 
 ;;; areas are sorted such that (in the "succ" direction) codes are >=.

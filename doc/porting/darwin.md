@@ -134,14 +134,15 @@ dynamic RX, `handle_alloc_trap` succeeds then `SPgvset` takes
 
 `:purify t` copies MAP_JIT / heap code into `AREA_READONLY` (RX).
 Dynamic heap is never executable.  Runtime compile + fasl code-vectors
-use a MAP_JIT arena (AREA_CODE stand-in).  Stock path:
+use the lisp kernel's MAP_JIT `jit_area` (`AREA_JIT`, not on the area list).  Stock path:
 `(rebuild-ccl :full t)`.  Details: `doc/porting/progress.md`.  Smokes:
 `tools/with-timeout` / `tools/run-darwin-smoke.sh` (exit 124 on timeout).
 
 **Boot path:** map heap RW → fill → purify / `mprotect` RX on pure.
 **Runtime compile / fasl load:** MAP_JIT via `%allocate-code-vector`
-(`level-0/ARM64/arm64-utils.lisp`); WP only in kernel C
-(`darwin_arm64_jit_*`).  On native Darwin, `compile-file` always
+(`level-0/ARM64/arm64-utils.lisp`) → lisp kernel `alloc_jit_code_vector`, which
+bumps `jit_area->active` under a mutex; WP only in the lisp kernel's C code
+(`alloc_jit_code_vector`, `darwin_arm64_jit_install_code`).  On native Darwin, `compile-file` always
 allocates MAP_JIT (eval-when `:compile-toplevel` must run while the
 heap is NX).
 

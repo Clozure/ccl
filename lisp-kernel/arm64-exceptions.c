@@ -1217,8 +1217,8 @@ handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr,
   }
 
 #if defined(DARWIN) && defined(ARM64)
-  /* Dynamic heap is never executable.  Executable code is MAP_JIT
-     (darwin_arm64_code_*) or AREA_READONLY.
+  /* Dynamic heap is never executable.  Executable code is in the
+     MAP_JIT jit_area or AREA_READONLY.
 
      Stock ports dirty AREA_READONLY with UnProtect→RWX (page stays
      executable).  Darwin W^X forbids RWX, so we oscillate:

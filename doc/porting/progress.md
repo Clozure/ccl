@@ -32,7 +32,7 @@ script in this tree.
 
 ## Architecture
 
-- **Executable Lisp code** lives in a **MAP_JIT** private mapping (`darwin_arm64_set_code_heap` / `%allocate-code-vector`) — Darwin stand-in for `AREA_CODE`.
+- **Executable Lisp code** lives in a **MAP_JIT** private mapping (the lisp kernel's `jit_area`, allocated by `alloc_jit_code_vector` via `%allocate-code-vector`).
 - **`:purify t` (default)** moves pure objects into `AREA_READONLY` as **RX**. The dynamic heap is never executable.
 - **W^X:** only kernel C toggles write-protect (`darwin_arm64_jit_*`). Lisp must not call `DarwinProtectMemory` / `DarwinUnProtectMemory` for MAP_JIT pages.
 - **Pure-page dirty under W^X:** first write → `mprotect(RW)`; NX fault on fetch in `AREA_READONLY` → `mprotect(RX)` and retry (`lisp-kernel/arm64-exceptions.c`). A **FATAL** NX fault means an attempt to execute from the RW **dynamic** heap.

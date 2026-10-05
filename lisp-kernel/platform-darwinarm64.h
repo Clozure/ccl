@@ -23,8 +23,8 @@ typedef ucontext_t ExceptionInformation;
 /*
  * W^X policy (Darwin/arm64):
  *   * Purified / AREA_READONLY code → mprotect RX at the canonical VA
- *   * Cold-load + runtime code → MAP_JIT code heap (AREA_CODE stand-in)
- *     via darwin_arm64_set_code_heap; purify copies into AREA_READONLY.
+ *   * Cold-load + runtime code → the MAP_JIT jit_area (memory.c),
+ *     via alloc_jit_code_vector; purify copies into AREA_READONLY.
  *   * Dynamic heap is never executable.
  * (An experimental dual-mapped RW/RX scheme was retired; PC/LR are
  * always the canonical VA.)

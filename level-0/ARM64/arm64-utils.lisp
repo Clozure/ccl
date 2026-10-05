@@ -834,15 +834,15 @@ be somewhat larger than what was specified)."
   (ret))                                          ; ppc:663
 
 ;;; =====================================================================
-;;; Darwin/arm64 MAP_JIT code-vector heap (AREA_CODE)
+;;; Darwin/arm64 MAP_JIT code-vector area (jit_area in the lisp kernel)
 ;;; =====================================================================
 ;;; Prefer DEFVAR with constant init ($fasl-defvar-init).  Avoid
 ;;; DEFSTATIC/DEFCONSTANT/%DEFPARAMETER random toplevel (cold-load UUO).
 ;;;
 ;;; All executable code (cold-load fasls + interactive compile) lives here.
 ;;; Purify copies live vectors into AREA_READONLY.  Dynamic heap is never
-;;; executable.  WP toggles only in
-;;; kernel C (darwin_arm64_jit_*); never call pthread_jit_write_protect_np
+;;; executable.  WP toggles only in lisp kernel C (alloc_jit_code_vector,
+;;; darwin_arm64_jit_install_code); never call pthread_jit_write_protect_np
 ;;; from lisp (NX's all MAP_JIT pages for the thread).
 
 #+(and darwinarm64-target)
@@ -853,61 +853,17 @@ be somewhat larger than what was specified)."
 ;;; MAP_JIT via $fasl-code-vector.
 (defvar *darwinarm64-map-jit-fasls* t)
 
-(defvar *jit-code-base* nil)
-(defvar *jit-code-limit* nil)
-(defvar *jit-code-free* nil)
-
-(defun %darwinarm64-register-code-heap ()
-  "Publish MAP_JIT [base,free) to the kernel for purify."
-  (when *jit-code-base*
-    (ff-call (foreign-symbol-address "darwin_arm64_set_code_heap")
-             :address *jit-code-base*
-             :address *jit-code-free*
-             :void)))
-
-(defun %ensure-jit-code-heap ()
-  "MAP_JIT code heap for this process.  Not part of the saved image —
-lisp macptrs are cleared before dumplisp; restart remmaps."
-  (unless (and *jit-code-base*
-               (typep *jit-code-base* 'macptr)
-               (not (%null-ptr-p *jit-code-base*)))
-    (let* ((len #.(* 256 1024 1024))
-           (p (ff-call (foreign-symbol-address "mmap")
-                       :address (%null-ptr)
-                       :unsigned-fullword len
-                       :int #x7
-                       :int (logior #x1002 #x0800)
-                       :int -1 :long 0 :address)))
-      (when (or (%null-ptr-p p) (eql (%ptr-to-int p) -1))
-        (error "mmap(MAP_JIT) code heap failed"))
-      (setq *jit-code-base* p
-            *jit-code-limit* (%inc-ptr p len)
-            *jit-code-free* p)
-      (%darwinarm64-register-code-heap)))
-  *jit-code-base*)
-
 (defun %allocate-code-vector (element-count)
-  "Allocate a code-vector of ELEMENT-COUNT u32 words in MAP_JIT.
-Header/zero via kernel C (no lisp under WP).  Fill with
+  "Allocate a code-vector of ELEMENT-COUNT u32 words in the lisp kernel's
+MAP_JIT code area.  Its payload is zeroed.  Fill with
 %darwinarm64-jit-install-code or LAP scratch+blit."
   (declare (fixnum element-count))
-  (%ensure-jit-code-heap)
-  (let* ((payload (ash element-count 2))
-         (total (logandc2 (+ payload 8 15) 15))
-         (header (logior (ash element-count arm64::num-subtag-bits)
-                         arm64::subtag-code-vector))
-         (free *jit-code-free*)
-         (next (%inc-ptr free total)))
-    (when (>= (%ptr-to-int next) (%ptr-to-int *jit-code-limit*))
-      (error "MAP_JIT code heap exhausted"))
-    (ff-call (foreign-symbol-address "darwin_arm64_jit_init_code_vector")
-             :address free
-             :unsigned-doubleword header
-             :unsigned-fullword total
-             :void)
-    (setq *jit-code-free* next)
-    (%darwinarm64-register-code-heap)
-    (%tag-as-misc free)))
+  (let* ((p (ff-call (foreign-symbol-address "alloc_jit_code_vector")
+                     :unsigned-doubleword element-count
+                     :address)))
+    (when (%null-ptr-p p)
+      (error "MAP_JIT code area exhausted"))
+    (%tag-as-misc p)))
 
 (defun %darwinarm64-jit-install-code (code-vector src-ivector nbytes)
   "Copy NBYTES from SRC-IVECTOR payload into CODE-VECTOR.  WP+icache
@@ -924,9 +880,8 @@ in kernel C — no lisp runs while MAP_JIT pages are RW-only."
   code-vector)
 
 (defun %enable-darwinarm64-map-jit-fasls ()
-  "Ensure MAP_JIT fasl loads (default).  Kept for dumplisp / rebuild callers."
+  "Ensure MAP_JIT fasl loads (default).  Kept for rebuild callers."
   (setq *darwinarm64-map-jit-fasls* t)
-  (%ensure-jit-code-heap)
   t)
 
 ) ; progn

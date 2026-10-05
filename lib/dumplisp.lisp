@@ -98,19 +98,6 @@
   ;; warnings object in the image; compile-file then never signals
   ;; undefined-type/function warnings (darwinarm64 bring-up hit this).
   (setq *outstanding-deferred-warnings* nil)
-  ;; Darwin/arm64 AREA_CODE: publish MAP_JIT bounds to the kernel for
-  ;; purify, then drop lisp macptrs so they are not dumped (would be
-  ;; dead after restart).  Fresh mmap on next %ensure-jit-code-heap.
-  #+darwinarm64-target
-  (progn
-    (unless (fboundp '%enable-darwinarm64-map-jit-fasls)
-      (require "ARM64ENV"))
-    (%enable-darwinarm64-map-jit-fasls)
-    (when (fboundp '%darwinarm64-register-code-heap)
-      (%darwinarm64-register-code-heap))
-    (setq *jit-code-base* nil
-          *jit-code-limit* nil
-          *jit-code-free* nil))
   (let* ((ip *initial-process*)
 	 (cp *current-process*))
     (when (process-verify-quit ip)
