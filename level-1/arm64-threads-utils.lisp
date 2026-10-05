@@ -114,7 +114,15 @@
       (#.arm64::fulltag-nil (null thing))
       (t nil))))
 
-(defun bogus-thing-p (x)                        ; x86:190 (#+x8664-target)
+#+darwinarm64-target
+(defun %code-vector-in-jit-area-p (x)
+  "True if X is a code vector in the lisp kernel's MAP_JIT code area."
+  (and (eql (typecode x) arm64::subtag-code-vector)
+       (not (eql 0 (external-call "darwin_arm64_in_code_heap"
+                                  :unsigned-doubleword (%address-of x)
+                                  :signed-fullword)))))
+
+(defun bogus-thing-p (x)
   (when x
     (or (not (valid-header-p x))
         (let* ((tag (lisptag x)))
@@ -122,12 +130,14 @@
                       (eql tag arm64::tag-single-float)
                       (eql tag arm64::tag-imm)
                       (in-any-consing-area-p x)
-                      (temporary-cons-p x)
-                      (and (or (typep x 'function)
-                               (typep x 'gvector))
-                           (on-any-tsp-stack x))
-                      ;; x8664's tag-tra clause has no arm64 analog.
-                      (and (typep x 'ivector)
-                           (on-any-csp-stack x))
-                      (%heap-ivector-p x))
+                      ;; Dynamic-extent objects of every type, conses
+                      ;; and %stack-block macptrs included, live on a
+                      ;; tstack, as on PPC.  Nothing lisp can see lives
+                      ;; on the cstack or the vstack.
+                      (on-any-tsp-stack x)
+                      (%heap-ivector-p x)
+                      ;; Code vectors live in jit_area, which isn't on
+                      ;; the area list.
+                      #+darwinarm64-target
+                      (%code-vector-in-jit-area-p x))
             t)))))
