@@ -169,8 +169,8 @@
   @again
   (ldxr imm0 (:@ imm1))                            ; ppc:569 lrarx
   (add imm0 imm0 (:$ 1))                           ; ppc:570 (addi raw +1)
-  (stxr (:w temp4) imm0 (:@ imm1))                 ; ppc:571 strcx.
-  (cbnz (:w temp4) @again)                          ; ppc:572
+  (stxr wimm4 imm0 (:@ imm1))
+  (cbnz wimm4 @again)
   (dmb (:$ 11))                                    ; ppc:573 isync
   (box-fixnum arg_z imm0)                           ; ppc:574
   (ret))                                           ; ppc:575
@@ -184,8 +184,8 @@
   @again
   (ldxr imm0 (:@ imm1))                            ; ppc:581 lrarx
   (add imm0 imm0 imm2)                             ; ppc:582
-  (stxr (:w temp4) imm0 (:@ imm1))                 ; ppc:583 strcx.
-  (cbnz (:w temp4) @again)                          ; ppc:584
+  (stxr wimm4 imm0 (:@ imm1))
+  (cbnz wimm4 @again)
   (dmb (:$ 11))                                    ; ppc:585 isync
   (box-fixnum arg_z imm0)                           ; ppc:586
   (ret))                                           ; ppc:587
@@ -198,8 +198,8 @@
   @again
   (ldxr imm0 (:@ imm1))                            ; ppc:592 lrarx
   (sub imm0 imm0 (:$ 1))                           ; ppc:593 (subi raw 1)
-  (stxr (:w temp4) imm0 (:@ imm1))                 ; ppc:594 strcx.
-  (cbnz (:w temp4) @again)                          ; ppc:595
+  (stxr wimm4 imm0 (:@ imm1))
+  (cbnz wimm4 @again)
   (dmb (:$ 11))                                    ; ppc:596 isync
   (box-fixnum arg_z imm0)                           ; ppc:597
   (ret))                                           ; ppc:598
@@ -217,8 +217,8 @@
   (cmp imm0 (:$ 0))                               ; ppc:604 (cmpri cr1)
   (sub imm0 imm0 (:$ 1))                           ; ppc:605 (subi 1 — flag-safe)
   (b.eq @done)                                     ; ppc:606 (beq) value was 0
-  (stxr (:w temp4) imm0 (:@ imm1))                 ; ppc:607 strcx.
-  (cbnz (:w temp4) @again)                          ; ppc:608
+  (stxr wimm4 imm0 (:@ imm1))
+  (cbnz wimm4 @again)
   (dmb (:$ 11))                                    ; ppc:609 isync
   (box-fixnum arg_z imm0)                           ; ppc:610
   (ret)                                            ; ppc:611
@@ -236,8 +236,8 @@
   (unbox-fixnum imm2 arg_z)                         ; ppc:621 (newval)
   @again
   (ldxr imm0 (:@ imm1))                            ; ppc:623 lrarx
-  (stxr (:w temp4) imm2 (:@ imm1))                 ; ppc:624 strcx.
-  (cbnz (:w temp4) @again)                          ; ppc:625
+  (stxr wimm4 imm2 (:@ imm1))
+  (cbnz wimm4 @again)
   (dmb (:$ 11))                                    ; ppc:626 isync
   (box-fixnum arg_z imm0)                           ; ppc:627
   (ret))                                           ; ppc:628
@@ -253,8 +253,8 @@
   (ldxr imm3 (:@ imm0))                            ; ppc:637 lrarx
   (cmp imm3 imm1)                                  ; ppc:638 cmpr
   (b.ne @done)                                     ; ppc:639 (bne-)
-  (stxr (:w temp4) imm2 (:@ imm0))                 ; ppc:640 strcx.
-  (cbnz (:w temp4) @again)                          ; ppc:641 (bne- @again)
+  (stxr wimm4 imm2 (:@ imm0))
+  (cbnz wimm4 @again)
   (dmb (:$ 11))                                    ; ppc:642 isync
   (box-fixnum arg_z imm3)                           ; ppc:643
   (ret)                                            ; ppc:644
@@ -273,8 +273,8 @@
   (ldaxr imm1 (:@ imm0))                            ; ppc:656 lrarx actual-oldval
   (cmp imm1 expected-oldval)                        ; ppc:657 cmpr
   (b.ne @done)                                     ; ppc:658 (bne-)
-  (stlxr (:w temp4) newval (:@ imm0))               ; ppc:659 strcx.
-  (cbnz (:w temp4) @again)                          ; ppc:660 (bne- @again)
+  (stlxr wimm4 newval (:@ imm0))
+  (cbnz wimm4 @again)
   (mov arg_z imm1)                                 ; ppc:662
   (ret)                                            ; ppc:663
   @done

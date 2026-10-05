@@ -1021,6 +1021,11 @@ endsp makestackblock0
  * store_node_conditional, and set_hash_key_conditional) must remain
  * contiguous and in this exact address order.  pc_luser_xp relies on
  * this.
+ *
+ * The status from each stxr/stlxr goes in wimm4: imm4 is dead at every
+ * exclusive store here, and the status mustn't go in a node register.
+ * pc_luser_xp's restart_exclusive_store reads it (as Rimm4) at the
+ * _test labels of store_node_conditional and set_hash_key_conditional.
  */
 
         .globl C(egc_write_barrier_start)
@@ -1053,8 +1058,8 @@ C(egc_rplaca_did_store):
         add temp0, temp0, imm0                  /* ldxr/stxr take [Xn]     */
 2:      ldxr imm1, [temp0]                      /* ppc:504 lrarx           */
         orr imm1, imm1, imm3                    /* ppc:505                 */
-        stlxr w17, imm1, [temp0]                  /* ppc:506 strcx           */
-        cbnz w17, 2b                             /* ppc:507                 */
+        stlxr wimm4, imm1, [temp0]
+        cbnz wimm4, 2b
         and imm4, imm2, #0x3f                   /* ppc:509                 */
         lsr imm2, imm2, #bitmap_shift           /* ppc:510                 */
         mov imm3, #0x8000000000000000           /* ppc:511                 */
@@ -1064,8 +1069,8 @@ C(egc_rplaca_did_store):
         add temp0, temp0, imm2                  /* ldxr/stxr take [Xn]     */
 3:      ldxr imm1, [temp0]                      /* ppc:515 lrarx           */
         orr imm1, imm1, imm3                    /* ppc:516                 */
-        stlxr w17, imm1, [temp0]                  /* ppc:517 strcx           */
-        cbnz w17, 3b                             /* ppc:518                 */
+        stlxr wimm4, imm1, [temp0]
+        cbnz wimm4, 3b
 1:      ret
 endsp rplaca
 
@@ -1096,8 +1101,8 @@ C(egc_rplacd_did_store):
         add temp0, temp0, imm0                  /* ldxr/stxr take [Xn]     */
 2:      ldxr imm1, [temp0]                      /* ppc:544 lrarx           */
         orr imm1, imm1, imm3                    /* ppc:545                 */
-        stlxr w17, imm1, [temp0]                  /* ppc:546 strcx           */
-        cbnz w17, 2b                             /* ppc:547                 */
+        stlxr wimm4, imm1, [temp0]
+        cbnz wimm4, 2b
         and imm4, imm2, #0x3f                   /* ppc:549                 */
         lsr imm2, imm2, #bitmap_shift           /* ppc:550                 */
         mov imm3, #0x8000000000000000           /* ppc:551                 */
@@ -1107,8 +1112,8 @@ C(egc_rplacd_did_store):
         add temp0, temp0, imm2                  /* ldxr/stxr take [Xn]     */
 3:      ldxr imm1, [temp0]                      /* ppc:555 lrarx           */
         orr imm1, imm1, imm3                    /* ppc:556                 */
-        stlxr w17, imm1, [temp0]                  /* ppc:557 strcx           */
-        cbnz w17, 3b                             /* ppc:558                 */
+        stlxr wimm4, imm1, [temp0]
+        cbnz wimm4, 3b
 1:      ret
 endsp rplacd
 
@@ -1146,9 +1151,8 @@ C(egc_gvset_did_store):
         add temp0, temp0, imm0          /* ldxr/stxr take [Xn] only        */
 1:      ldxr imm1, [temp0]
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp0]         /* status=temp5/x17: w2 aliases imm2,
-                                           which is STILL LIVE (granule) */
-        cbnz w17, 1b
+        stlxr wimm4, imm1, [temp0]
+        cbnz wimm4, 1b
         and imm4, imm2, #0x3f /* extract_bit_shift_count */
         lsr imm2, imm2, #bitmap_shift
         mov imm3, #0x8000000000000000
@@ -1158,8 +1162,8 @@ C(egc_gvset_did_store):
         add temp0, temp0, imm2          /* ldxr/stxr take [Xn] only        */
 2:      ldxr imm1, [temp0]
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp0]
-        cbnz w17, 2b
+        stlxr wimm4, imm1, [temp0]
+        cbnz wimm4, 2b
 9:      ret
 endsp gvset
 
@@ -1196,8 +1200,8 @@ C(egc_set_hash_key_did_store):
         add temp2, temp0, imm0          /* ldxr/stxr take [Xn] only        */
 1:      ldxr imm1, [temp2]              /* ppc:640 lrarx                   */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp2]         /* status=temp5/x17 (imm2 live)        */
-        cbnz w17, 1b
+        stlxr wimm4, imm1, [temp2]
+        cbnz wimm4, 1b
         mov imm3, #0x8000000000000000   /* ppc:645                         */
         and imm4, imm2, #0x3f           /* ppc:646                         */
         lsr imm2, imm2, #bitmap_shift   /* ppc:647                         */
@@ -1206,8 +1210,8 @@ C(egc_set_hash_key_did_store):
         add temp2, temp1, imm2
 2:      ldxr imm1, [temp2]              /* ppc:650                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp2]
-        cbnz w17, 2b
+        stlxr wimm4, imm1, [temp2]
+        cbnz wimm4, 2b
 3:      /* -- memoize the hash VECTOR itself (ppc:656-683) -- */
         ref_global imm1, ref_base       /* ppc:656                         */
         sub imm0, arg_x, imm1           /* ppc:657                         */
@@ -1224,8 +1228,8 @@ C(egc_set_hash_key_did_store):
         add temp2, temp0, imm0
 4:      ldxr imm1, [temp2]              /* ppc:668                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp2]
-        cbnz w17, 4b
+        stlxr wimm4, imm1, [temp2]
+        cbnz wimm4, 4b
         mov imm3, #0x8000000000000000   /* ppc:673                         */
         and imm4, imm2, #0x3f           /* ppc:674                         */
         lsr imm2, imm2, #bitmap_shift   /* ppc:675                         */
@@ -1234,8 +1238,8 @@ C(egc_set_hash_key_did_store):
         add temp2, temp1, imm2
 5:      ldxr imm1, [temp2]              /* ppc:678                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp2]
-        cbnz w17, 5b
+        stlxr wimm4, imm1, [temp2]
+        cbnz wimm4, 5b
 9:      ret                             /* ppc:683                         */
 endsp set_hash_key
 
@@ -1250,10 +1254,10 @@ C(egc_store_node_conditional_retry):
 1:      ldxr temp1, [imm0]              /*  ldxr/stxr take [Xn] only */
         cmp temp1, arg_y
         b.ne conditional_store_false
-        stxr w17, arg_z, [imm0]
+        stxr wimm4, arg_z, [imm0]
         .globl C(egc_store_node_conditional_test)
 C(egc_store_node_conditional_test):
-        cbnz w17, 1b
+        cbnz wimm4, 1b
         dmb ish
         /* -- memoize the stored reference (ppc:718-748) -- */
         ref_global imm2, ref_base       /* ppc:719 (imm0 = slot addr)      */
@@ -1272,8 +1276,8 @@ C(egc_store_node_conditional_test):
         add temp1, temp1, imm0
 2:      ldxr imm1, [temp1]              /* ppc:732                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp1]
-        cbnz w17, 2b
+        stlxr wimm4, imm1, [temp1]
+        cbnz wimm4, 2b
         mov imm3, #0x8000000000000000   /* ppc:737                         */
         and imm4, imm2, #0x3f           /* ppc:738                         */
         lsr imm2, imm2, #bitmap_shift   /* ppc:739                         */
@@ -1283,8 +1287,8 @@ C(egc_store_node_conditional_test):
         add temp1, temp1, imm2
 3:      ldxr imm1, [temp1]              /* ppc:743                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [temp1]
-        cbnz w17, 3b
+        stlxr wimm4, imm1, [temp1]
+        cbnz wimm4, 3b
         b conditional_store_true
 endsp store_node_conditional
 
@@ -1300,10 +1304,10 @@ C(egc_set_hash_key_conditional_retry):
 1:      ldxr temp1, [imm0]
         cmp temp1, arg_y
         b.ne 9f
-        stxr w17, arg_z, [imm0]               /* status=temp5/x17 (uniform)    */
+        stxr wimm4, arg_z, [imm0]
         .globl C(egc_set_hash_key_conditional_test)
 C(egc_set_hash_key_conditional_test):
-        cbnz w17, 1b
+        cbnz wimm4, 1b
         dmb ish
         /* -- memoize the stored reference (ppc:768-797) -- */
         ref_global imm2, ref_base       /* ppc:769 (imm0 = slot addr)      */
@@ -1323,8 +1327,8 @@ C(egc_set_hash_key_conditional_test):
         add imm5, temp2, imm0           /* [Xn] form; temp0 must survive  */
 2:      ldxr imm1, [imm5]              /* ppc:783                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [imm5]
-        cbnz w17, 2b
+        stlxr wimm4, imm1, [imm5]
+        cbnz wimm4, 2b
         mov imm3, #0x8000000000000000   /* ppc:788                         */
         and imm4, imm2, #0x3f           /* ppc:789                         */
         lsr imm2, imm2, #bitmap_shift   /* ppc:790                         */
@@ -1333,8 +1337,8 @@ C(egc_set_hash_key_conditional_test):
         add imm5, temp1, imm2
 3:      ldxr imm1, [imm5]              /* ppc:793                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [imm5]
-        cbnz w17, 3b
+        stlxr wimm4, imm1, [imm5]
+        cbnz wimm4, 3b
         /* -- memoize the hash VECTOR itself (ppc:799-828) -- */
         ref_global temp1, refbits       /* ppc:800                         */
         ref_global imm1, ref_base       /* ppc:801                         */
@@ -1352,8 +1356,8 @@ C(egc_set_hash_key_conditional_test):
         add imm5, temp1, imm0
 4:      ldxr imm1, [imm5]              /* ppc:813                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [imm5]
-        cbnz w17, 4b
+        stlxr wimm4, imm1, [imm5]
+        cbnz wimm4, 4b
         ref_global temp1, ephemeral_refidx      /* ppc:818                 */
         mov imm3, #0x8000000000000000   /* ppc:819                         */
         and imm4, imm2, #0x3f           /* ppc:820                         */
@@ -1363,8 +1367,8 @@ C(egc_set_hash_key_conditional_test):
         add imm5, temp1, imm2
 5:      ldxr imm1, [imm5]              /* ppc:824                         */
         orr imm1, imm1, imm3
-        stlxr w17, imm1, [imm5]
-        cbnz w17, 5b
+        stlxr wimm4, imm1, [imm5]
+        cbnz wimm4, 5b
         .globl C(egc_write_barrier_end)
 C(egc_write_barrier_end):               /* ppc:829 (family END marker)     */
 /* store_node_conditional exits here, too.  These must be outside

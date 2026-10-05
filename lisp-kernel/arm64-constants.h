@@ -71,6 +71,7 @@ wimm2 .req w2
 imm3 .req x3
 wimm3 .req w3
 imm4 .req x4
+wimm4 .req w4
 imm5 .req x5
 nargs .req x6
 fn .req x7

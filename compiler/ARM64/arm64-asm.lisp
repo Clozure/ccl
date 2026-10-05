@@ -203,6 +203,7 @@
 (define-register-alias wimm1 w1)
 (define-register-alias wimm2 w2)
 (define-register-alias wimm3 w3)
+(define-register-alias wimm4 w4)
 
 ;; nargs probably doesn't need to be a dedicated register
 (define-register-alias nargs x6)        ;unboxed, but nargs fixnum tagged

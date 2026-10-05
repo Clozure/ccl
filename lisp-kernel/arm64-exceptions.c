@@ -2560,7 +2560,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       if ((program_counter < &egc_set_hash_key_conditional_retry) ||
           restart_exclusive_store(xp, &egc_set_hash_key_conditional_retry,
                                   &egc_set_hash_key_conditional_test,
-                                  Rtemp5)) {
+                                  Rimm4)) {
         /* The store-exclusive hasn't happened yet. */
         return;
       }
@@ -2573,7 +2573,7 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       if ((program_counter < &egc_store_node_conditional_retry) ||
           restart_exclusive_store(xp, &egc_store_node_conditional_retry,
                                   &egc_store_node_conditional_test,
-                                  Rtemp5)) {
+                                  Rimm4)) {
         /* The store-exclusive hasn't happened yet.  No memoization
            needed. */
         return;
