@@ -937,25 +937,6 @@ makestackblock0_too_big:
         br      temp0
 endsp makestackblock0
 
-/*
- * Cluster B: vectors-misc subprims
- * Ported from vendor/ccl/lisp-kernel/ppc-spentry.s (PPC64 branch)
- *
- * 22 subprims: gvset, set_hash_key, store_node_conditional,
- * set_hash_key_conditional, conslist, conslist_star, stkconslist,
- * stkconslist_star, mkstackv, progvsave, gvector, misc_ref,
- * subtag_misc_ref, stkconsyz, stkgvector, subtag_misc_set, misc_set,
- * progvrestore, aref2, aref3, aset2, aset3
- */
-
-/* PORT-NOTE: All 22 subprims ported line-by-line from PPC64.
-   misc_ref (~150 lines) and misc_set (~180 lines) cover integer/node/string/bit
-   vectors, and since 16m37/16m41 ALSO the four float-vector subtags
-   (single/double) and the two complex ones -- the note here that they were
-   "omitted pending Misc_Alloc_Fixed and subtag constants" is stale; both exist
-   and both are used by those legs. aref2/3 and aset2/3 provide
-   2D/3D array indexing with displaced-array follow chains. File builds once
-   missing constants are defined (35 #error directives guard missing definitions). */
 
 /* Derived constants (same derivations as spentry-A/-C/-D):
  * dnode_shift: ppc-constants64.s:37 (log2 dnode_size=16);
@@ -1883,24 +1864,6 @@ spentry subtag_misc_ref
         b _SPksignalerr
 endsp subtag_misc_ref
 
-/* ===== stkconsyz ===== */
-/* ported from ppc-spentry.s:3226-3241 (PPC64 branch) */
-spentry stkconsyz
-        mov imm0, rnil                  /* li imm0,nil_value -> rnil       */
-        str imm0, [vsp, #-node_size]!         /* vpush(imm0) */
-        str imm0, [vsp, #-node_size]!
-        str imm0, [vsp, #-node_size]!
-        and imm0, vsp, #(1<<node_shift)       /* Check alignment */
-        cbz imm0, 1f
-        str arg_y, [vsp, #(node_size*2)]
-        str arg_z, [vsp, #node_size]
-        add arg_z, vsp, #(fulltag_cons + node_size)
-        ret
-1:      str arg_y, [vsp, #node_size]
-        str arg_z, [vsp]
-        add arg_z, vsp, #fulltag_cons
-        ret
-endsp stkconsyz
 
 /* ===== stkgvector ===== */
 /* ported from ppc-spentry.s:3393-3420 (PPC64 branch) - ~30 lines */
@@ -2480,89 +2443,6 @@ aset3_follow:
 aset3_not_arrayH:
         uuo_error_reg_not_xtype temp1, xtype_array3d /* ppc uuo_interr -> xtype trap */
 endsp aset3
-
-/* ===== COMPLETION STATUS & MISSING CONSTANTS ===== */
-/*
- * ALL 22 SUBPRIMS PORTED (logic complete, awaiting constant definitions):
- *   ✓ aref2 (2d array ref) - COMPLETE, exits via misc_ref_common
- *   ✓ aref3 (3d array ref) - COMPLETE, exits via misc_ref_common
- *   ✓ aset2 (2d array set) - COMPLETE, exits via misc_set_common
- *   ✓ aset3 (3d array set) - COMPLETE, exits via misc_set_common
- *   ✓ conslist, conslist_star (heap cons) - COMPLETE
- *   ✓ stkconslist, stkconslist_star (tstack cons) - needs tsp_frame offsets
- *   ✓ mkstackv (tstack vector) - needs tsp_frame offsets
- *   ✓ gvector (heap vector) - COMPLETE except dnode_align macro
- *   ✓ misc_ref (vector read) - COMPLETE: integer/node/string/bit + float and
- *     complex-float vectors (16m37/16m41)
- *   ✓ subtag_misc_ref (explicit subtag) - COMPLETE
- *   ✓ misc_set (vector write) - COMPLETE: same coverage as misc_ref above
- *   ✓ subtag_misc_set (explicit subtag) - COMPLETE
- *   ✓ gvset (GC write barrier) - LOGIC COMPLETE, needs GC globals
- *   ✓ set_hash_key (hash-table write) - LOGIC COMPLETE, needs GC globals
- *   ✓ store_node_conditional (atomic store+barrier) - LOGIC COMPLETE, needs GC globals
- *   ✓ set_hash_key_conditional (atomic hash store) - LOGIC COMPLETE, needs GC globals
- *   ✓ stkconsyz (tstack cons from Y/Z) - COMPLETE
- *   ✓ progvsave (special bindings) - LOGIC COMPLETE (~70 lines), needs tcr/tsp_frame/symbol offsets
- *   ✓ progvrestore (restore bindings) - LOGIC COMPLETE
- *   ✓ stkgvector (tstack general vector) - LOGIC COMPLETE (~30 lines), needs tsp_frame offsets
- *
- * MISSING CONSTANTS (must be defined in arm64-constants.h or arm64-macros.s):
- *
- * 1. GC write barrier (gvset, set_hash_key, store/set_*_conditional):
- *    - ref_base (global: base of reference bitmap)
- *    - refbits (global: pointer to refbits array)
- *    - ephemeral_refidx (global: pointer to ephemeral index array)
- *    - oldspace_dnode_count (global: size of oldspace in dnodes)
- *    - dnode_shift (constant: 4 for 16-byte dnodes)
- *    - bitmap_shift (constant: 9 for 512-entry bitmap chunks)
- *
- * 2. Symbolic values:
- *    - nil_value (address of NIL object; low-tag design unclear if static)
- *    - t_value (address of T object)
- *    - RESERVATION_DISCHARGE (address for clearing ldxr reservation)
- *
- * 3. Error codes:
- *    - XBADVEC (bad vector type/index error)
- *    - XNOTELT (bad element type error)
- *    - XSETBADVEC (bad vector for set operation)
- *
- * 4. TSP frame structure (for stkconslist*, mkstackv, stkgvector, progvsave/restore):
- *    - tsp_frame.fixed_overhead (frame header size, likely 8-16 bytes)
- *    - tsp_frame.data_offset (offset to data area, likely 8)
- *    - tsp_frame.backlink (offset to previous frame link)
- *    - tstack_alloc_limit (global or tcr field for overflow check)
- *
- * 5. TCR offsets (already in constants.h but needs verification):
- *    - tcr.ts_area (offset to tstack area pointer) - VERIFIED at tcr struct definition
- *    - tcr.db_link (special binding chain, for progvsave)
- *    - tcr.tlb_limit, tcr.tlb_pointer (thread-local binding array, for progvsave)
- *
- * 6. Alignment macros (referenced but not expanded):
- *    - dnode_align(dest, src, add) - align to 16-byte boundary
- *
- * 7. Float/complex support -- CLOSED (16m37 real floats, 16m41 complex): the
- *    constants and Misc_Alloc_Fixed all exist; misc_ref/misc_set dispatch every
- *    float and complex-float vector subtag.  Kept for the register/allocation
- *    notes below.
- *    - subtag_double_float, subtag_single_float, subtag_complex_single_float, etc.
- *    - Allocation macros: Misc_Alloc_Fixed for boxed float returns
- *    - Bignum header constants: one/two/three_digit_bignum_header
- *
- * 8. progvsave-specific:
- *    - symbol.binding_index (offset within symbol struct)
- *    - XIMPROPERLIST (error code for improper list)
- *    - Binding trap mechanism (PPC64 trlle → ARM64 conditional brk or bounds check)
- *
- * DESIGN NOTES:
- *   - ARM64 low-tag: fixnumshift=3, misc_data_offset=+4, misc_header_offset=-4
- *   - Bit vectors: ARM64 LSB0 bit order (bit 0 is rightmost)
- *   - Atomics: PPC64 ldarx/stdcx. → ARM64 ldxr/stxr + dmb ish (isync → dmb)
- *   - cons.size = 16 (2*node_size from struct definition)
- *   - _rplaca/_rplacd macros expanded inline as str to cons.car/cons.cdr offsets
- *   - Node vectors delegate to _SPgvset for write-barrier handling
- *   - Float/complex handlers marked #error due to missing constants (not design issues)
- */
-/* SPDX-License-Identifier: Apache-2.0 */
 
 /*
  * C-bind-catch-throw cluster: 41 subprims ported from PPC64 to ARM64 low-tag
@@ -3769,34 +3649,6 @@ spentry tcallnfnvsp
         b _SPjmpnfn                             /* ppc:2399 jump_nfn() (nfn) */
 endsp tcallnfnvsp
 
-/* ported from ppc-spentry.s:3271-3285 (PPC64 branch) */
-/* Get vcell address on stack */
-spentry stkvcellvsp
-        /* ppc-spentry.s:3271-3292.  Push 3 NILs, then overlay a stack-allocated
-           value-cell on two of them, placement chosen by (oddp vsp). */
-        mov arg_z, rnil                 /* ppc:3272 li arg_z,nil_value          */
-        vpush1 arg_z                    /* ppc:3273 vpush(arg_z)                */
-        vpush1 arg_z                    /* ppc:3274 vpush(arg_z)                */
-        vpush1 arg_z                    /* ppc:3275 vpush(arg_z)                */
-        mov imm1, #(node_size*3)        /* ppc:3276 li imm1,node_size*3         */
-        add imm0, vsp, imm1             /* ppc:3277 imm0 = old vsp (pre-push)   */
-        tst vsp, #(1<<3)                /* ppc:3278 andi. (oddp vsp)? flag-only;
-                                           1<<word_shift, word_shift==3 (spentry-B) */
-        mov imm1, #value_cell_header    /* ppc:3279 (flag-neutral)              */
-        ldr arg_z, [imm0]               /* ppc:3280 reload value at old vsp (flag-neutral) */
-        b.eq 1f                         /* ppc:3281 beq cr0 -> even-vsp layout  */
-        str arg_z, [vsp, #(node_size*2)]/* ppc:3282                             */
-        str imm1, [vsp, #node_size]     /* ppc:3283                             */
-        add arg_z, vsp, #(fulltag_misc+node_size) /* ppc:3284 la                */
-        str arg_z, [imm0]               /* ppc:3285                             */
-        ret                             /* ppc:3286 blr                         */
-1:      /* ppc:3287 */
-        str arg_z, [vsp, #node_size]    /* ppc:3288                             */
-        str imm1, [vsp]                 /* ppc:3289                             */
-        add arg_z, vsp, #fulltag_misc   /* ppc:3290 la                          */
-        str arg_z, [imm0]               /* ppc:3291                             */
-        ret                             /* ppc:3292 blr                         */
-endsp stkvcellvsp
 
 /* Register aliases for the destructuring trio (ppc-spentry.s:3538-3541 mapping).
    whole_reg = temp1 (x14); arg_reg = temp3/fname (x16); keyvect_reg = temp2/nfn (x15).
@@ -4229,38 +4081,6 @@ spentry specset
         b _SPgvset                          /* ppc:6739 b _SPgvset               */
 endsp specset
 
-/* ported from ppc-spentry.s:3246-3268 (PPC64 branch) */
-/* Make a stack-consed value cell.  imm0 points to the closed-over value
-   (already vpushed as a locative offset from vsp).  Replace that locative
-   with the newly-minted vcell.  Sibling of stkvcellvsp (which is the same
-   but assumes imm0 == vsp on entry). */
-spentry stkvcell0
-        /* ppc-spentry.s:3246-3268.  Like stkvcellvsp but imm0 is a locative
-           pointing INTO the vstack (not necessarily vsp): compute delta first,
-           then push 3 NILs, recompute, and overlay exactly as stkvcellvsp. */
-        sub imm1, imm0, vsp             /* ppc:3247 sub imm1,imm0,vsp (delta)   */
-        mov arg_z, rnil                 /* ppc:3248 li arg_z,nil_value           */
-        vpush1 arg_z                    /* ppc:3249 vpush(arg_z)                 */
-        vpush1 arg_z                    /* ppc:3250 vpush(arg_z)                 */
-        vpush1 arg_z                    /* ppc:3251 vpush(arg_z)                 */
-        add imm1, imm1, #(node_size*3)  /* ppc:3252 addi imm1,imm1,node_size*3  */
-        add imm0, vsp, imm1             /* ppc:3253 add imm0,vsp,imm1 (recompute)*/
-        tst vsp, #(1<<3)                /* ppc:3254 andi. imm1,vsp,1<<word_shift */
-        mov imm1, #value_cell_header    /* ppc:3255 li imm1,value_cell_header    */
-        ldr arg_z, [imm0]              /* ppc:3256 ldr(arg_z,0(imm0))           */
-        b.eq 1f                         /* ppc:3257 beq cr0 -> even-vsp layout   */
-        str arg_z, [vsp, #(node_size*2)]/* ppc:3258                              */
-        str imm1, [vsp, #node_size]     /* ppc:3259                              */
-        add arg_z, vsp, #(fulltag_misc+node_size) /* ppc:3260 la                 */
-        str arg_z, [imm0]              /* ppc:3261                              */
-        ret                             /* ppc:3262 blr                          */
-1:      /* ppc:3263 even-vsp layout */
-        str arg_z, [vsp, #node_size]    /* ppc:3264                              */
-        str imm1, [vsp]                /* ppc:3265                              */
-        add arg_z, vsp, #fulltag_misc   /* ppc:3266 la                           */
-        str arg_z, [imm0]              /* ppc:3267                              */
-        ret                             /* ppc:3268 blr                          */
-endsp stkvcell0
 
 /* NOTES
  *
