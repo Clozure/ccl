@@ -1313,10 +1313,10 @@
   area.succ)
 
 (defarm64archmacro ccl::nth-immediate (f i)
-  `(ccl::%nth-immediate ,f (the fixnum (- (the fixnum ,i) 1))))
+  `(ccl::%svref ,f ,i))
 
 (defarm64archmacro ccl::set-nth-immediate (f i new)
-  `(ccl::%set-nth-immediate ,f (the fixnum (- (the fixnum ,i) 1)) ,new))
+  `(setf (ccl::%svref ,f ,i) ,new))
 
 (defarm64archmacro ccl::symptr->symvector (s)
   `(ccl::%symptr->symvector ,s))

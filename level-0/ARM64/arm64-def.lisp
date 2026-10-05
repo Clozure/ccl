@@ -35,39 +35,9 @@
   (trap-unless-typecode= arg arm64::subtag-function)
   (ret))
 
-;;; %nth-immediate — immediate (constant) N of a function.  Donor by NAME
-;;; = x86-def.lisp:37, but the body follows MATT'S arm64 function shape
-;;; {code-vector@slot0, constants@slot1..} (16k4 / e4440cb), NOT x8664's
-;;; inline-code layout: immediate n = uvector slot (1+ n).  fun is
-;;; misc-tagged (fulltag-function removed, patch 0055): slot(1+n) sits at
-;;; fun-12+8+8(1+n) = fun+4+8n, and boxed n IS 8n.  The offset goes in
-;;; imm0 and fun stays the base register, so a GC can't strand the access.
-(defarm64lapfunction %nth-immediate ((fun arg_y) (n arg_z))
-  (trap-unless-typecode= fun arm64::subtag-function)
-  (add imm0 n (:$ (+ arm64::misc-data-offset arm64::node-size)))
-  (ldr arg_z (:@ fun imm0))
-  (ret))
-
-;;; %set-nth-immediate — setter twin, donor x86-def.lisp:45 (16m11b
-;;; demand: l1-clos-boot gf-dcode install).  Store goes through .SPgvset
-;;; for the GC write barrier (x86:50 jmp .SPgvset), never inline.
-;;; gvset contract (spentry-B:77): arg_x = misc-tagged vector, arg_y =
-;;; boxed slot index (= byte offset at fixnumshift 3), arg_z = value.
-;;; Slot = (1+ n) on Matt's {cv@0, imms@1..} shape — x86:47-48's
-;;; code-words lookup drops out (no inline code here).
-(defarm64lapfunction %set-nth-immediate ((fun arg_x) (n arg_y) (new arg_z))
-  (trap-unless-typecode= fun arm64::subtag-function)  ; x86:46
-  (add arg_y n (:$ (ash 1 arm64::fixnumshift)))       ; boxed 1+n
-  ;; fun is already the misc-tagged vector (fulltag-function removed,
-  ;; patch 0055) — no retag before .SPgvset.
-  (jump-subprim .SPgvset))                            ; x86:50
-
-;;; closure-function — x86-def.lisp:496 verbatim (his function shape:
-;;; a closure's inner function = immediate 0, with the vector
-;;; indirection for lfun-vector-reached cases).  16m5t demand.
 (defun closure-function (fun)
   (while (and (functionp fun)  (not (compiled-function-p fun)))
-    (setq fun (%nth-immediate fun 0))
+    (setq fun (%svref fun 1))
     (when (vectorp fun)
       (setq fun (svref fun 0))))
   fun)
