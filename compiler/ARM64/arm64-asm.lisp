@@ -197,6 +197,13 @@
 (define-register-alias imm3 x3)
 (define-register-alias imm4 x4)
 (define-register-alias imm5 x5)
+
+;;; Selected 32-bit view names
+(define-register-alias wimm0 w0)
+(define-register-alias wimm1 w1)
+(define-register-alias wimm2 w2)
+(define-register-alias wimm3 w3)
+
 ;; nargs probably doesn't need to be a dedicated register
 (define-register-alias nargs x6)        ;unboxed, but nargs fixnum tagged
 

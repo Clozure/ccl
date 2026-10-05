@@ -63,9 +63,13 @@ DEFCONST(log2_heap_segment_size, 17)
 /* lisp names for registers */
 #ifdef __ASSEMBLER__
 imm0 .req x0
+wimm0 .req w0
 imm1 .req x1
+wimm1 .req w1
 imm2 .req x2
+wimm2 .req w2
 imm3 .req x3
+wimm3 .req w3
 imm4 .req x4
 imm5 .req x5
 nargs .req x6
