@@ -403,14 +403,12 @@ registration (otherwise :with-frame etc. silently fall back to #/init)."
                                  #xaa0103fe      ; mov lr, x1
                                  #xd61f0200))    ; br x16
                    (nbytes (* 4 (length code-words)))
-                   (ptr (%allocate-callback-pointer 16))
-                   ;; On Darwin the callback page is MAP_JIT: assemble
-                   ;; into a heap scratch and let kernel C blit it into
-                   ;; place (same pattern as make-callback-trampoline).
-                   (scratch (make-array 16 :element-type '(unsigned-byte 8)
-                                        :initial-element 0)))
-              (with-macptrs ((s))
-                (%vect-data-to-macptr scratch s)
+                   (ptr (%allocate-callback-pointer 16)))
+              ;; On Darwin the callback page is MAP_JIT: assemble
+              ;; into a scratch buffer and let lisp kernel C blit it
+              ;; into place (same pattern as make-callback-trampoline).
+              ;; The scratch is foreign stack memory, which doesn't move.
+              (%stack-block ((s 16))
                 (do* ((i 0 (+ i 4))
                       (words code-words (cdr words)))
                      ((null words))

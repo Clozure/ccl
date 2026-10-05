@@ -869,14 +869,24 @@ MAP_JIT code area.  Its payload is zeroed.  Fill with
   "Copy NBYTES from SRC-IVECTOR payload into CODE-VECTOR.  WP+icache
 in kernel C — no lisp runs while MAP_JIT pages are RW-only."
   (declare (fixnum nbytes))
-  (with-macptrs ((d) (s))
-    (%vect-data-to-macptr code-vector d)
-    (%vect-data-to-macptr src-ivector s)
-    (ff-call (foreign-symbol-address "darwin_arm64_jit_install_code")
-             :address d
-             :address s
-             :unsigned-fullword nbytes
-             :void))
+  ;; SRC-IVECTOR is in the dynamic heap, and other threads can GC
+  ;; while this one is in foreign code, so C mustn't see a pointer
+  ;; into it.  Copy it (in lisp, where a GC is harmless) to malloc'ed
+  ;; memory, which doesn't move, and install from there.
+  (with-macptrs ((d)
+                 (s (malloc nbytes)))
+    (when (%null-ptr-p s)
+      (error "Can't allocate ~d bytes to install code" nbytes))
+    (unwind-protect
+         (progn
+           (%copy-ivector-to-ptr src-ivector 0 s 0 nbytes)
+           (%vect-data-to-macptr code-vector d)
+           (ff-call (foreign-symbol-address "darwin_arm64_jit_install_code")
+                    :address d
+                    :address s
+                    :unsigned-fullword nbytes
+                    :void))
+      (free s)))
   code-vector)
 
 (defun %enable-darwinarm64-map-jit-fasls ()

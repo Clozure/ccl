@@ -39,15 +39,14 @@
   (declare (ignorable info))
   (let* ((p (%allocate-callback-pointer 32))
          (addr (%lookup-subprim-address
-                #.(arm64::subprimitive-offset ".SPcallback")))
-         ;; On Darwin the callback page is MAP_JIT: assemble into a heap
-         ;; u8 scratch, then C-blit into place.  Never call
-         ;; pthread_jit_write_protect_np from MAP_JIT-resident lisp —
-         ;; that makes the caller non-executable.
-         (scratch (make-array 32 :element-type '(unsigned-byte 8)
-                              :initial-element 0)))
-    (with-macptrs ((s))
-      (%vect-data-to-macptr scratch s)
+                #.(arm64::subprimitive-offset ".SPcallback"))))
+    ;; On Darwin the callback page is MAP_JIT: assemble into a scratch
+    ;; buffer, then C-blit into place.  Never call
+    ;; pthread_jit_write_protect_np from MAP_JIT-resident lisp — that
+    ;; makes the caller non-executable.  The scratch is foreign stack
+    ;; memory: a raw pointer into a heap vector would be left behind
+    ;; if a GC moved the vector.
+    (%stack-block ((s 32))
       (setf (%get-unsigned-long s 0)          ; movz x10,#lo16(index)
             (logior #xd280000a (ash (ldb (byte 16 0) index) 5))
             (%get-unsigned-long s 4)          ; movk x10,#hi16(index),lsl #16
