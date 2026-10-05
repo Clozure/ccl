@@ -1744,67 +1744,67 @@ misc_ref_common:
         b.eq misc_ref_u32
         b misc_ref_invalid
 misc_ref_node:
-        add imm0, arg_y, arg_z
-        ldr arg_z, [imm0, #misc_data_offset]
+        add imm0, arg_z, #misc_data_offset
+        ldr arg_z, [arg_y, imm0]
         ret
 misc_ref_u8:
         lsr imm0, arg_z, #fixnumshift
-        add imm2, arg_y, #misc_data_offset
-        ldrb w0, [imm2, imm0]
+        add imm0, imm0, #misc_data_offset
+        ldrb w0, [arg_y, imm0]
         lsl arg_z, x0, #fixnumshift
         ret
 misc_ref_s8:
         lsr imm0, arg_z, #fixnumshift
-        add imm2, arg_y, #misc_data_offset
-        ldrsb x0, [imm2, imm0]
+        add imm0, imm0, #misc_data_offset
+        ldrsb x0, [arg_y, imm0]
         lsl arg_z, x0, #fixnumshift
         ret
 misc_ref_u16:
         lsr imm0, arg_z, #fixnumshift
         lsl imm0, imm0, #1
-        add imm2, arg_y, #misc_data_offset
-        ldrh w0, [imm2, imm0]
+        add imm0, imm0, #misc_data_offset
+        ldrh w0, [arg_y, imm0]
         lsl arg_z, x0, #fixnumshift
         ret
 misc_ref_s16:
         lsr imm0, arg_z, #fixnumshift
         lsl imm0, imm0, #1
-        add imm2, arg_y, #misc_data_offset
-        ldrsh x0, [imm2, imm0]
+        add imm0, imm0, #misc_data_offset
+        ldrsh x0, [arg_y, imm0]
         lsl arg_z, x0, #fixnumshift
         ret
 misc_ref_u32:
         lsr imm0, arg_z, #fixnumshift
         lsl imm0, imm0, #2
-        add imm2, arg_y, #misc_data_offset
-        ldr w0, [imm2, imm0]
+        add imm0, imm0, #misc_data_offset
+        ldr w0, [arg_y, imm0]
         lsl arg_z, x0, #fixnumshift
         ret
 misc_ref_s32:
         lsr imm0, arg_z, #fixnumshift
         lsl imm0, imm0, #2
-        add imm2, arg_y, #misc_data_offset
-        ldrsw x0, [imm2, imm0]
+        add imm0, imm0, #misc_data_offset
+        ldrsw x0, [arg_y, imm0]
         lsl arg_z, x0, #fixnumshift
         ret
 misc_ref_u64:
-        add imm0, arg_y, arg_z
-        ldr imm0, [imm0, #misc_data_offset]
+        add imm0, arg_z, #misc_data_offset
+        ldr imm0, [arg_y, imm0]
         b _SPmakeu64
 misc_ref_s64:
-        add imm0, arg_y, arg_z
-        ldr imm0, [imm0, #misc_data_offset]
+        add imm0, arg_z, #misc_data_offset
+        ldr imm0, [arg_y, imm0]
         b _SPmakes64
 misc_ref_fixnum_vector:
-        add imm0, arg_y, arg_z
-        ldr imm0, [imm0, #misc_data_offset]
+        add imm0, arg_z, #misc_data_offset
+        ldr imm0, [arg_y, imm0]
         lsl arg_z, imm0, #fixnumshift
         ret
 misc_ref_string:
         /* 32-bit chars (see misc_set_string); PPC64 misc_ref_new_string. */
         lsr imm0, arg_z, #1             /* boxed idx -> idx*4              */
-        add imm2, arg_y, #misc_data_offset
-        ldr w0, [imm2, imm0]
+        add imm0, imm0, #misc_data_offset
+        ldr w0, [arg_y, imm0]
         lsl imm0, x0, #charcode_shift
         orr arg_z, imm0, #subtag_character
         ret
@@ -1813,8 +1813,8 @@ misc_ref_bit_vector:
         lsr imm0, arg_z, #fixnumshift
         lsr imm2, imm0, #5
         lsl imm2, imm2, #2
-        add imm2, arg_y, imm2
-        ldr w3, [imm2, #misc_data_offset]
+        add imm2, imm2, #misc_data_offset
+        ldr w3, [arg_y, imm2]
         and imm1, imm0, #31
         lsr w3, w3, w1
         and w3, w3, #1
@@ -1825,8 +1825,8 @@ misc_ref_single_float_vector:
            misc_ref_u32: boxed idx >> fixnumshift, then << 2. */
         lsr imm0, arg_z, #fixnumshift
         lsl imm0, imm0, #2
-        add imm2, arg_y, #misc_data_offset
-        ldr w0, [imm2, imm0]
+        add imm0, imm0, #misc_data_offset
+        ldr w0, [arg_y, imm0]
         /* ppc:2761-2762 (rldicr 32,31 + ori).  Single-floats are IMMEDIATE on
            arm64, the raw IEEE bits riding the high 32 with the tag in the low
            byte.  NB the tag spelling: arm64-arch.lisp:83 defines
@@ -1839,8 +1839,8 @@ misc_ref_single_float_vector:
 misc_ref_double_float_vector:
         /* ppc:2700-2705.  64-bit elements: fixnumshift == word_shift == 3, so
            the boxed index IS the byte offset, exactly as in misc_ref_u64. */
-        add imm0, arg_y, arg_z
-        ldr imm0, [imm0, #misc_data_offset]
+        add imm0, arg_z, #misc_data_offset
+        ldr imm0, [arg_y, imm0]
         /* Unlike PPC, arm64-constants.h defines no double_float_header, so
            build it here -- but the count is a LITERAL 2, not
            double_float.element_count.  _endstructf derives element_count as
@@ -1871,8 +1871,8 @@ misc_ref_complex_single_float_vector:
            and one store carry both parts.
            imm0 must survive Misc_Alloc_Fixed with the header in imm2 -- the
            same guarantee makes128 relies on. */
-        add imm0, arg_y, arg_z
-        ldr imm0, [imm0, #misc_data_offset]
+        add imm0, arg_z, #misc_data_offset
+        ldr imm0, [arg_y, imm0]
         /* Literal 2, not complex_single_float.element_count: ivector_class_32_bit
            over an 8-byte payload, so the count is 2 thirty-two-bit elements
            where _endstructf's node-derived value is 1.  x8664 canon:
@@ -1896,9 +1896,10 @@ misc_ref_complex_double_float_vector:
            (arm64-constants.h:349-353: {pad, realpart, imagpart}), so the
            store side still uses .realpart. */
         lsl imm3, arg_z, #1
-        add imm3, imm3, arg_y
         add imm3, imm3, #misc_complex_dfloat_offset
-        ldp imm0, imm1, [imm3]
+        ldr imm0, [arg_y, imm3]
+        add imm3, imm3, #node_size
+        ldr imm1, [arg_y, imm3]
         /* Literal 6, not complex_double_float.element_count: ivector_class_32_bit
            over a 24-byte payload {pad, realpart, imagpart}, so 6 thirty-two-bit
            elements where the node-derived value is 3.  Worse than the other two
@@ -2092,8 +2093,8 @@ misc_set_u8:
         cmp imm0, #256
         b.hs misc_set_bad
         lsr imm4, arg_y, #fixnumshift   /* ppc:4297 idx                    */
-        add imm2, arg_x, #misc_data_offset
-        strb w0, [imm2, imm4]           /* ppc:4301 stbx (was [imm4,imm4]) */
+        add imm4, imm4, #misc_data_offset
+        strb w0, [arg_x, imm4]          /* ppc:4301 stbx                   */
         ret
 misc_set_s8:
         and imm2, arg_z, #fixnummask
@@ -2103,8 +2104,8 @@ misc_set_s8:
         cmp x0, x1
         b.ne misc_set_bad
         lsr imm4, arg_y, #fixnumshift   /* ppc:4286 idx                    */
-        add imm2, arg_x, #misc_data_offset
-        strb w0, [imm2, imm4]           /* ppc:4293 stbx (was [imm4,imm4]) */
+        add imm4, imm4, #misc_data_offset
+        strb w0, [arg_x, imm4]          /* ppc:4293 stbx                   */
         ret
 misc_set_u16:
         and imm0, arg_z, #fixnummask
@@ -2114,9 +2115,8 @@ misc_set_u16:
         b.hs misc_set_bad
         lsr imm1, arg_y, #fixnumshift   /* ppc:4266 idx                    */
         lsl imm1, imm1, #1              /* *2 bytes                        */
-        add imm2, arg_x, #misc_data_offset
-        strh w0, [imm2, imm1]           /* (index was clobbered; store hit
-                                           element 0 for every index)      */
+        add imm1, imm1, #misc_data_offset
+        strh w0, [arg_x, imm1]
         ret
 misc_set_s16:
         and imm2, arg_z, #fixnummask
@@ -2127,8 +2127,8 @@ misc_set_s16:
         b.ne misc_set_bad
         lsr imm1, arg_y, #fixnumshift
         lsl imm1, imm1, #1
-        add imm2, arg_x, #misc_data_offset
-        strh w0, [imm2, imm1]
+        add imm1, imm1, #misc_data_offset
+        strh w0, [arg_x, imm1]
         ret
 misc_set_u32:
         /* ppc:4256-4263.  extract_unsigned_byte_bits_(imm0,arg_z,32): on
@@ -2141,8 +2141,8 @@ misc_set_u32:
         lsr imm2, imm1, #32             /* sign or high bits => not u32    */
         cbnz imm2, misc_set_bad
         lsr imm4, arg_y, #1             /* ppc:4258 boxed idx -> idx*4     */
-        add imm2, arg_x, #misc_data_offset
-        str w1, [imm2, imm4]            /* ppc:4262 stwx                   */
+        add imm4, imm4, #misc_data_offset
+        str w1, [arg_x, imm4]           /* ppc:4262 stwx                   */
         ret
 misc_set_s32:
         /* ppc:4243-4255; fixnum-only for the same reason as u32. */
@@ -2153,8 +2153,8 @@ misc_set_s32:
         cmp x0, x1
         b.ne misc_set_bad
         lsr imm4, arg_y, #1             /* boxed idx -> idx*4              */
-        add imm2, arg_x, #misc_data_offset
-        str w0, [imm2, imm4]            /* ppc:4254 stwx                   */
+        add imm4, imm4, #misc_data_offset
+        str w0, [arg_x, imm4]           /* ppc:4254 stwx                   */
         ret
 misc_set_u64:
         /* ppc:4303-4332.  Value > most-positive-fixnum arrives as a 2- or
@@ -2165,8 +2165,8 @@ misc_set_u64:
         cbnz imm0, setu64_maybe_bignum  /* ppc:4310                        */
         asr imm0, arg_z, #fixnumshift   /* ppc:4311                        */
         tbnz imm0, #63, misc_set_bad    /* ppc:4312 blt (negative fixnum)  */
-2:      add imm4, arg_x, arg_y
-        str imm0, [imm4, #misc_data_offset]     /* ppc:4313 stdx           */
+2:      add imm4, arg_y, #misc_data_offset
+        str imm0, [arg_x, imm4]                 /* ppc:4313 stdx           */
         ret
 setu64_maybe_bignum:                    /* ppc:4315-4332                   */
         and imm2, arg_z, #fulltagmask
@@ -2191,8 +2191,8 @@ misc_set_s64:
         and imm2, arg_z, #fixnummask
         cbnz imm2, sets64_maybe_bignum  /* ppc:4376                        */
         asr imm0, arg_z, #fixnumshift   /* ppc:4372                        */
-2:      add imm4, arg_x, arg_y
-        str imm0, [imm4, #misc_data_offset]     /* ppc:4377 stdx           */
+2:      add imm4, arg_y, #misc_data_offset
+        str imm0, [arg_x, imm4]                 /* ppc:4377 stdx           */
         ret
 sets64_maybe_bignum:                    /* ppc:4379-4387                   */
         and imm3, arg_z, #fulltagmask
@@ -2208,8 +2208,8 @@ misc_set_fixnum_vector:
         and imm2, arg_z, #fixnummask
         cbnz imm2, misc_set_bad
         asr imm0, arg_z, #fixnumshift
-        add imm4, arg_x, arg_y
-        str imm0, [imm4, #misc_data_offset]
+        add imm4, arg_y, #misc_data_offset
+        str imm0, [arg_x, imm4]
         ret
 misc_set_string:
         /* ppc:4264-4272 misc_set_new_string: this design's strings are
@@ -2221,8 +2221,8 @@ misc_set_string:
         b.ne misc_set_bad
         lsr imm0, arg_z, #charcode_shift        /* ppc:4269 code           */
         lsr imm4, arg_y, #1             /* ppc:4266 boxed idx -> idx*4     */
-        add imm2, arg_x, #misc_data_offset
-        str w0, [imm2, imm4]            /* ppc:4271 stwx                   */
+        add imm4, imm4, #misc_data_offset
+        str w0, [arg_x, imm4]           /* ppc:4271 stwx                   */
         ret
 misc_set_bit_vector:
         /* ARM64 LSB0 bit order */
@@ -2231,8 +2231,8 @@ misc_set_bit_vector:
         lsr imm0, arg_y, #fixnumshift
         lsr imm2, imm0, #5
         lsl imm2, imm2, #2
-        add imm2, arg_x, imm2
-        ldr w3, [imm2, #misc_data_offset]
+        add imm2, imm2, #misc_data_offset
+        ldr w3, [arg_x, imm2]
         and imm1, imm0, #31
         mov w4, #1
         lsl w4, w4, w1
@@ -2240,7 +2240,7 @@ misc_set_bit_vector:
         lsr imm0, arg_z, #fixnumshift
         lsl w0, w0, w1
         orr w3, w3, w0
-        str w3, [imm2, #misc_data_offset]
+        str w3, [arg_x, imm2]
         ret
 misc_set_single_float_vector:
         /* ppc:4234-4241.  arg_x=vector arg_y=boxed index arg_z=value. */
@@ -2249,8 +2249,8 @@ misc_set_single_float_vector:
         b.ne misc_set_bad
         lsr imm4, arg_y, #1             /* ppc:4236 boxed idx -> idx*4     */
         lsr imm0, arg_z, #32            /* ppc:4239 the IEEE bits ride high */
-        add imm2, arg_x, #misc_data_offset
-        str w0, [imm2, imm4]            /* ppc:4240 stwx                   */
+        add imm4, imm4, #misc_data_offset
+        str w0, [arg_x, imm4]           /* ppc:4240 stwx                   */
         ret
 misc_set_double_float_vector:
         /* ppc:4333-4339.  PPC's extract_typecode is tag-safe; we have no such
@@ -2266,8 +2266,8 @@ misc_set_double_float_vector:
         b.ne misc_set_bad
         ldr imm0, [arg_z, #double_float.value]   /* ppc:4337 misc_dfloat_offset */
         /* 64-bit elements: boxed index IS the byte offset (fixnumshift 3). */
-        add imm4, arg_x, arg_y
-        str imm0, [imm4, #misc_data_offset]      /* ppc:4338 stdx           */
+        add imm4, arg_y, #misc_data_offset
+        str imm0, [arg_x, imm4]                  /* ppc:4338 stdx           */
         ret
 misc_set_complex_single_float_vector:
         /* 16m41, parity twin of misc_ref_complex_single_float_vector.
@@ -2281,8 +2281,8 @@ misc_set_complex_single_float_vector:
         cmp imm1, #subtag_complex_single_float
         b.ne misc_set_bad
         ldr imm0, [arg_z, #complex_single_float.realpart]  /* both parts */
-        add imm4, arg_x, arg_y                  /* boxed idx IS the byte offset */
-        str imm0, [imm4, #misc_data_offset]
+        add imm4, arg_y, #misc_data_offset      /* boxed idx IS the byte offset */
+        str imm0, [arg_x, imm4]
         ret
 misc_set_complex_double_float_vector:
         and imm2, arg_z, #fulltagmask
@@ -2295,9 +2295,10 @@ misc_set_complex_double_float_vector:
         ldur imm0, [arg_z, #complex_double_float.realpart]   /* ldur: see the */
         ldur imm1, [arg_z, #(complex_double_float.realpart + 8)] /* ref leg  */
         lsl imm4, arg_y, #1                     /* 16i = boxed<<1 */
-        add imm4, imm4, arg_x
         add imm4, imm4, #misc_complex_dfloat_offset  /* 16m48: pad; see ref leg */
-        stp imm0, imm1, [imm4]
+        str imm0, [arg_x, imm4]
+        add imm4, imm4, #node_size
+        str imm1, [arg_x, imm4]
         ret
 misc_set_bad:
         mov arg_y, arg_z

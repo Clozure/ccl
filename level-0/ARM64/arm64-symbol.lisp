@@ -246,8 +246,7 @@
     (sub len len (:$ arm64::fixnumone))
     ;; (lwzx nextw str offset) — 32-bit load; w1 = W alias of nextw/imm1/x1
     ;; (Matt's arm64-asm.lisp:144); avoids over-reading past the last char.
-    (add imm3 str offset)
-    (ldr w1 (:@ imm3 (:$ 0)))
+    (ldr w1 (:@ str offset))
     ;; (addi offset offset 4)
     (add offset offset (:$ 4))
     ;; (rotlwi accum accum 5) — 32-bit rotate left by 5, emulated
@@ -299,8 +298,7 @@
     @loop
     (sub len len (:$ arm64::fixnumone))
     ;; (lwzx nextw str offset) — 32-bit load via w1 (see %pname-hash)
-    (add imm3 str offset)
-    (ldr w1 (:@ imm3 (:$ 0)))
+    (ldr w1 (:@ str offset))
     (add offset offset (:$ 4))
     ;; (rotlwi accum accum 5) — 32-bit rotate left by 5, emulated
     ;; (see %pname-hash: 64-bit ror would leak bits 27-31 into 32-36)

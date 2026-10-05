@@ -213,8 +213,7 @@
       ;; (lwzx next key offset) — 32-bit digit load; w3 = W alias of
       ;; next/header/imm3/x3 (Matt's arm64-asm.lisp:146); avoids
       ;; over-reading past the last digit.
-      (add imm4 key offset)
-      (ldr w3 (:@ imm4 (:$ 0)))
+      (ldr w3 (:@ key offset))
       ;; (rotldi immhash immhash 13) — 64-bit rotate left by 13 = ror #51
       (ror immhash immhash (:$ 51))
       ;; (addi offset offset 4)

@@ -40,11 +40,12 @@
 ;;; {code-vector@slot0, constants@slot1..} (16k4 / e4440cb), NOT x8664's
 ;;; inline-code layout: immediate n = uvector slot (1+ n).  fun is
 ;;; misc-tagged (fulltag-function removed, patch 0055): slot(1+n) sits at
-;;; fun-12+8+8(1+n) = fun+4+8n, and boxed n IS 8n — one add + unscaled ldur.
+;;; fun-12+8+8(1+n) = fun+4+8n, and boxed n IS 8n.  The offset goes in
+;;; imm0 and fun stays the base register, so a GC can't strand the access.
 (defarm64lapfunction %nth-immediate ((fun arg_y) (n arg_z))
   (trap-unless-typecode= fun arm64::subtag-function)
-  (add imm0 fun n)
-  (ldur arg_z (:@ imm0 (:$ (+ arm64::misc-data-offset arm64::node-size))))
+  (add imm0 n (:$ (+ arm64::misc-data-offset arm64::node-size)))
+  (ldr arg_z (:@ fun imm0))
   (ret))
 
 ;;; %set-nth-immediate — setter twin, donor x86-def.lisp:45 (16m11b
