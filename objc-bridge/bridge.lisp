@@ -830,7 +830,9 @@
             `(:* ,(concise-foreign-type to))))
         (if (typep ftype 'foreign-type)
           (unparse-foreign-type ftype)
-          ftype)))))
+          (if (and (keywordp ftype) (objc-object-typedef-p ftype))
+            :id
+            ftype))))))
 
 
 ;;; Not a perfect mechanism.
@@ -1357,18 +1359,42 @@
               ;; STRET not required but provided
               (error "The message ~S must be sent using SEND" msg)))))))
 
+;;; Is the foreign record type REC the struct for a class in the
+;;; interface database?
+(defun objc-class-record-type-p (rec)
+  (let* ((name (foreign-record-type-name rec)))
+    (and name
+         (get-objc-class-decl (unescape-foreign-name (symbol-name name)) t)
+         t)))
+
+;;; A pointer to an ObjC object: a struct whose first field is an isa
+;;; pointer, or a struct named after a class in the interface database.
+;;; ffigen5 doesn't define a struct for each class the way the old
+;;; gcc-based ffigen did, so in interfaces it generates (e.g.,
+;;; darwinarm64) the class's struct has no isa field to recognize.
 (defun objc-id-type-p (foreign-type)
   (and (typep foreign-type 'foreign-pointer-type)
        (let* ((to (foreign-pointer-type-to foreign-type)))
          (and (typep to 'foreign-record-type)
               (eq :struct (foreign-record-type-kind to))
-              (not (null (progn (ensure-foreign-type-bits to) (foreign-record-type-fields to))))
-              (let* ((target (foreign-record-field-type (car (foreign-record-type-fields to)))))
-                (and (typep target 'foreign-pointer-type)
-                     (let* ((target-to (foreign-pointer-type-to target)))
-                       (and (typep target-to 'foreign-record-type)
-                            (eq :struct (foreign-record-type-kind target-to))
-                            (eq :objc_class (foreign-record-type-name target-to))))))))))
+              (if (progn (ensure-foreign-type-bits to) (foreign-record-type-fields to))
+                (let* ((target (foreign-record-field-type (car (foreign-record-type-fields to)))))
+                  (and (typep target 'foreign-pointer-type)
+                       (let* ((target-to (foreign-pointer-type-to target)))
+                         (and (typep target-to 'foreign-record-type)
+                              (eq :struct (foreign-record-type-kind target-to))
+                              (eq :objc_class (foreign-record-type-name target-to))))))
+                (objc-class-record-type-p to))))))
+
+;;; Is NAME a typedef for a pointer to an ObjC class?  Modern SDKs have
+;;; many of these, e.g., NSNibName is NSString *.
+(defun objc-object-typedef-p (name)
+  (let* ((ftype (ignore-errors (parse-foreign-type name))))
+    (and (typep ftype 'foreign-pointer-type)
+         (let* ((to (foreign-pointer-type-to ftype)))
+           (and (typep to 'foreign-record-type)
+                (eq :struct (foreign-record-type-kind to))
+                (objc-class-record-type-p to))))))
 
 (defun unique-objc-classes-in-method-info-list (method-info-list)
   (if (cdr method-info-list)                     ; if more than 1 class
