@@ -3137,15 +3137,6 @@
             (! load-nil arm64::arg_x)
             (! misc-set-c-node arm64::arg_x dest cell)
             (! misc-set-c-node arm64::arg_y dest (1+ cell))))
-        ;; Both legs above build the closure through the MISC allocator
-        ;; (arm642-alloc-misc-fixed / .SPstkgvector), which since the
-        ;; fulltag_function removal (patch 0055) is already the final tag:
-        ;; an arm64 function is fulltag-misc + header subtag-function, the
-        ;; PPC64 shape.  tag-as-function is (mov dest src) accordingly, so
-        ;; with dest = dest this is a no-op that names the seam.  If a
-        ;; distinct function tag ever returns, this is where it goes, and
-        ;; it must stay LAST -- the cell stores above are misc-relative.
-        (! tag-as-function dest dest)
         dest))))
 
 (defun arm642-symbol-entry-locative (sym)
@@ -8378,12 +8369,6 @@
                                     (progn
                                       (arm642-addrspec-to-reg seg v-ea arm64::temp1)
                                       arm64::temp1))))
-                    ;; NOT the donor's misc-set-c-node: temp0 is
-                    ;; function-tagged here (tag-as-function ran inside
-                    ;; make-closure), and misc addressing off a tag-7
-                    ;; pointer lands +3 past the slot (16m13 root).
-                    ;; x8664 (split tags like this port) uses this
-                    ;; dedicated vinsn -- x862.lisp:10053.
                     (! set-closure-forward-reference val-reg arm64::temp0 (car r)))))))
           (arm642-undo-body seg vreg xfer body old-stack)
           (dolist (var real-vars)

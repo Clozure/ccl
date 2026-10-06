@@ -1451,18 +1451,8 @@
                               (:apply ash idx 3))))))
 
 ;;; ============ set-closure-forward-reference ============
-;;; Donor: x8664-vinsns.lisp:301 (movq val (misc-function-offset + 8*idx)
-;;; closure).  The labels forward-ref fixup stores into a closure AFTER
-;;; tag-as-function retagged it misc(4)->function(7); misc-set-c-node's
-;;; misc-data-offset addressing is then +3 off, producing an UNALIGNED
-;;; 8-byte store at slot+3 that merges the closure pointer with the
-;;; neighboring cells ((clos<<24)|nil in slot 2, low-bytes leak into
-;;; slot 3 -- the 16m13 l1-clos not-callable).  HISTORY: that was the
-;;; split-tag era.  Since the fulltag-function removal (patch 0055)
-;;; misc-function-offset = misc-data-offset (-4) and this vinsn is
-;;; equivalent to misc-set-c-node's addressing; kept as the dedicated
-;;; seam.  No GC write barrier: initializing store, faithful to both
-;;; donors.
+;;; Store val into cell idx of a closure that LABELS is still
+;;; initializing.  No write barrier: it's an initializing store.
 (define-arm64-vinsn set-closure-forward-reference (()
                                                    ((val :lisp)
                                                     (closure :lisp)
@@ -4531,13 +4521,10 @@
   (blr temp))
 
 ;;; ============ tag-as-function ============
-;;; Since the fulltag-function removal (patch 0055) a finished closure
-;;; already carries its final tag (fulltag-misc) straight out of the
-;;; misc allocator, exactly as on PPC64 -- this vinsn is now a plain
-;;; move.  It was "the single seam to change" if Matt landed a different
-;;; convention, and he did: this IS that change.  Kept (as a move)
-;;; because patch 0042's arm642-make-closure emit site calls it with
-;;; dest = src, where it degenerates to a no-op mov.
+;;; Functions are ordinary misc objects, so a new closure needs no
+;;; retagging and nothing emits this.  Left for bootstrapping (the
+;;; compiler in an older image emits it).  Remove after 1.14 binaries
+;;; are built.
 (define-arm64-vinsn tag-as-function (((dest :lisp))
                                      ((src :lisp)))
   (mov dest src))
