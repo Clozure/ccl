@@ -2610,30 +2610,13 @@ argument lisp string."
 (defun %add-objc-class (class)
   (#_objc_registerClassPair class))
 
-
-
-
-
-
-
-(let* ((objc-gen-message-args (make-array 10 :fill-pointer 0 :adjustable t)))
-  (defun %objc-gen-message-arg (n)
-    (let* ((len (length objc-gen-message-args)))
-      (do* ((i len (1+ i)))
-           ((> i n) (aref objc-gen-message-args n))
-        (vector-push-extend (intern (format nil "ARG~d" i)) objc-gen-message-args)))))
-
+;;; We used to keep a vector of these arglist symbols so that they
+;;; could be shared.  By using fresh uninterned symbols, we avoid
+;;; shared state subject to races (and incidentally avoid interning
+;;; into the current package).
 (defun objc-gen-message-arglist (n)
   (collect ((args))
-    (dotimes (i n (args)) (args (%objc-gen-message-arg i)))))
-
-
-
-
-
-                           
-    
-                   
+    (dotimes (i n (args)) (args (make-symbol (format nil "ARG~d" i))))))
 
 ;;; Call get-objc-message-info for all known init messages.  (A
 ;;; message is an "init message" if it starts with the string "init",
