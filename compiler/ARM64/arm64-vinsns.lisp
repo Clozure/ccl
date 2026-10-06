@@ -3856,14 +3856,6 @@
   (ldr temp (:@ rcontext temp))
   (blr temp))
 
-;;; ============ vcell triple (post-wall scan; PPC64 2072-2096) ============
-;;; Closed-over-variable value cells: slot-0 ref/set (LDUR/STUR @ -4;
-;;; vcell-set carries NO write barrier on PPC64 -- the barrier'd path is
-;;; .SPgvset via the handler, same split as misc-set-node) + make-vcell
-;;; on the cons/%alloc-misc-fixed alloc canon (value-cell = header +
-;;; 1 cell = 16 bytes; his value-cell-header @708).  Operand-alias
-;;; order: closed is stored via dest only AFTER dest is formed --
-;;; PPC64's (:ne dest) constraint carried.
 (define-arm64-vinsn vcell-ref (((dest :lisp))
                                ((vcell :lisp)))
   (ldur dest (:@ vcell (:$ arm64::misc-data-offset))))
@@ -3934,9 +3926,7 @@
   (ldr temp (:@ rcontext temp))
   (blr temp))
 
-;;; complex-single-float->heap -- box a csf (one 64-bit payload word)
-;;; into a fresh 16-byte miscobj: the cons/%alloc-misc-fixed alloc
-;;; canon + a D-form STUR of both lanes to realpart (-4).
+;;; Box a complex-single-float.
 (define-arm64-vinsn complex-single-float->heap (((dest :lisp))
                                                 ((val :complex-single-float))
                                                 ((header :u64)))
@@ -4462,40 +4452,42 @@
                          arm64::symbol.size))))
   (ldr dest (:@ rnil temp)))
 
-;;; ============ %alloc-misc-fixed ============
-;;; PPC64 ppc64-vinsns.lisp:2414 logic (round nbytes+header to a dnode,
-;;; decrement, trap, plant header, tag) composed on HIS Misc_Alloc_Fixed
-;;; canon (lisp-kernel/arm64-macros.s:68-76): the same alloc protocol as
-;;; the `cons' vinsn above (udf #4 = uuo_alloc; order load-bearing).
-;;; misc-header-offset = -12 => STUR.  Emit sites gate the size within
-;;; sub's imm12 (PPC64 has the equivalent constraint via la simm16).
+;;; Allocate a small uvector, whose displacement (dnode-aligned size
+;;; less fulltag-misc) fits in an imm12 (i.e., <= 4095).
+(define-arm64-vinsn %allocate-uvector (((dest :lisp))
+                                       ((header :u64)
+                                        (disp :u16const)))
+  (sub allocptr allocptr (:$ disp))
+  (cmp allocptr allocbase)
+  (b.hi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
+  (stur header (:@ allocptr (:$ arm64::misc-header-offset)))
+  (mov dest allocptr)
+  (bic allocptr allocptr (:$ arm64::fulltagmask)))
+
+;;; Allocate a uvector: its displacement (dnode-aligned size less
+;;; fulltag-misc) is in a register.
+(define-arm64-vinsn %allocate-uvector-large (((dest :lisp))
+                                             ((header :u64)
+                                              (disp :u64)))
+  (sub allocptr allocptr disp)
+  (cmp allocptr allocbase)
+  (b.hi :no-trap)
+  (uuo-alloc-trap)
+  :no-trap
+  (stur header (:@ allocptr (:$ arm64::misc-header-offset)))
+  (mov dest allocptr)
+  (bic allocptr allocptr (:$ arm64::fulltagmask)))
+
+;;; Left for bootstrapping. Remove after 1.14 release binaries
+;;; are built.
 (define-arm64-vinsn %alloc-misc-fixed (((dest :lisp))
                                        ((Rheader :u64)
                                         (nbytes :u32const)))
-  ;; ARM64-DEVIATION: `sub Xd,Xn,#imm' takes a 12-bit unsigned immediate,
-  ;; optionally shifted left by 12, so a request over 4095 bytes cannot be
-  ;; spelled in ONE sub and the assembler refuses the vinsn:
-  ;;   vinsn immediate 4324 (shift 0) out of range for operand class :AIMM
-  ;; (compiling arm64-asm.lisp: a 539-element gvector literal).  PPC64's
-  ;; donor never hits this -- its `la' displacement is simm16.  Split into
-  ;; the u12<<12 lane plus the u12 lane; the `(:$ v :lsl 12)' spelling is
-  ;; live in the assembler (vinsn-parse-immediate, :aimm accepts shift 12),
-  ;; and 0081's own note at the lri site documents both lanes.
-  ((:pred <= (:apply - (:apply logand (lognot 15)
+  (sub allocptr allocptr (:$ (:apply - (:apply logand (lognot 15)
                                                (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc) 4095)
-   (sub allocptr allocptr (:$ (:apply - (:apply logand (lognot 15)
-                                               (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc))))
-  ((:not (:pred <= (:apply - (:apply logand (lognot 15)
-                                               (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc) 4095))
-   (sub allocptr allocptr (:$ (:apply ash (:apply - (:apply logand (lognot 15)
-                                               (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc) -12) :lsl 12))
-   (sub allocptr allocptr (:$ (:apply logand 4095 (:apply - (:apply logand (lognot 15)
-                                               (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc)))))
+                                     arm64::fulltag-misc)))
   (cmp allocptr allocbase)
   (b.hi :no-trap)
   (uuo-alloc-trap)
@@ -4504,117 +4496,27 @@
   (mov dest allocptr)
   (bic allocptr allocptr (:$ arm64::fulltagmask)))
 
-;;; ============ %arm64-gvector ============
-;;; Donor: PPC64 ppc64-vinsns.lisp:2389 %ppc-gvector (LINE-PORT).  The
-;;; donor is literally %alloc-misc-fixed (ppc64-vinsns.lisp:2414)
-;;; followed by a store loop, and the handler that emits it --
-;;; arm642-allocate-initialized-gvector's inline leg (arm642.lisp:4975,
-;;; from ppc2.lisp:4484 ppc2-allocate-initialized-gvector) -- is a
-;;; faithful port already; only this vinsn was missing (defined NOWHERE
-;;; at our pin 9c61574 OR at Matt's tip 9fb47830: an upstream defect).
-;;;
-;;; Semantics preserved exactly from the donor: bump allocptr down by the
-;;; 16-aligned (header + data) size less fulltag-misc, trap against
-;;; allocbase, store the header at misc-header-offset, set dest, clear
-;;; allocptr's tag bits, then -- unless nbytes is 0 -- pop n node words
-;;; off vsp and store them into dest from the LAST index down to the
-;;; first.
-;;;
-;;; Alloc/trap protocol taken verbatim from OUR double->heap
-;;; (arm64-vinsns.lisp:1125-1138) and macptr->heap (:5088-5100): the
-;;; stylized cmp/b.hi/uuo-alloc-trap that pc_luser_xp recognizes (see
-;;; below).
-;;; STORE-LOOP KEY.  misc-data-offset is -4 on this LOW-TAG target
-;;; (arm64-arch.lisp:262-263: misc-header-offset = -fulltag-misc = -12,
-;;; misc-data-offset = -12 + 8).  Offsets are relative to the TAGGED
-;;; dest, so element i lands at dest + (-4 + 8i) = base + 8 + 8i, i.e.
-;;; correctly 8-aligned; the register-offset STR form adds a full 64-bit
-;;; two's-complement Xm, so the final (negative) -4 offset is fine.
-(define-arm64-vinsn %arm64-gvector (((dest :lisp))
-                                    ((Rheader :u64)
-                                     (nbytes :u32const))
-                                    ((immtemp0 :u64)
-                                     (nodetemp :lisp)))
-  ;; ARM64-DEVIATION: `sub Xd,Xn,#imm' takes a 12-bit unsigned immediate,
-  ;; optionally shifted left by 12, so a request over 4095 bytes cannot be
-  ;; spelled in ONE sub and the assembler refuses the vinsn:
-  ;;   vinsn immediate 4324 (shift 0) out of range for operand class :AIMM
-  ;; (compiling arm64-asm.lisp: a 539-element gvector literal).  PPC64's
-  ;; donor never hits this -- its `la' displacement is simm16.  Split into
-  ;; the u12<<12 lane plus the u12 lane; the `(:$ v :lsl 12)' spelling is
-  ;; live in the assembler (vinsn-parse-immediate, :aimm accepts shift 12),
-  ;; and 0081's own note at the lri site documents both lanes.
-  ((:pred <= (:apply - (:apply logand (lognot 15)
-                                               (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc) 4095)
-   (sub allocptr allocptr (:$ (:apply - (:apply logand (lognot 15)
-                                               (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc))))
-  ((:not (:pred <= (:apply - (:apply logand (lognot 15)
-                                               (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc) 4095))
-   (sub allocptr allocptr (:$ (:apply ash (:apply - (:apply logand (lognot 15)
-                                               (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc) -12) :lsl 12))
-   (sub allocptr allocptr (:$ (:apply logand 4095 (:apply - (:apply logand (lognot 15)
-                                               (:apply + (+ 15 8) nbytes))
-                                     arm64::fulltag-misc)))))
-  (cmp allocptr allocbase)
-  ;;; ARM64-DEVIATION: PPC's single `tdlt allocptr allocbase' has no
-  ;;; ARM64 analog (no trap-on-condition instruction), so it becomes
-  ;;; cmp + skip-branch + trap.  The skip MUST be b.hi (skip only when
-  ;;; allocptr is strictly above allocbase): this is the exact stylized
-  ;;; sequence pc_luser_xp recognizes -- the kernel hardcodes the
-  ;;; branch-around instruction as b.hi .+8 (0x54000048,
-  ;;; arm64-exceptions.c IS_BRANCH_AROUND_ALLOC_TRAP), matching x86's
-  ;;; `ja' and ARM32's `bhi'.  Trapping at allocptr==allocbase too is
-  ;;; harmless (the trap handler completes/refills).
-  (b.hi :no-trap)
-  (uuo-alloc-trap)
-  :no-trap
-  (stur Rheader (:@ allocptr (:$ arm64::misc-header-offset)))
-  (mov dest allocptr)
-  ;;; ARM64-DEVIATION: PPC's `rldicr allocptr allocptr 0 (- 63 ntagbits)'
-  ;;; (clear the low ntagbits) becomes AND with the UNSIGNED complement
-  ;;; of fulltagmask -- ARM64 logical immediates are unsigned.
-  (bic allocptr allocptr (:$ arm64::fulltagmask))
-  ((:not (:pred = nbytes 0))
-   ;;; ARM64-DEVIATION: PPC's `li immtemp0 <imm>' has no single-instruction
-   ;;; ARM64 spelling.  `mov Xd,#imm' is an ALIAS (movz/movn/orr), so the
-   ;;; assembler refuses it -- "Ambiguous immediate or condition ...: 3
-   ;;; templates match; use a specific (non-alias) instruction", which fails
-   ;;; the LOAD of this whole file.  movz+movk is the idiom, spelled exactly as
-   ;;; the pin's own constant loader spells it -- `lri :constant-ref'
-   ;;; (arm64-vinsns.lisp:596-607).  NB the shift lives INSIDE the (:$ ...)
-   ;;; form: `(movk d (:$ <expr> :lsl 16))', never `(movk d (:$ <expr>) :lsl
-   ;;; 16)' -- the latter loads as "don't understand (MOVK ...)".
-   ;;; Both halves unconditionally, rather than movz alone: nbytes is
-   ;;; 8*(length initforms), so a literal of more than 8192 elements
-   ;;; overflows movz's 16-bit field, and this must not depend on the
-   ;;; assembler happening to reject rather than truncate it.
-   (movz immtemp0 (:$ (:apply logand #xffff
-                              (:apply + arm64::misc-data-offset nbytes))))
-   (movk immtemp0 (:$ (:apply logand #xffff
-                              (:apply ash (:apply + arm64::misc-data-offset nbytes) -16))
-                      :lsl 16))
-   :loop
-   (sub immtemp0 immtemp0 (:$ arm64::node-size))
-   ;;; ARM64-DEVIATION: the donor's `cmpdi crf immtemp0 misc-data-offset'
-   ;;; compares against -4.  ARM64 cmp takes an UNSIGNED 12-bit
-   ;;; immediate, so the negative compare is expressed as CMN against
-   ;;; +4 (cmn Xn,#4 sets Z iff Xn = -4).  No :crf temp is declared --
-   ;;; ARM64 has one NZCV, so the donor's crf operand drops out.
-   ;;; Neither LDR nor STR writes flags, so keeping the donor's
-   ;;; compare-before-load order is still correct here.
-   (cmn immtemp0 (:$ (:apply - arm64::misc-data-offset)))
-   ;;; ARM64-DEVIATION: the donor's `ld nodetemp 0 vsp' + `la vsp 8 vsp'
-   ;;; fuse into one post-indexed load -- this repo's established vpop
-   ;;; idiom (vpop-register, arm64-vinsns.lisp:658).
-   (ldr nodetemp (:@+ vsp (:$ arm64::node-size)))
-   ;;; register-offset store, as misc-set-node (arm64-vinsns.lisp:2000)
-   ;;; does for PPC64's stdx.
-   (str nodetemp (:@ dest immtemp0))
-   (b.ne :loop)))
+;;; Pop nbytes/8 node words off the vstack into the gvector dest,
+;;; last element first.  arm642-allocate-initialized-gvector put
+;;; them there.
+(define-arm64-vinsn vpop-gvector-elements (()
+                                           ((dest :lisp)
+                                            (nbytes :u32const))
+                                           ((index :u64)
+                                            (node :lisp)))
+  (movz index (:$ (:apply ldb (byte 16 0)
+                          (:apply + arm64::misc-data-offset nbytes))))
+  ((:pred > (:apply + arm64::misc-data-offset nbytes) #xffff)
+   (movk index (:$ (:apply ldb (byte 16 16)
+                           (:apply + arm64::misc-data-offset nbytes))
+                   :lsl 16)))
+  :loop
+  (sub index index (:$ arm64::node-size))
+  ;; misc-data-offset is negative, so compare with cmn.
+  (cmn index (:$ (:apply - arm64::misc-data-offset)))
+  (ldr node (:@+ vsp (:$ arm64::node-size)))
+  (str node (:@ dest index))
+  (b.ne :loop))
 
 ;;; ============ make-stack-gvector ============
 ;;; PPC64 ppc64-vinsns.lisp:3995: subprim call .SPstkgvector (kernel

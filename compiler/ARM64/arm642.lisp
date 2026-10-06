@@ -3119,8 +3119,9 @@
               (arm642-lri seg arm64::imm0
                           (arch::make-vheader
                            vsize (nx-lookup-target-uvector-subtag :function)))
-              (! %alloc-misc-fixed dest arm64::imm0
-                 (ash vsize (arch::target-word-shift arch))))
+              (arm642-alloc-misc-fixed seg dest arm64::imm0
+                                       (ash vsize
+                                            (arch::target-word-shift arch))))
             (! %closure-code% arm64::arg_x)
             (arm642-store-immediate seg (arm642-afunc-lfun-ref afunc) arm64::arg_y)
             (with-node-temps (arm64::arg_z) (t0 t1 t2 t3)
@@ -3137,7 +3138,7 @@
             (! misc-set-c-node arm64::arg_x dest cell)
             (! misc-set-c-node arm64::arg_y dest (1+ cell))))
         ;; Both legs above build the closure through the MISC allocator
-        ;; (%alloc-misc-fixed / .SPstkgvector), which since the
+        ;; (arm642-alloc-misc-fixed / .SPstkgvector), which since the
         ;; fulltag_function removal (patch 0055) is already the final tag:
         ;; an arm64 function is fulltag-misc + header subtag-function, the
         ;; PPC64 shape.  tag-as-function is (mov dest src) accordingly, so
@@ -5121,6 +5122,21 @@
             (backend-target-arch *target-backend*))
            subtag element-count))
 
+(defun arm642-misc-allocptr-disp (nbytes)
+  ;; The amount by which allocating a uvector with NBYTES of data
+  ;; decrements allocptr: its dnode-aligned size less fulltag-misc.
+  (- (arm642-align-up (+ nbytes arm64::node-size) arm64::dnode-size)
+     arm64::fulltag-misc))
+
+(defun arm642-alloc-misc-fixed (seg dest header nbytes)
+  (with-arm64-local-vinsn-macros (seg)
+    (let* ((disp (arm642-misc-allocptr-disp nbytes)))
+      (if (<= disp 4095)
+        (! %allocate-uvector dest header disp)
+        (with-imm-temps (header) ((rdisp :u64))
+          (arm642-lri seg rdisp disp)
+          (! %allocate-uvector-large dest header rdisp))))))
+
 (defun arm642-allocate-initialized-gvector (seg vreg xfer subtag initforms)
   (with-arm64-local-vinsn-macros (seg vreg xfer)
     (if (null vreg)
@@ -5138,7 +5154,13 @@
         (cond ((or *arm642-open-code-inline* (> nntriv 3))
                (arm642-formlist seg initforms nil)
                (arm642-lri seg arm64::imm0 header)
-               (! %arm64-gvector vreg arm64::imm0 (ash n (arch::target-word-shift arch))))
+               (ensuring-node-target (target vreg)
+                 (arm642-alloc-misc-fixed seg target arm64::imm0
+                                          (ash n
+                                               (arch::target-word-shift arch)))
+                 (unless (eql n 0)
+                   (! vpop-gvector-elements target
+                      (ash n (arch::target-word-shift arch))))))
               (t
                (let* ((pending ())
                       (vstack *arm642-vstack*))
@@ -5151,7 +5173,8 @@
                        (arm642-vpush-register seg (arm642-one-untargeted-reg-form seg form arm64::arg_z)))))
                  (arm642-lri seg arm64::imm0 header)
                  (ensuring-node-target (target vreg)
-                   (! %alloc-misc-fixed target arm64::imm0 (ash n (arch::target-word-shift arch)))
+                   (arm642-alloc-misc-fixed seg target arm64::imm0
+                                            (ash n (arch::target-word-shift arch)))
                    (with-node-temps (target) (nodetemp)
                      (do* ((forms pending (cdr forms))
                            (index (1- n) (1- index))
@@ -7747,17 +7770,14 @@
     (let* ((subtag (acode-fixnum-form-p st))
            (nelements (acode-fixnum-form-p element-count))
            (nbytes (if (and subtag nelements)
-                     (arm642-misc-byte-count subtag nelements))))
+                     (arm642-misc-byte-count subtag nelements)))
+           (disp (if nbytes (arm642-misc-allocptr-disp nbytes))))
       (if (and nbytes (null initval)
-               (< (logand
-                   (lognot (1- (* 2 *arm642-target-node-size*)))
-                   (+ nbytes *arm642-target-node-size*
-                      (1- (* 2 *arm642-target-node-size*))))
-                  #x1000))              ;aimm limit
+               (<= disp 4095)) ; imm12
         (with-imm-temps () (header)
           (arm642-lri seg header (arch::make-vheader nelements subtag))
           (ensuring-node-target (target vreg)
-            (! %alloc-misc-fixed target header nbytes)))
+            (! %allocate-uvector target header disp)))
         (progn
           (if initval
             (progn
