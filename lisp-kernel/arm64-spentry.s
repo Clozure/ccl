@@ -109,6 +109,175 @@ spentry makeu64
         ret
 endsp makeu64
 
+#ifdef DARWIN
+/*
+ * Objective-C exceptions thrown by a foreign callee.
+ *
+ * ObjC 2.0 exceptions on 64-bit Darwin are C++-ABI zero-cost
+ * exceptions: the unwinder must find unwind info for every frame
+ * between the throw and a frame whose personality routine claims the
+ * exception, or the throw ends in std::terminate() and the process
+ * aborts.  So each ff-call subprim (ffcall, ffcall_return_registers,
+ * ffcall_indirect_result) carries unwind info naming a personality
+ * routine and an LSDA whose one call-site entry covers the blr into
+ * foreign code and catches everything.
+ *
+ * The unwinder only ever steps INTO the subprim's frame (from the
+ * callee), never out of it, so the CFI needs no rules of its own: the
+ * callee's unwind info restores sp and x19-x28 (save0-3, rnil, tsp,
+ * vsp, allocptr, allocbase, rcontext) to their values at the blr,
+ * which is everything the return path runs from.
+ *
+ * The landing pad runs objc_begin_catch/objc_end_catch with the thread
+ * still in foreign valence, then joins the normal return path (still
+ * foreign there) with the NSException in x0 and x3 nonzero; the return
+ * path never touches x1-x5, so after the switch to lisp valence they
+ * are imm0 and imm3.  Back in lisp state, ffcall_foreign_exception boxes the
+ * NSException in a macptr and signals XFOREIGNEXCEPTION, which
+ * recognize-objc-exception (objc-support.lisp) turns into a lisp
+ * condition.  This is the x86-64 scheme, except that x86-64 carries
+ * the indication in TCR_FLAG_BIT_FOREIGN_EXCEPTION.
+ *
+ * libobjc's __objc_personality_v0 is known only once objc-support.lisp
+ * has stored it in the objc_2_personality lisp global, so the unwind
+ * info names lisp_objc2_personality, which jumps through that global.
+ */
+
+.set XFOREIGNEXCEPTION, (200<<fixnumshift)  /* errors.s deferr(XFOREIGNEXCEPTION,200) */
+
+/* Right after `spentry name': the LSDA's offsets are relative to here. */
+.macro ffcall_eh_start name
+        .cfi_startproc
+        .cfi_personality 0x9b, C(lisp_objc2_personality) /* indirect|pcrel|sdata4 */
+        .cfi_lsda 0x10, L\name\()_lsda                   /* pcrel|absptr */
+L\name\()_start:
+.endm
+
+/* Bracket the foreign call: the one region the LSDA covers. */
+.macro ffcall_eh_call_begin name
+L\name\()_call:
+.endm
+.macro ffcall_eh_call_end name
+L\name\()_call_end:
+.endm
+
+/* Where the landing pad rejoins the return path; foreign valence. */
+.macro ffcall_eh_join name
+        mov x3, #0
+L\name\()_join:
+.endm
+
+/* Just before the return path's ret; lisp valence, so x3 is imm3. */
+.macro ffcall_eh_check
+        cbnz imm3, ffcall_foreign_exception
+.endm
+
+/* After the ret: the landing pad, then the LSDA.
+ *
+ * Unwinding uses two kinds of per-function information.  The CFI
+ * (.cfi_* above; the linker turns it into compact unwind) is
+ * language-neutral and tells the unwinder how to step from a frame to
+ * its caller.  Whether a frame catches an exception is up to the frame's
+ * personality routine (here libobjc's __objc_personality_v0), which reads
+ * that frame's LSDA, the Language-Specific Data Area.  The unwinder
+ * never looks inside the LSDA.  Its format comes from the C++ ABI (gcc's
+ * "except table"), and ObjC uses it unchanged.
+ *
+ * A throw takes two passes.  The search pass asks each frame's
+ * personality whether it catches the exception.  The second pass
+ * restores registers frame by frame up to the frame that does, then
+ * enters its landing pad with x0 = the exception object and x1 = the
+ * selector naming the matching catch clause (always 1 here).
+ *
+ * The LSDA below is copied from what clang emits for
+ * `@try { f(); } @catch (...) { }' (clang -S); when in doubt, compile
+ * that and compare.  It is four small tables:
+ *   header: no separate base, so offsets are from L<name>_start (0xff);
+ *     type-table entry encoding (0x9b); and the distance to the end of
+ *     the type table.
+ *   call-site table: one entry covering just the blr, with our landing
+ *     pad and action record 1.  If a throw passes through a pc that has
+ *     no call-site entry, the result is std::terminate().
+ *   action table: action 1 = "catch type 1; no further clauses".
+ *   type table: type 1 is null, which means catch everything.
+ * The encoding bytes are DWARF DW_EH_PE_* codes: 0xff = omit,
+ * 0x01 = uleb128, 0x9b = indirect|pcrel|sdata4.  Everything is
+ * pc-relative, so the linker never has to patch the table.
+ *
+ * The landing pad does what clang's @catch code does: objc_begin_catch,
+ * fetch the thrown object, objc_end_catch.  A catch-all clause gets a
+ * pointer to the thrown id, not the id, hence the extra load. */
+.macro ffcall_eh_end name
+L\name\()_landing_pad:
+        /* Foreign valence.  x0 = the _Unwind_Exception; sp and x19-x28
+         * are as at the blr, so rnil (x23) still holds nil and
+         * ref_global works. */
+        ref_global x16, objc_2_begin_catch
+        blr x16
+        ldr x0, [x0]            /* catch-all: we get a pointer to the thrown id */
+        str x0, [sp, #-16]!
+        ref_global x16, objc_2_end_catch
+        blr x16
+        ldr x0, [sp], #16
+        mov x3, #1
+        b L\name\()_join
+        .cfi_endproc
+
+        .section __TEXT,__gcc_except_tab
+        .p2align 2
+L\name\()_lsda:
+        .byte 0xff              /* @LPStart encoding: omit */
+        .byte 0x9b              /* @TType encoding: indirect|pcrel|sdata4 */
+        .uleb128 L\name\()_ttbase - L\name\()_ttbaseref
+L\name\()_ttbaseref:
+        .byte 0x01              /* call-site encoding: uleb128 */
+        .uleb128 L\name\()_cst_end - L\name\()_cst_begin
+L\name\()_cst_begin:
+        .uleb128 L\name\()_call - L\name\()_start               /* start */
+        .uleb128 L\name\()_call_end - L\name\()_call            /* length */
+        .uleb128 L\name\()_landing_pad - L\name\()_start        /* landing pad */
+        .byte 1                 /* action record 1 */
+L\name\()_cst_end:
+        .byte 1                 /* action record 1: type 1 */
+        .byte 0                 /* no further actions */
+        .p2align 2
+        .long 0                 /* type 1: null, i.e. catch everything */
+L\name\()_ttbase:
+        .text
+.endm
+
+/* Personality routine for the ff-call subprims' unwind info.  Called
+ * from the unwinder with foreign register state, so rnil can't be
+ * trusted; find the lisp globals through the C global lisp_nil.  Until
+ * objc-support.lisp sets objc_2_personality, decline the exception,
+ * which leaves things as they would be without this unwind info. */
+        .text
+        .p2align 2
+        .globl C(lisp_objc2_personality)
+C(lisp_objc2_personality):
+        load_addr_of_lisp_nil x16
+        ldr x16, [x16]
+        sub x16, x16, #(0 - (lisp_globals.objc_2_personality))
+        ldr x16, [x16]
+        cbz x16, 1f
+        br x16
+1:      mov w0, #8              /* _URC_CONTINUE_UNWIND */
+        ret
+#else
+.macro ffcall_eh_start name
+.endm
+.macro ffcall_eh_call_begin name
+.endm
+.macro ffcall_eh_call_end name
+.endm
+.macro ffcall_eh_join name
+.endm
+.macro ffcall_eh_check
+.endm
+.macro ffcall_eh_end name
+.endm
+#endif
+
 /*
  * Call a foreign function.
  *
@@ -159,6 +328,7 @@ endsp makeu64
  * foreign call is exactly what prevents it.
  */
 spentry ffcall
+        ffcall_eh_start ffcall
         /* Spill fn AND all four boxed NVRs to the vstack (the protocol the
          * spentry-E-ffi.s header always prescribed: "save0-3 are still
          * vpushed so the GC can SEE them while the thread is foreign").
@@ -305,7 +475,10 @@ spentry ffcall
          * region [old SP, old SP+80) belongs to the callee/signals; every
          * value the return path needs was hoisted to save0/save1 above. */
         add sp, sp, #(c_frame.size + 8*node_size)
+        ffcall_eh_call_begin ffcall
         blr temp4
+        ffcall_eh_call_end ffcall
+        ffcall_eh_join ffcall
         /* Back.  x0/d0 hold the results.  [save3, save3+80) is DEAD -- it
          * sat below the callee's incoming SP -- so nothing on this path may
          * read the c_frame head: the return runs entirely from the save0/
@@ -398,7 +571,9 @@ spentry ffcall
          * (spentry-E-ffi.s:378) and _SPsyscall (:666); x0/d0 hold the foreign
          * result and the macro does not touch them. */
         check_pending_interrupt
+        ffcall_eh_check
         ret
+        ffcall_eh_end ffcall
 endsp ffcall
 
 /* PROPOSED-CONSTANTS (ratify with Matt) -- derived from PPC64 struct/header
@@ -5775,6 +5950,7 @@ endsp mvpasssym
  * at the return; save2 carries the buffer address across the call
  * (callee-saved), parked on the vstack like save3/fn. */
 spentry ffcall_return_registers
+        ffcall_eh_start ffcall_return_registers
         /* fn + all four boxed NVRs, exactly as `spentry ffcall'
          * (arm64-spentry.s -- the CANONICAL NOTE for this whole body): the
          * vstack copies are what the GC forwards while we are foreign; the
@@ -5851,7 +6027,9 @@ spentry ffcall_return_registers
         str temp0, [rcontext, #tcr.valence]
         add sp, sp, #(c_frame.size + 8*node_size) /* ARM64-DEVIATION: NSAA
                           stack args at [SP]; canonical note in ffcall */
+        ffcall_eh_call_begin ffcall_return_registers
         blr temp4                               /* ppc:1849 bctrl            */
+        ffcall_eh_call_end ffcall_return_registers
         /* Store every AAPCS64 result register into the buffer
            (ppc:1851-1871 stores r3-r10/f1-f13). */
         stp x0, x1, [save2, #(0*node_size)]
@@ -5862,6 +6040,7 @@ spentry ffcall_return_registers
         stp d2, d3, [save2, #((8*node_size) + 2*8)]
         stp d4, d5, [save2, #((8*node_size) + 4*8)]
         stp d6, d7, [save2, #((8*node_size) + 6*8)]
+        ffcall_eh_join ffcall_return_registers
         /* ---- common return path (= `spentry ffcall', arm64-spentry.s;
          * the per-boundary GC audit lives there).  The frame head
          * [save3, save3+80) is DEAD; run entirely from the hoist.
@@ -5896,7 +6075,9 @@ spentry ffcall_return_registers
         ldr allocbase, [rcontext, #tcr.save_allocbase]
         add sp, sp, #lisp_frame.size        /* drop the frame: sp = prev SP */
         check_pending_interrupt
+        ffcall_eh_check
         ret
+        ffcall_eh_end ffcall_return_registers
 endsp ffcall_return_registers
 
 /* Just like ffcall, but the record-by-value result is >16 bytes and not
@@ -5910,6 +6091,7 @@ endsp ffcall_return_registers
  * pass the hidden result pointer as the FIRST integer argument; AAPCS64
  * alone dedicates x8. */
 spentry ffcall_indirect_result
+        ffcall_eh_start ffcall_indirect_result
         /* fn + all four boxed NVRs -- byte-identical to `spentry ffcall'
          * (arm64-spentry.s), whose comments are the canonical note. */
         str fn, [vsp, #-node_size]!
@@ -5973,7 +6155,10 @@ spentry ffcall_indirect_result
         str temp0, [rcontext, #tcr.valence]
         add sp, sp, #(c_frame.size + 8*node_size) /* ARM64-DEVIATION: NSAA
                           stack args at [SP]; canonical note in ffcall */
+        ffcall_eh_call_begin ffcall_indirect_result
         blr temp4
+        ffcall_eh_call_end ffcall_indirect_result
+        ffcall_eh_join ffcall_indirect_result
         /* ---- common return path (= `spentry ffcall', arm64-spentry.s;
          * the per-boundary GC audit lives there).  The frame head
          * [save3, save3+80) is DEAD; run entirely from the hoist.
@@ -6008,8 +6193,23 @@ spentry ffcall_indirect_result
         ldr allocbase, [rcontext, #tcr.save_allocbase]
         add sp, sp, #lisp_frame.size        /* drop the frame: sp = prev SP */
         check_pending_interrupt
+        ffcall_eh_check
         ret
+        ffcall_eh_end ffcall_indirect_result
 endsp ffcall_indirect_result
+
+#ifdef DARWIN
+/* The ff-call subprims come here, back in lisp state and with the
+ * caller's sp and lr, when the foreign callee threw an ObjC exception
+ * (see ffcall_eh_start).  imm0 is the NSException. */
+ffcall_foreign_exception:
+        mov imm1, #macptr_header
+        Misc_Alloc_Fixed arg_z, imm1, macptr.size
+        stur imm0, [arg_z, #macptr.address]
+        mov arg_y, #XFOREIGNEXCEPTION
+        set_nargs 2
+        b _SPksignalerr
+#endif
 
 /* Deprecated "swap exception handling info" variant.  TRAP-ONLY ON PPC64
  * TOO: ppc-spentry.s:3526-3527 is just `.long 0x7c800008` (debug trap). */
