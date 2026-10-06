@@ -43,9 +43,10 @@
     ;; On Darwin the callback page is MAP_JIT: assemble into a scratch
     ;; buffer, then C-blit into place.  Never call
     ;; pthread_jit_write_protect_np from MAP_JIT-resident lisp — that
-    ;; makes the caller non-executable.  The scratch is foreign stack
-    ;; memory: a raw pointer into a heap vector would be left behind
-    ;; if a GC moved the vector.
+    ;; makes the caller non-executable.  The scratch is a %stack-block,
+    ;; so it's on the temp stack, where the GC won't move it; a raw
+    ;; pointer into a heap-allocated vector would be left behind if a
+    ;; GC moved the vector.
     (%stack-block ((s 32))
       (setf (%get-unsigned-long s 0)          ; movz x10,#lo16(index)
             (logior #xd280000a (ash (ldb (byte 16 0) index) 5))

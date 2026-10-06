@@ -389,45 +389,41 @@ registration (otherwise :with-frame etc. silently fall back to #/init)."
 
 #+arm64-target
 (progn
-;;; Callback-frame survivors after .SPcallback exit (arm64-arch.lisp):
-;;;   CBF+0 = x0, CBF+8 = x1, CBF-64 = d0, foreign LR at CBF-152.
-;;; Trampoline: fmov x16,d0; mov lr,x1; br x16 — x0 already holds the
-;;; NSException / encapsulated throw.  Built lazily (defloadvar +
-;;; makedataexecutable during OBJC-SUPPORT load SEGV'd on darwinarm64).
-(defvar *arm64-objc-callback-error-return-trampoline* nil)
-
-(defun %arm64-objc-callback-error-return-trampoline ()
-  (or *arm64-objc-callback-error-return-trampoline*
-      (setq *arm64-objc-callback-error-return-trampoline*
-            (let* ((code-words '(#x9e670010      ; fmov x16, d0
-                                 #xaa0103fe      ; mov lr, x1
-                                 #xd61f0200))    ; br x16
-                   (nbytes (* 4 (length code-words)))
-                   (ptr (%allocate-callback-pointer 16)))
-              ;; On Darwin the callback page is MAP_JIT: assemble
-              ;; into a scratch buffer and let lisp kernel C blit it
-              ;; into place (same pattern as make-callback-trampoline).
-              ;; The scratch is foreign stack memory, which doesn't move.
-              (%stack-block ((s 16))
-                (do* ((i 0 (+ i 4))
-                      (words code-words (cdr words)))
-                     ((null words))
-                  (setf (%get-unsigned-long s i) (car words)))
-                #+(and darwin-target arm64-target)
-                (ff-call (foreign-symbol-address "darwin_arm64_jit_install_code")
-                         :address ptr
-                         :address s
-                         :unsigned-fullword nbytes
-                         :void)
-                #-(and darwin-target arm64-target)
-                (dotimes (i nbytes)
-                  (setf (%get-unsigned-byte ptr i) (%get-unsigned-byte s i))))
-              #-(and darwin-target arm64-target)
-              (ff-call (%kernel-import #.arm64::kernel-import-makedataexecutable)
-                       :address ptr
-                       :unsigned-fullword nbytes
-                       :void)
-              ptr))))
+;;; Trampoline: fmov x16,d0; mov lr,x1; br x16.  x0 already holds the
+;;; NSException / encapsulated throw.  It lives in a callback page,
+;;; which doesn't survive save-application, so the defloadvar builds
+;;; it again at startup.
+(defloadvar *arm64-objc-callback-error-return-trampoline*
+    (let* ((code-words '(#x9e670010      ; fmov x16, d0
+                         #xaa0103fe      ; mov lr, x1
+                         #xd61f0200))    ; br x16
+           (nbytes (* 4 (length code-words)))
+           (ptr (%allocate-callback-pointer 16)))
+      ;; On Darwin the callback page is MAP_JIT: assemble into a
+      ;; scratch buffer and let lisp kernel C blit it into place (same
+      ;; pattern as make-callback-trampoline).  The scratch is a
+      ;; %stack-block, so it's on the temp stack, where the GC won't
+      ;; move it.
+      (%stack-block ((s 16))
+        (do* ((i 0 (+ i 4))
+              (words code-words (cdr words)))
+             ((null words))
+          (setf (%get-unsigned-long s i) (car words)))
+        #+(and darwin-target arm64-target)
+        (ff-call (foreign-symbol-address "darwin_arm64_jit_install_code")
+                 :address ptr
+                 :address s
+                 :unsigned-fullword nbytes
+                 :void)
+        #-(and darwin-target arm64-target)
+        (dotimes (i nbytes)
+          (setf (%get-unsigned-byte ptr i) (%get-unsigned-byte s i))))
+      #-(and darwin-target arm64-target)
+      (ff-call (%kernel-import #.arm64::kernel-import-makedataexecutable)
+               :address ptr
+               :unsigned-fullword nbytes
+               :void)
+      ptr))
 
 (defun %arm64-objc-exception-throw-bits ()
   (let* ((addr (%reference-external-entry-point
@@ -440,7 +436,7 @@ registration (otherwise :with-frame etc. silently fall back to #/init)."
   (process-debug-condition *current-process* condition (%get-frame-ptr))
   (setf (%get-ptr return-value-pointer 0) (ns-exception condition)
         (%get-ptr return-value-pointer 8) (%get-ptr return-address-pointer 0)
-        (%get-ptr return-address-pointer 0) (%arm64-objc-callback-error-return-trampoline))
+        (%get-ptr return-address-pointer 0) *arm64-objc-callback-error-return-trampoline*)
   (let* ((addr (%arm64-objc-exception-throw-bits)))
     (if (< addr 0)
       (setf (%%get-signed-longlong return-value-pointer
@@ -452,7 +448,7 @@ registration (otherwise :with-frame etc. silently fall back to #/init)."
 (defun objc-propagate-throw (throw-info return-value-pointer return-address-pointer)
   (setf (%get-ptr return-value-pointer 0) (encapsulate-throw-info throw-info)
         (%get-ptr return-value-pointer 8) (%get-ptr return-address-pointer 0)
-        (%get-ptr return-address-pointer 0) (%arm64-objc-callback-error-return-trampoline))
+        (%get-ptr return-address-pointer 0) *arm64-objc-callback-error-return-trampoline*)
   (let* ((addr (%arm64-objc-exception-throw-bits)))
     (if (< addr 0)
       (setf (%%get-signed-longlong return-value-pointer
