@@ -389,12 +389,21 @@ registration (otherwise :with-frame etc. silently fall back to #/init)."
 
 #+arm64-target
 (progn
-;;; Trampoline: fmov x16,d0; mov lr,x1; br x16.  x0 already holds the
-;;; NSException / encapsulated throw.  It lives in a callback page,
-;;; which doesn't survive save-application, so the defloadvar builds
-;;; it again at startup.
+;;; Trampoline: fmov x16,d0; mov lr,x1; br x16.
+;;; objc-callback-error-return and objc-propagate-throw (below) make
+;;; the callback "return" here instead of to its caller.  .SPcallback's
+;;; return path reloads only x0, x1 and d0-d3 from the callback frame,
+;;; so the three values we need travel in those slots:
+;;;   x0  the NSException / encapsulated throw (objc_exception_throw's arg)
+;;;   x1  the callback's real return address
+;;;   d0  the address of objc_exception_throw (callback-frame.fp-save-offset)
+;;; We restore lr and tail-call objc_exception_throw, so the throw appears
+;;; to come from the caller's call site.  (x86-64 does the same through
+;;; %xmm0.)  The trampoline lives in a callback page, which doesn't
+;;; survive save-application, so the defloadvar builds it again at
+;;; startup.
 (defloadvar *arm64-objc-callback-error-return-trampoline*
-    (let* ((code-words '(#x9e670010      ; fmov x16, d0
+    (let* ((code-words '(#x9e660010      ; fmov x16, d0
                          #xaa0103fe      ; mov lr, x1
                          #xd61f0200))    ; br x16
            (nbytes (* 4 (length code-words)))
