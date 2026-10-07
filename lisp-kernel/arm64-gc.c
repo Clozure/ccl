@@ -268,12 +268,14 @@ check_range(LispObj *start, LispObj *end, Boolean header_allowed)
     tag = fulltag_of(node);
     if (immheader_tag_p(tag)) {
       if (! header_allowed) {
-        Bug(NULL, "Header not expected at 0x" LISP "\n", prev);
+        Bug(NULL, "Header not expected at 0x" LISP ": 0x" LISP "\n",
+            prev, node);
       }
       current = (LispObj *)skip_over_ivector((natural)prev, node);
     } else if (nodeheader_tag_p(tag)) {
       if (! header_allowed) {
-        Bug(NULL, "Header not expected at 0x" LISP "\n", prev);
+        Bug(NULL, "Header not expected at 0x" LISP ": 0x" LISP "\n",
+            prev, node);
       }
       /* OPEN-ENTRYPOINT (arm-gc.c:121-129, ARM64-DEVIATION): consistency
          check for the function entrypoint/codevector pair; only fires
