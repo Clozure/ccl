@@ -215,6 +215,13 @@
     (load-ide-init-file))
   (signal-semaphore *cocoa-ide-finished-launching*))
 
+;;; Opt in to secure coding of restorable state explicitly.  macOS 14
+;;; and later enable it anyway, but log a warning if we don't say so.
+(objc:defmethod (#/applicationSupportsSecureRestorableState: #>BOOL)
+    ((self ide-application-delegate) app)
+  (declare (ignore app))
+  t)
+
 (objc:defmethod (#/applicationShouldOpenUntitledFile: #>BOOL)
     ((self ide-application-delegate) app)
   (declare (ignore app))
