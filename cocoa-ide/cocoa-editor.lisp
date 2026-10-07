@@ -39,7 +39,7 @@
                                             (font-size-kludge 10.0)))
 		   "Default font for editor windows")
 
-(def-cocoa-default *editor-rows* :int 24 "Initial height of editor windows, in characters")
+(def-cocoa-default *editor-rows* :int 35 "Initial height of editor windows, in characters")
 (def-cocoa-default *editor-columns* :int 80 "Initial width of editor windows, in characters")
 
 (def-cocoa-default *editor-background-color* :color '(1.0 1.0 1.0 1.0) "Editor background color")

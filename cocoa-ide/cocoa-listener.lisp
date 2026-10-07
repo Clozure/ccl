@@ -35,7 +35,7 @@
                                                      (font-size-kludge 10.0)))
 		   "Default font for listener output")
 
-(def-cocoa-default *listener-rows* :int 16 "Initial height of listener windows, in characters")
+(def-cocoa-default *listener-rows* :int 24 "Initial height of listener windows, in characters")
 (def-cocoa-default *listener-columns* :int 80 "Initial height of listener windows, in characters")
 
 (def-cocoa-default hi::*listener-output-style* :int 1 "Text style index for listener output")
