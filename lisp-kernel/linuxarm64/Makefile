@@ -16,7 +16,9 @@ CDEBUG = -g
 # context's __u64 fields through natural * and uint32_t **.  -O2 turns on
 # -fstrict-aliasing, which licenses the compiler to assume that does not
 # happen, so this is a correctness flag and not a warning suppression.
-COPT = -O2 -fno-strict-aliasing
+# Lisp passes the addresses of kernel imports around as fixnums, so
+# they have to be 8-byte aligned; see check_kernel_imports().
+COPT = -O2 -fno-strict-aliasing -falign-functions=8
 # Once in a while, -Wformat says something useful.  The odds are against that,
 # however.
 WFORMAT = -Wno-format

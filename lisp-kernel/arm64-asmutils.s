@@ -169,17 +169,24 @@ C(set_fpsr):
         msr     fpsr, x0
         ret
 
-/* ARM32 ships these as stubs (arm-asmutils.s:202-213): the signal path
- * reads FP state from the mcontext.  Same here. */
+/*
+ * These are stubs because the signal path reads FP state from the
+ * mcontext.  Nevertheless, they are kernel imports, so they have to
+ * be 8-byte aligned (see check_kernel_imports).
+ */
+        .p2align 3
         .globl C(save_fp_context)
 C(save_fp_context):
         ret
+        .p2align 3
         .globl C(restore_fp_context)
 C(restore_fp_context):
         ret
+        .p2align 3
         .globl C(put_vector_registers)
 C(put_vector_registers):
         ret
+        .p2align 3
         .globl C(get_vector_registers)
 C(get_vector_registers):
         ret

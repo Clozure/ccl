@@ -421,7 +421,10 @@ spentry ffcall
         b.ne 8f
         ldur temp4, [arg_z, #macptr.address]
         b 9f
-8:      mov temp4, arg_z        // fixnum-locative / raw code address
+        /* A fixnum-locative: the raw address of a kernel import (see
+           %kernel-import), which looks like a fixnum because every kernel
+           import is 8-byte aligned (check_kernel_imports). */
+8:      mov temp4, arg_z
 9:
         /* Publish lisp state to the TCR for the GC, then go foreign. */
         str vsp, [rcontext, #tcr.save_vsp]
@@ -6004,7 +6007,7 @@ spentry ffcall_return_registers
         b.ne 8f
         ldur temp4, [arg_z, #macptr.address]
         b 9f
-8:      mov temp4, arg_z        // fixnum-locative / raw code address
+8:      mov temp4, arg_z        // fixnum-locative; see _SPffcall
 9:
         /* Publish lisp state to the TCR for the GC, then go foreign
            (ppc:1816-1827). */
@@ -6131,7 +6134,7 @@ spentry ffcall_indirect_result
         b.ne 8f
         ldur temp4, [arg_z, #macptr.address]
         b 9f
-8:      mov temp4, arg_z        // fixnum-locative / raw code address
+8:      mov temp4, arg_z        // fixnum-locative; see _SPffcall
 9:
         /* Publish lisp state to the TCR for the GC, then go foreign. */
         str vsp, [rcontext, #tcr.save_vsp]

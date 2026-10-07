@@ -10,21 +10,17 @@
 (eval-when (:compile-toplevel :execute)
   (require "ARM64-LAPMACROS"))
 
-;;; =====================================================================
-;;; %kernel-import — ppc:619
-;;; =====================================================================
-;;; offset is a boxed fixnum, one of the target::kernel-import-xxx BYTE
-;;; offsets; unboxing yields the raw byte offset.
+;;; offset is a fixnum, one of the arm64::kernel-import-xxx constants.
 ;;;
-;;; Return a fixnum-locative: the raw C address in a node register.
-;;; Aligned code addresses have low tag bits clear, so they look like
-;;; fixnums.  Matches PPC (ppc-utils:623 ldrx→arg_z, no box) and
-;;; _SPffcall's "non-macptr bits ARE the address" contract.  Do NOT
-;;; box-fixnum like x86 — x86 ffcall unboxes first; arm64 ffcall does not.
+;;; Returns a fixnum-locative: a node whose bits are the raw C address.
+;;; Those bits are fixnum-tagged, so Lisp and the GC see a fixnum (with
+;;; the value address/8), but ff-call uses the bits unchanged as the
+;;; address.  This works on arm64 only because we have arranged for
+;;; every kernel import to be 8-byte aligned (see check_kernel_imports).
 (defarm64lapfunction %kernel-import ((offset arg_z))
-  (ref-global imm0 kernel-imports)      ; ppc:621
-  (unbox-fixnum imm1 arg_z)             ; ppc:622
-  (ldr arg_z (:@ imm0 imm1))            ; ppc:623 — raw address / fixnum-locative
+  (ref-global imm0 kernel-imports)
+  (unbox-fixnum imm1 arg_z)             ;raw byte offset
+  (ldr arg_z (:@ imm0 imm1))            ;arg_z must be fixnum-aligned
   (ret))
 
 ;;; =====================================================================

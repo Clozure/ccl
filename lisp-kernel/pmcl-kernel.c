@@ -172,6 +172,26 @@ LispObj text_start = 0;
 
 extern LispObj import_ptrs_base;
 
+#ifdef ARM64
+extern LispObj import_ptrs_end;
+
+/* Lisp passes the address of a kernel import to ff-call as a fixnum,
+   so each one has to look like a fixnum (be 8-byte aligned).  If one
+   didn't, and it was on a lisp stack during a GC, the GC would take it
+   for a header and skip the rest of the stack. */
+static void
+check_kernel_imports(void)
+{
+  LispObj *p;
+
+  for (p = (LispObj *)import_ptrs_base; p < &import_ptrs_end; p++) {
+    if (*p & fixnummask) {
+      Fatal("A kernel import isn't 8-byte aligned.", "");
+    }
+  }
+}
+#endif
+
 /* The highest heap address that's (probably) been written to. */
 BytePtr heap_dirty_limit = NULL;
 
@@ -2205,6 +2225,9 @@ main
   lisp_global(ARGV) = ptr_to_lispobj(argv);
 #endif
   lisp_global(KERNEL_IMPORTS) = (LispObj)import_ptrs_base;
+#ifdef ARM64
+  check_kernel_imports();
+#endif
 
   lisp_global(GET_TCR) = (LispObj) get_tcr;
   *(double *) &(lisp_global(DOUBLE_FLOAT_ONE)) = (double) 1.0;

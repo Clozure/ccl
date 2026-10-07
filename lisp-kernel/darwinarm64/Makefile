@@ -21,7 +21,9 @@ ASFLAGS =
 CDEFINES = -DDARWIN -DARM64 -D_REENTRANT -D_DARWIN_C_SOURCE \
 	-DVC_REVISION=$(VC_REVISION) $(CDEFINES_EXTRA)
 CDEBUG = -g
-COPT = -O2
+# Lisp passes the addresses of kernel imports around as fixnums, so
+# they have to be 8-byte aligned; see check_kernel_imports().
+COPT = -O2 -falign-functions=8
 WFORMAT = -Wno-format
 PLATFORM_H = platform-darwinarm64.h
 

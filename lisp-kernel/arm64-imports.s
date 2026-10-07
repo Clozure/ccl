@@ -83,6 +83,8 @@ import_ptrs_start:
         defimport(lisp_lstat)
         defimport(lisp_realpath)
         defimport(lisp_monotonic_time)
+        .globl C(import_ptrs_end)
+C(import_ptrs_end):
 
         .globl C(import_ptrs_base)
 C(import_ptrs_base):
