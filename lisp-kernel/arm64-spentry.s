@@ -2787,13 +2787,17 @@ endsp aset3
    locative the frame walker updates) and let the b insn EXECUTE at throw
    time -- the ARM32 model (arm-macros.s mkcatch), which needs no decode
    and no derived PC at all. */
-        .macro mkcatch
+.macro mkcatch
         ldr imm0, [rcontext, #tcr.catch_top]
         build_lisp_frame imm4          /* csp frame: fn, lr(= the b insn), vsp */
         add lr, lr, #4                 /* normal return addr: skip the branch */
         ldr imm3, [rcontext, #tcr.xframe]
         ldr imm1, [rcontext, #tcr.db_link]
-        TSP_Alloc_Fixed_Unboxed catch_frame.size, imm4
+        /*
+         * We store node NVRs in the tsp frame: make a boxed frame.
+         */
+        mov imm4, #(catch_frame.size + tsp_frame.fixed_overhead)
+        TSP_Alloc_Var_Boxed imm4, nargs
         add nargs, tsp, #(tsp_frame.data_offset + fulltag_misc)  /* tagged cf
                                           (PPC uses nargs for this too)       */
         mov imm4, #((catch_frame.element_count<<num_subtag_bits) | subtag_catch_frame)
@@ -2804,14 +2808,14 @@ endsp aset3
         mov imm4, sp
         str imm4, [nargs, #catch_frame.csp]
         str imm1, [nargs, #catch_frame.db_link]
+        /* save the NVRs */
         save_catch_regs nargs
         str imm3, [nargs, #catch_frame.xframe]
         ldr imm0, [rcontext, #tcr.nfp]
         str imm0, [nargs, #catch_frame.nfp]
-        Set_TSP_Frame_Boxed
         str nargs, [rcontext, #tcr.catch_top]
         set_nargs 0
-        .endm
+.endm
 
 /* ported from ppc-spentry.s:61-64.  Single-value catch; tag in arg_z. */
 spentry mkcatch1v
@@ -3120,8 +3124,7 @@ spentry nthrow1value
            cleanup pc must not sit in temp4 across the tsp stores (16m86
            W2b') -- it stays in the frame slot until the swap below. */
         /* fixed boxed tsp frame: value + throw count = 2 nodes (ppc:342)        */
-        TSP_Alloc_Fixed_Unboxed 2*node_size, imm0
-        Set_TSP_Frame_Boxed
+        TSP_Alloc_Fixed_Boxed 2*node_size, imm0
         str arg_z, [tsp, #tsp_frame.data_offset]                /* ppc:343 */
         str imm4, [tsp, #(tsp_frame.data_offset + node_size)]   /* ppc:344 */
         ldr vsp, [sp, #lisp_frame.savevsp]   /* ppc:345 */
