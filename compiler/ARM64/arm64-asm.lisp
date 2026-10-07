@@ -839,6 +839,8 @@
    (def ldr ((:rt :s) (:mem-regoff (:base :x/sp) (:index :regoff2))) #xbc600800 $ldst-regoff-mask)
    (def str ((:rt :d) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xfc200800 $ldst-regoff-mask)
    (def ldr ((:rt :d) (:mem-regoff (:base :x/sp) (:index :regoff3))) #xfc600800 $ldst-regoff-mask)
+   (def str ((:rt :q) (:mem-regoff (:base :x/sp) (:index :regoff4))) #x3ca00800 $ldst-regoff-mask)
+   (def ldr ((:rt :q) (:mem-regoff (:base :x/sp) (:index :regoff4))) #x3ce00800 $ldst-regoff-mask)
 
    ;; FP load/store pair (offset, pre-indexed, post-indexed)
    (def stp ((:rt :s) (:rt2 :s) (:mem-scaled (:base :x/sp) (:imm :poff2))) #x2d000000 $ldstpair-mask)
@@ -1348,6 +1350,7 @@
     :regoff1       ; an Xm (lsl/sxtx) or Wm (uxtw/sxtw), amount 0 or N.  The
     :regoff2       ; option @ 15:13 comes from the extend, S @ 12 from amount.
     :regoff3
+    :regoff4       ; ... and the 128-bit (Q) access, scale 4
     :poff2         ;load/store-pair signed scaled offset, imm7 @ 21:15 (W pair)
     :poff3         ; ... and the X pair (scale 3); the access size is baked in
     :x-shift       ;Xn lsl/lsr/asr by 0...63 (add/sub shifted register)
@@ -1844,7 +1847,8 @@
 
 (defun regoff-scale (class)
   ;; The natural scale (log2 access size) baked into a :regoffN class.
-  (ecase class (:regoff0 0) (:regoff1 1) (:regoff2 2) (:regoff3 3)))
+  (ecase class (:regoff0 0) (:regoff1 1) (:regoff2 2) (:regoff3 3)
+         (:regoff4 4)))
 
 (defun index-option (width modifier)
   ;; The 3-bit option field for a register-offset index, or NIL if the

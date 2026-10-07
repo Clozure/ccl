@@ -2341,24 +2341,13 @@
      ())
   (ldr dest (:@ v scaled-idx)))
 
-;;; ============ misc-ref-complex-double-float ============
-;;; PPC64 ppc64-vinsns.lisp:262: (addi idx2 scaled-idx 8) then two lfdx
-;;; into an FPR pair.  One 128-bit load here, as in the constant-index
-;;; sibling.  There is no Q-form REG-OFFSET template -- arm64-asm.lisp
-;;; defines :q loads/stores only for :mem-scaled/:uoff4 and
-;;; :mem-unscaled/:simm9 -- so fold the index into the address
-;;; with the plain add + [reg,#0] shape this file already uses for
-;;; mem-ref-double-float.  idx2 is imm-class (x0-x5), which the GC does
-;;; not scan as a node, and no allocation point separates the add from
-;;; the load.  scaled-idx already includes misc-complex-dfloat-offset
-;;; (scale-128bit contract).
+;;; One 128-bit load, as in the constant-index sibling.  scaled-idx
+;;; already includes misc-complex-dfloat-offset.
 (define-arm64-vinsn misc-ref-complex-double-float
     (((dest :complex-double-float))
      ((v :lisp)
-      (scaled-idx :u64))
-     ((idx2 :u64)))
-  (add idx2 v scaled-idx)
-  (ldur dest (:@ idx2 (:$ 0))))
+      (scaled-idx :u64)))
+  (ldr dest (:@ v scaled-idx)))
 
 ;;; ============================================================
 ;;; Constant-index misc-set (12).  Same displacement arithmetic as the
@@ -2619,18 +2608,13 @@
       (scaled-idx :u64)))
   (str val (:@ v scaled-idx)))
 
-;;; ============ misc-set-complex-double-float ============
-;;; PPC64 ppc64-vinsns.lisp:287: (addi idx2 scaled-idx 8), two stfdx.
-;;; One 128-bit store; no Q-form reg-offset template exists, so plain add
-;;; into the GPR temp then [reg,#0] -- the mem-set-double-float shape.
+;;; One 128-bit store, as in the constant-index sibling.
 (define-arm64-vinsn misc-set-complex-double-float
     (()
      ((val :complex-double-float)
       (v :lisp)
-      (scaled-idx :u64))
-     ((idx2 :u64)))
-  (add idx2 v scaled-idx)
-  (stur val (:@ idx2 (:$ 0))))
+      (scaled-idx :u64)))
+  (str val (:@ v scaled-idx)))
 
 ;;; ============ misc-ref-c-bit-fixnum ============
 ;;; The one member of the MISC-REF family this file deferred (see the header:
