@@ -33,10 +33,10 @@
 					   (#/fontWithName:size:
 					    ns:ns-font
                                             #+darwin-target
-					    #@"Monaco"
+					    #@"Menlo"
                                             #-darwin-target
                                             #@"Courier New"
-                                            (font-size-kludge 10.0)))
+                                            (font-size-kludge 12.0)))
 		   "Default font for editor windows")
 
 (def-cocoa-default *editor-rows* :int 35 "Initial height of editor windows, in characters")
