@@ -36,8 +36,7 @@
 
 
 (defun platform-description ()
-  (multiple-value-bind (os bits cpu) (host-platform)
-    (format nil "~a~a~d" (string-capitalize os) cpu bits)))
+  (string-downcase (backend-name *host-backend*)))
 
 (defun lisp-implementation-version ()
   (%str-cat "Version " (format nil *openmcl-version* (platform-description))))
