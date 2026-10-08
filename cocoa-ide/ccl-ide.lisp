@@ -68,8 +68,15 @@
                                *cocoa-ide-frameworks*
                                *cocoa-ide-libraries*
                                #+windows-target "ccl:cocoa-ide;ide-contents;resources;openmcl-icon.ico"))
-          (t (load "ccl:cocoa-ide;defsystem.lisp")
-             (load-ide force-compile)))
+          (t
+           ;; Read the sources with standard reader settings, in case
+           ;; an init file has changed (say) *read-default-float-format*.
+           (let ((*read-default-float-format* 'single-float)
+                 (*read-base* 10)
+                 (*read-eval* t)
+                 (*read-suppress* nil))
+             (load "ccl:cocoa-ide;defsystem.lisp")
+             (load-ide force-compile))))
     
     (setf (symbol-value (intern "*CCL-IDE-INIT-FILE*" (find-package :gui))) (or init-file "")) ;; to prevent loading the user's ccl-ide-init-file
     

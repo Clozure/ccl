@@ -46,8 +46,14 @@
 
 (defvar *cocoa-ide-force-compile* #+(or mac-app-store standalone-ide) t
 	                          #-(or mac-app-store standalone-ide) nil)
-(load "ccl:cocoa-ide;defsystem.lisp")
-(load-ide *cocoa-ide-force-compile*)
+;;; Read the sources with standard reader settings, in case an init
+;;; file has changed (say) *read-default-float-format*.
+(let ((*read-default-float-format* 'single-float)
+      (*read-base* 10)
+      (*read-eval* t)
+      (*read-suppress* nil))
+  (load "ccl:cocoa-ide;defsystem.lisp")
+  (load-ide *cocoa-ide-force-compile*))
 
 
   

@@ -32,6 +32,12 @@
 (defvar *cocoa-ide-frameworks* #+cocotron '("ccl:cocotron;Foundation.framework;" "ccl:cocotron;AppKit.framework;" "ccl:cocotron;CoreData.framework;") #-cocotron nil)
 (defvar *cocoa-ide-libraries* #+cocotron '("ccl:cocotron;Foundation>.1>.0.dll" "ccl:cocotron;AppKit>.1>.0.dll" "ccl:cocotron;CoreData>.1>.0.dll") #-cocotron nil)
 
-(load "ccl:cocoa-ide;defsystem.lisp")
-(load-ide *cocoa-ide-force-compile*)
+;;; Read the sources with standard reader settings, in case an init
+;;; file has changed (say) *read-default-float-format*.
+(let ((*read-default-float-format* 'single-float)
+      (*read-base* 10)
+      (*read-eval* t)
+      (*read-suppress* nil))
+  (load "ccl:cocoa-ide;defsystem.lisp")
+  (load-ide *cocoa-ide-force-compile*))
 (gui::start-cocoa-ide)
