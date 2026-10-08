@@ -124,11 +124,13 @@ raise_thread_interrupt(TCR *target)
       }
     }
 #endif
-    if (pCancelSynchronousIo) {
-      pCancelSynchronousIo(hthread);
-    }
     QueueUserAPC(nullAPC, hthread, 0);
     ResumeThread(hthread);
+    if (pCancelSynchronousIo) {
+      /* Cancel only after the target runs again: the cancel of a
+         synchronous I/O operation waits for the target thread. */
+      pCancelSynchronousIo(hthread);
+    }
     return 0;
   } else {
     /* Thread is running lisp code with interupts enabled.  Set it
