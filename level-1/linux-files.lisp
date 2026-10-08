@@ -1935,7 +1935,6 @@ space, and prefixed with PREFIX."
   ;;; winbase.h.  The interface database does not define it.
   (defconstant $pipe-reject-remote-clients 8)
 
-  (defloadvar *child-process-pipe-lock* (make-lock))
   (defloadvar *child-process-pipe-serial* 0)
 
   ;;; An anonymous pipe cannot do overlapped I/O, so the kernel can
@@ -1952,8 +1951,8 @@ space, and prefixed with PREFIX."
         (return-from child-process-pipe (pipe)))
       (dotimes (i 10 (error "Can't create a unique pipe name."))
         (declare (ignorable i))
-        (let* ((serial (with-lock-grabbed (*child-process-pipe-lock*)
-                         (incf *child-process-pipe-serial*)))
+        (let* ((serial (%atomic-incf-node 1 '*child-process-pipe-serial*
+                                          target::symbol.vcell))
                (name (format nil "\\\\.\\pipe\\ccl-~d-~d"
                              (#_GetCurrentProcessId) serial)))
           (with-native-utf-16-cstrs ((cname name))
@@ -1972,7 +1971,8 @@ space, and prefixed with PREFIX."
               (if (eql server #$INVALID_HANDLE_VALUE)
                 (let* ((err (#_GetLastError)))
                   ;; Another pipe has this name.  Try the next one.
-                  (unless (eql err #$ERROR_ACCESS_DENIED)
+                  (unless (or (eql err #$ERROR_PIPE_BUSY)
+                              (eql err #$ERROR_ACCESS_DENIED))
                     (%windows-error-disp err)))
                 (rlet ((sa #>SECURITY_ATTRIBUTES
                            #>nLength (record-length #>SECURITY_ATTRIBUTES)
