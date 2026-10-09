@@ -61,6 +61,17 @@
 
 (defvar *ffi-void-reference* '(:primitive :void))
 
+;;; ffigen5 gives the 16-bit float types (__fp16, _Float16, __bf16)
+;;; their own names.  There's no 16-bit float foreign type, so in
+;;; memory (struct fields, arrays, pointer targets, variables) treat
+;;; one as its raw bits.  That's wrong for an argument or return
+;;; value, which is passed in an FP register, so functions and
+;;; methods that pass one by value are skipped.  These are compared
+;;; with EQ; see FFI-HALF-FLOAT-REFERENCE-P.
+(defvar *ffi-half-float-reference* (list :primitive '(:unsigned 16)))
+(defvar *ffi-complex-half-float-reference*
+  (list :array 2 *ffi-half-float-reference*))
+
 
 
 (defun find-or-create-ffi-struct (string)
@@ -420,9 +431,11 @@
     (:pointer (list :pointer (reference-ffi-type (cadr spec))))
     (:array (list :array (cadr spec) (reference-ffi-type (caddr spec))))
     (:void *ffi-void-reference*)
-    ;; ffigen5 emits (null ()) for unmapped clang kinds (Half/Float16).
-    ;; Prefer skipping the enclosing function (see parse-ffi handler-case);
-    ;; if one leaks through, treat as void rather than ecase failure.
+    ((:half-float :float16 :bfloat16) *ffi-half-float-reference*)
+    ((:complex-half-float :complex-float16 :complex-bfloat16)
+     *ffi-complex-half-float-reference*)
+    ;; Older ffigen5 emitted (null ()) for clang type kinds it had no
+    ;; name for.  Treat one as void rather than failing in the ECASE.
     (:null *ffi-void-reference*)
     (t
      (list :primitive
@@ -549,14 +562,18 @@
       (if (or (eq method-type :objc-protocol-class-method)
               (eq method-type :objc-protocol-instance-method))
         (setf (getf flags :protocol) t))
+      (setq arglist (mapcar #'reference-ffi-type arglist)
+            result-type (reference-ffi-type result-type))
+      (when (some #'ffi-half-float-reference-p (cons result-type arglist))
+        (warn "parse-ffi: skipping method ~a ~s: 16-bit float argument or return value"
+              class-name message-name)
+        (return-from process-ffi-objc-method nil))
       (let* ((message (find-or-create-ffi-objc-message message-name))
              (class-method-p (getf flags :class))
              (method
               (make-ffi-objc-method :class-name class-name
-                                    :arglist (mapcar #'reference-ffi-type
-                                                     arglist)
-                                    :result-type (reference-ffi-type
-                                                  result-type)
+                                    :arglist arglist
+                                    :result-type result-type
                                     :flags flags)))
         (unless (dolist (m (ffi-objc-message-methods message))
                   (when (and (equal (ffi-objc-method-class-name m)
@@ -575,12 +592,25 @@
     def))
 
 
+(defun ffi-half-float-reference-p (ref)
+  (loop
+    (cond ((or (eq ref *ffi-half-float-reference*)
+               (eq ref *ffi-complex-half-float-reference*))
+           (return t))
+          ((eq (car ref) :typedef)
+           (setq ref (ffi-typedef-type (cadr ref))))
+          (t (return nil)))))
+
 (defun process-ffi-function (form)
   (let* ((name (caddr form))
-         (ftype (cadddr form)))
+         (ftype (cadddr form))
+         (arglist (mapcar #'reference-ffi-type (cadr ftype)))
+         (return-value (reference-ffi-type (caddr ftype))))
+    (when (some #'ffi-half-float-reference-p (cons return-value arglist))
+      (error "16-bit float argument or return value"))
     (make-ffi-function :string name
-                       :arglist (mapcar #'reference-ffi-type (cadr ftype))
-                       :return-value (reference-ffi-type (caddr ftype)))))
+                       :arglist arglist
+                       :return-value return-value)))
 
 (defun process-ffi-macro (form)
   (let* ((name-form (caddr form))
@@ -790,9 +820,9 @@
                  (handler-case
                      (push (process-ffi-function form) defined-functions)
                    (error (c)
-                     ;; Darwin/ffigen5: CXType_Half/__fp16 → "(null ())"; skip.
+                     ;; e.g., a 16-bit float passed by value; skip.
                      (warn "parse-ffi: skipping function ~s: ~a"
-                           (cadr form) c))))
+                           (caddr form) c))))
                 (:macro (let* ((m (process-ffi-macro form))
                                (args (ffi-macro-args m)))
                           (if args
