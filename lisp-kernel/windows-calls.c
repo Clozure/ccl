@@ -292,88 +292,135 @@ lisp_close(HANDLE hfile)
 
 extern TCR *get_tcr(int);
 
-ssize_t
-lisp_standard_read(HANDLE hfile, void *buf, unsigned int count)
+/* Wait for an overlapped operation that ReadFile or WriteFile left
+   pending.  An APC (a process interrupt) ends the wait early; the
+   operation is then cancelled, and we wait for the cancel to finish,
+   because the OVERLAPPED is on our caller's stack.  An operation that
+   completed before the cancel took effect keeps its result.  Returns
+   TRUE with *ntransferred set, or FALSE with the Win32 error in *perr
+   (ERROR_OPERATION_ABORTED when interrupted). */
+static BOOL
+wait_for_overlapped(HANDLE hfile, OVERLAPPED *overlapped,
+                    DWORD *ntransferred, DWORD *perr)
 {
-  HANDLE hevent;
-  OVERLAPPED overlapped;
-  DWORD err, nread, wait_result;
-  pending_io pending;
-  TCR *tcr;
-  
-  
-  memset(&overlapped,0,sizeof(overlapped));
-
-  if (GetFileType(hfile) == FILE_TYPE_DISK) {
-    overlapped.Offset = SetFilePointer(hfile, 0, &(overlapped.OffsetHigh), FILE_CURRENT);
-  }
-
-  tcr = (TCR *)get_tcr(1);
-  pending.h = hfile;
-  pending.o = &overlapped;
-  TCR_AUX(tcr)->pending_io_info = &pending;
-  hevent = (HANDLE)(TCR_AUX(tcr)->io_datum);
-  overlapped.hEvent = hevent;
-  ResetEvent(hevent);
-  if (ReadFile(hfile, buf, count, &nread, &overlapped)) {
-    TCR_AUX(tcr)->pending_io_info = NULL;
-    return nread;
-  }
-
-  err = GetLastError();
-  
-  if (err == ERROR_HANDLE_EOF) {
-    TCR_AUX(tcr)->pending_io_info = NULL;
-    return 0;
-  }
-
-  if (err != ERROR_IO_PENDING) {
-    _dosmaperr(err);
-    TCR_AUX(tcr)->pending_io_info = NULL;
-    return -1;
-  }
-  
-  err = 0;
-  
-  /* We block here */    
-  wait_result = WaitForSingleObjectEx(hevent, INFINITE, true);
-
-
-
-  TCR_AUX(tcr)->pending_io_info = NULL;
-  if (wait_result == WAIT_OBJECT_0) {
-    err = overlapped.Internal;
-    if (err == ERROR_HANDLE_EOF) {
-      return 0;
-    }
-    if (err) {
-      _dosmaperr(err);
-      return -1;
-    }
-    return overlapped.InternalHigh;
-  }
+  DWORD wait_result = WaitForSingleObjectEx(overlapped->hEvent, INFINITE, TRUE);
 
   if (wait_result == WAIT_IO_COMPLETION) {
     CancelIo(hfile);
-    errno = EINTR;
-    return -1;
+  } else if (wait_result != WAIT_OBJECT_0) {
+    *perr = GetLastError();
+    CancelIo(hfile);
+    GetOverlappedResult(hfile, overlapped, ntransferred, TRUE);
+    return FALSE;
   }
-  err = GetLastError();
-  
+  if (GetOverlappedResult(hfile, overlapped, ntransferred, TRUE)) {
+    return TRUE;
+  }
+  *perr = GetLastError();
+  return FALSE;
+}
 
-  switch (err) {
-  case ERROR_HANDLE_EOF: 
-    return 0;
-  default:
-    _dosmaperr(err);
-    return -1;
-  }
+static ssize_t
+standard_read(HANDLE hfile, void *buf, unsigned int count, BOOL is_pipe)
+{
+  OVERLAPPED overlapped;
+  DWORD err, nread;
+  pending_io pending;
+  TCR *tcr = (TCR *)get_tcr(1);
+  BOOL ok;
+
+  do {
+    memset(&overlapped,0,sizeof(overlapped));
+
+    if (!is_pipe && (GetFileType(hfile) == FILE_TYPE_DISK)) {
+      overlapped.Offset = SetFilePointer(hfile, 0, &(overlapped.OffsetHigh), FILE_CURRENT);
+    }
+
+    pending.h = hfile;
+    pending.o = &overlapped;
+    TCR_AUX(tcr)->pending_io_info = &pending;
+    overlapped.hEvent = (HANDLE)(TCR_AUX(tcr)->io_datum);
+    ResetEvent(overlapped.hEvent);
+    nread = 0;
+    ok = ReadFile(hfile, buf, count, &nread, &overlapped);
+    err = ok ? 0 : GetLastError();
+    if (err == ERROR_IO_PENDING) {
+      ok = wait_for_overlapped(hfile, &overlapped, &nread, &err);
+    }
+    TCR_AUX(tcr)->pending_io_info = NULL;
+
+    if (ok) {
+      /* On a pipe, a zero-length write by the other end completes a
+         read with no data.  That is not end of file. */
+      if ((nread != 0) || !is_pipe) {
+        return nread;
+      }
+      continue;
+    }
+    switch (err) {
+    case ERROR_HANDLE_EOF:
+    case ERROR_BROKEN_PIPE:
+      return 0;
+    case ERROR_OPERATION_ABORTED:
+      if (nread != 0) {
+        return nread;
+      }
+      errno = EINTR;
+      return -1;
+    default:
+      _dosmaperr(err);
+      return -1;
+    }
+  } while (1);
 }
 
 ssize_t
+lisp_standard_read(HANDLE hfile, void *buf, unsigned int count)
+{
+  return standard_read(hfile, buf, count, FALSE);
+}
+
+/* Does this handle do overlapped I/O?  A handle opened without
+   FILE_FLAG_OVERLAPPED has one of the FILE_SYNCHRONOUS_IO_ mode bits
+   set.  The information class is FileModeInformation (ntifs.h). */
+#define FILE_MODE_INFORMATION_CLASS 16
+
+typedef struct {
+  union {
+    LONG Status;
+    PVOID Pointer;
+  };
+  ULONG_PTR Information;
+} io_status_block;
+
+static LONG WINAPI (*pNtQueryInformationFile)(HANDLE, io_status_block *,
+                                              PVOID, ULONG, int) = NULL;
+
+static BOOL
+handle_is_overlapped(HANDLE hfile)
+{
+  io_status_block iosb;
+  ULONG mode = 0;
+
+  if ((pNtQueryInformationFile == NULL) ||
+      (pNtQueryInformationFile(hfile, &iosb, &mode, sizeof(mode),
+                               FILE_MODE_INFORMATION_CLASS) != 0)) {
+    return FALSE;
+  }
+  return (mode & (FILE_SYNCHRONOUS_IO_ALERT|FILE_SYNCHRONOUS_IO_NONALERT)) == 0;
+}
+
+/* An anonymous pipe cannot do overlapped I/O, so a read from one polls
+   for data and sleeps between polls.  A named pipe opened for
+   overlapped I/O blocks in the read, and an interrupt ends it. */
+ssize_t
 pipe_read(HANDLE hfile, void *buf, unsigned int count)
 {
-  DWORD navail, err;;
+  DWORD navail, err;
+
+  if (handle_is_overlapped(hfile)) {
+    return standard_read(hfile, buf, count, TRUE);
+  }
 
   do {
     navail = 0;
@@ -462,9 +509,10 @@ lisp_write(HANDLE hfile, void *buf, ssize_t count)
 {
   HANDLE hevent;
   OVERLAPPED overlapped;
-  DWORD err, nwritten, wait_result;
+  DWORD err, nwritten;
   pending_io pending;
   TCR *tcr = (TCR *)get_tcr(1);
+  BOOL ok;
 
   hevent = (HANDLE)TCR_AUX(tcr)->io_datum;
   if (hfile == (HANDLE)1) {
@@ -486,34 +534,25 @@ lisp_write(HANDLE hfile, void *buf, ssize_t count)
   TCR_AUX(tcr)->pending_io_info = &pending;
   overlapped.hEvent = hevent;
   ResetEvent(hevent);
-  if (WriteFile(hfile, buf, count, &nwritten, &overlapped)) {
-    TCR_AUX(tcr)->pending_io_info = NULL;
+  nwritten = 0;
+  ok = WriteFile(hfile, buf, count, &nwritten, &overlapped);
+  err = ok ? 0 : GetLastError();
+  if (err == ERROR_IO_PENDING) {
+    ok = wait_for_overlapped(hfile, &overlapped, &nwritten, &err);
+  }
+  TCR_AUX(tcr)->pending_io_info = NULL;
+  if (ok) {
     return nwritten;
   }
-  
-  err = GetLastError();
-  if (err != ERROR_IO_PENDING) {
-    _dosmaperr(err);
-    TCR_AUX(tcr)->pending_io_info = NULL;
-    return -1;
-  }
-  err = 0;
-  wait_result = WaitForSingleObjectEx(hevent, INFINITE, true);
-  TCR_AUX(tcr)->pending_io_info = NULL;
-  if (wait_result == WAIT_OBJECT_0) {
-    err = overlapped.Internal;
-    if (err) {
-      _dosmaperr(err);
-      return -1;
+  if (err == ERROR_OPERATION_ABORTED) {
+    /* An interrupt cancelled the write.  Report the part that was
+       written, so that the caller does not write it again. */
+    if (nwritten != 0) {
+      return nwritten;
     }
-    return overlapped.InternalHigh;
-  }
-  if (wait_result == WAIT_IO_COMPLETION) {
-    CancelIo(hfile);
     errno = EINTR;
     return -1;
   }
-  err = GetLastError();
   _dosmaperr(err);
   return -1;
 }
@@ -1017,6 +1056,8 @@ void
 init_windows_io()
 {
   find_symbol_lock = CreateMutex(NULL,false,NULL);
+  pNtQueryInformationFile = (void *)GetProcAddress(GetModuleHandleA("ntdll.dll"),
+                                                   "NtQueryInformationFile");
 }
 
 void
