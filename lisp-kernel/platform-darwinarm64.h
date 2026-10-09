@@ -4,6 +4,8 @@
 #define PLATFORM_OS PLATFORM_OS_DARWIN
 #define PLATFORM_CPU PLATFORM_CPU_ARM64
 #define PLATFORM_WORD_SIZE PLATFORM_WORD_SIZE_64
+/* Must match standard-kernel-name in lib/compile-ccl.lisp. */
+#define STANDARD_KERNEL_NAME "darm64cl"
 
 #ifndef _DARWIN_C_SOURCE
 #define _DARWIN_C_SOURCE

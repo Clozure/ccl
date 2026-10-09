@@ -1101,6 +1101,11 @@ default_image_name(char *orig)
 #endif
 
 #ifdef DARWIN
+/*
+ * If we're in an application bundle, the image is in
+ * Contents/Resources/ccl/, not alongside the lisp kernel binary.
+ * Return its location inside the bundle.
+ */
 char *
 bundle_image_name(char *orig)
 {
@@ -1108,8 +1113,17 @@ bundle_image_name(char *orig)
   char *dir = dirname(orig);
   char path[MAXPATHLEN];
 
-  snprintf(path, MAXPATHLEN, "%s/../Resources/ccl/%s", dir, base);
-  return path_by_appending_image(path);
+  snprintf(path, MAXPATHLEN, "%s/../Resources/ccl/%s.image", dir, base);
+#ifdef STANDARD_KERNEL_NAME
+  /* A universal application bundle has one executable for all
+     architectures, but each architecture has its own image, named
+     after that architecture's standard lisp kernel. */
+  if (!probe_file(path)) {
+    snprintf(path, MAXPATHLEN, "%s/../Resources/ccl/%s.image", dir,
+             STANDARD_KERNEL_NAME);
+  }
+#endif
+  return strdup(path);
 }
 #endif
 
