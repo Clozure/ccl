@@ -1974,10 +1974,16 @@ space, and prefixed with PREFIX."
                   (unless (or (eql err #$ERROR_PIPE_BUSY)
                               (eql err #$ERROR_ACCESS_DENIED))
                     (%windows-error-disp err)))
-                (rlet ((sa #>SECURITY_ATTRIBUTES
-                           #>nLength (record-length #>SECURITY_ATTRIBUTES)
-                           #>lpSecurityDescriptor (%null-ptr)
-                           #>bInheritHandle #$TRUE))
+                ;; Not RLET: SECURITY_ATTRIBUTES has no canonical foreign
+                ;; type ordinal, so RLET would look the type up in a
+                ;; LOAD-TIME-VALUE, and that can't run while the cold
+                ;; load of a new image loads this file.
+                (%stack-block ((sa (record-length #>SECURITY_ATTRIBUTES)
+                                   :clear t))
+                  (setf (pref sa #>SECURITY_ATTRIBUTES.nLength)
+                        (record-length #>SECURITY_ATTRIBUTES)
+                        (pref sa #>SECURITY_ATTRIBUTES.bInheritHandle)
+                        #$TRUE)
                   (let* ((client (#_CreateFileW cname
                                                 (if child-reads
                                                   #$GENERIC_READ
