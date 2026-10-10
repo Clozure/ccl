@@ -79,12 +79,14 @@
     (#/setFont: cell font)
     field))
     
+(defconstant $preferences-choose-ccl-directory-button-tag 103)
+
 (defun %preferences-general-view ()
-  (cg:with-rects ((frame 0 0 544 106)
-                  (meta-checkbox-frame 18 70 169 18)
-                  (hyperspec-checkbox-frame 18 48 182 18)
-                  (label-frame 27 22 33 17)
-                  (text-field-frame 65 20 459 22))
+  (cg:with-rects ((frame 0 0 544 138)
+                  (meta-checkbox-frame 18 102 169 18)
+                  (hyperspec-checkbox-frame 18 80 182 18)
+                  (label-frame 27 54 33 17)
+                  (text-field-frame 65 52 459 22))
     (let ((view (#/initWithFrame: (#/alloc ns:ns-view) frame))
           (meta-checkbox (%checkbox-button meta-checkbox-frame
                                            "Use option key as meta"))
@@ -129,7 +131,36 @@
                                             #@"values.hyperspecLookupEnabled"
                                             +null-ptr+)
       (#/release text-field)
+      (%add-ccl-directory-controls view font dc)
       view)))
+
+;;; The directory where M-. looks for CCL's sources.  Empty means the
+;;; default (see INIT-CCL-DIRECTORY-FOR-IDE).
+(defun %add-ccl-directory-controls (view font dc)
+  (cg:with-rects ((label-frame 18 22 86 17)
+                  (text-field-frame 107 20 315 22)
+                  (button-frame 430 15 100 32))
+    (let ((label (%text-label label-frame #@"CCL sources:"))
+          (text-field (#/initWithFrame: (#/alloc ns:ns-text-field)
+                                        text-field-frame))
+          (button (%push-button button-frame "Choose..."))
+          (tool-tip #@"Where M-. looks for CCL's sources.  If this is empty, it uses the directory containing the application, if that has CCL's sources, or else the copy of the sources in the application."))
+      (#/setFont: (#/cell label) font)
+      (#/setToolTip: label tool-tip)
+      (#/addSubview: view label)
+      (#/release label)
+      (#/setFont: (#/cell text-field) font)
+      (#/setToolTip: text-field tool-tip)
+      (#/addSubview: view text-field)
+      (#/bind:toObject:withKeyPath:options: text-field #@"value"
+                                            dc
+                                            #@"values.CCLDirectory"
+                                            +null-ptr+)
+      (#/release text-field)
+      (#/setFont: (#/cell button) font)
+      (#/setTag: button $preferences-choose-ccl-directory-button-tag)
+      (#/addSubview: view button)
+      (#/release button))))
 
 (defconstant $preferences-change-editor-font-button-tag 100)
 (defconstant $preferences-change-listener-input-font-button-tag 101)

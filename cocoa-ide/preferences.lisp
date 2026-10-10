@@ -71,6 +71,10 @@
     (#/setAction: listener-input-font-button (objc:@selector #/showFontPanel:))
     (#/setTarget: listener-output-font-button self)
     (#/setAction: listener-output-font-button (objc:@selector #/showFontPanel:)))
+  (let* ((button (#/viewWithTag: (slot-value self 'general-view)
+                                 $preferences-choose-ccl-directory-button-tag)))
+    (#/setTarget: button self)
+    (#/setAction: button (objc:@selector #/chooseCCLDirectory:)))
 
   (#/addObserver:selector:name:object: (#/defaultCenter ns:ns-notification-center)
 				       self
@@ -89,6 +93,15 @@
 					      notification)
   (declare (ignore notification))
   (update-cocoa-defaults))
+
+(objc:defmethod (#/chooseCCLDirectory: :void) ((self ccl-preferences-window-controller)
+                                               sender)
+  (declare (ignore sender))
+  (let* ((dir (%cocoa-choose-directory-dialog nil)))
+    (when dir
+      (with-cfstring (s (native-translated-namestring dir))
+        (#/setObject:forKey: (#/standardUserDefaults ns:ns-user-defaults)
+                             s #@"CCLDirectory")))))
 
 (defconstant editor-font-button-tag 1)
 (defconstant listener-input-font-button-tag 2)
