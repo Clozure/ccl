@@ -1611,7 +1611,7 @@ space, and prefixed with PREFIX."
            (signal-file-error fd null-device))
          (values fd nil (cons fd close-in-parent) (cons fd close-on-error))))
       ((eql :stream)
-       (multiple-value-bind (read-pipe write-pipe) (pipe)
+       (multiple-value-bind (read-pipe write-pipe) (child-process-pipe direction)
          (case direction
            (:input
             (values read-pipe
@@ -1931,6 +1931,78 @@ space, and prefixed with PREFIX."
     (let ((new-fd (fd-dup fd :direction direction)))
       (fd-close fd)
       new-fd))
+
+  ;;; winbase.h.  The interface database does not define it.
+  (defconstant $pipe-reject-remote-clients 8)
+
+  (defloadvar *child-process-pipe-serial* 0)
+
+  ;;; An anonymous pipe cannot do overlapped I/O, so the kernel can
+  ;;; only poll it for input.  Make the parent's end of a child's pipe
+  ;;; the server end of a named pipe opened for overlapped I/O: a read
+  ;;; on it blocks until data arrives, and an interrupt can end that
+  ;;; read.  The child's end stays synchronous, because the child does
+  ;;; plain reads and writes on it, and it is inheritable.  DIRECTION
+  ;;; is :INPUT when the child reads and :OUTPUT when it writes.
+  ;;; Returns the read end and the write end, as PIPE does.
+  (defun child-process-pipe (direction)
+    (let* ((child-reads (eq direction :input)))
+      (unless (member direction '(:input :output))
+        (return-from child-process-pipe (pipe)))
+      (dotimes (i 10 (error "Can't create a unique pipe name."))
+        (declare (ignorable i))
+        (let* ((serial (%atomic-incf-node 1 '*child-process-pipe-serial*
+                                          target::symbol.vcell))
+               (name (format nil "\\\\.\\pipe\\ccl-~d-~d"
+                             (#_GetCurrentProcessId) serial)))
+          (with-native-utf-16-cstrs ((cname name))
+            (let* ((server (#_CreateNamedPipeW
+                            cname
+                            (logior (if child-reads
+                                      #$PIPE_ACCESS_OUTBOUND
+                                      #$PIPE_ACCESS_INBOUND)
+                                    #$FILE_FLAG_OVERLAPPED
+                                    #$FILE_FLAG_FIRST_PIPE_INSTANCE)
+                            (logior #$PIPE_TYPE_BYTE
+                                    #$PIPE_READMODE_BYTE
+                                    #$PIPE_WAIT
+                                    $pipe-reject-remote-clients)
+                            1 4096 4096 0 (%null-ptr))))
+              (if (eql server #$INVALID_HANDLE_VALUE)
+                (let* ((err (#_GetLastError)))
+                  ;; Another pipe has this name.  Try the next one.
+                  (unless (or (eql err #$ERROR_PIPE_BUSY)
+                              (eql err #$ERROR_ACCESS_DENIED))
+                    (%windows-error-disp err)))
+                ;; Not RLET: SECURITY_ATTRIBUTES has no canonical foreign
+                ;; type ordinal, so RLET would look the type up in a
+                ;; LOAD-TIME-VALUE, and that can't run while the cold
+                ;; load of a new image loads this file.
+                (%stack-block ((sa (record-length #>SECURITY_ATTRIBUTES)
+                                   :clear t))
+                  (setf (pref sa #>SECURITY_ATTRIBUTES.nLength)
+                        (record-length #>SECURITY_ATTRIBUTES)
+                        (pref sa #>SECURITY_ATTRIBUTES.bInheritHandle)
+                        #$TRUE)
+                  (let* ((client (#_CreateFileW cname
+                                                (if child-reads
+                                                  #$GENERIC_READ
+                                                  #$GENERIC_WRITE)
+                                                0
+                                                sa
+                                                #$OPEN_EXISTING
+                                                0
+                                                (%null-ptr))))
+                    (when (eql client #$INVALID_HANDLE_VALUE)
+                      (let* ((err (#_GetLastError)))
+                        (#_CloseHandle server)
+                        (%windows-error-disp err)))
+                    (let* ((s (%ptr-to-int server))
+                           (c (%ptr-to-int client)))
+                      (return-from child-process-pipe
+                        (if child-reads
+                          (values c s)
+                          (values s c)))))))))))))
 
   
   (defun data-available-on-pipe-p (hpipe)
