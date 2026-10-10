@@ -183,8 +183,14 @@
 	outpos = textlen;
       }
     } else if (curlen > 0) {
-      [tv setSelectedRange: NSMakeRange(textlen,0)];
-      [tv insertText: [textstring substringWithRange: r]];
+      NSString *s = [textstring substringWithRange: r];
+      NSRange end = NSMakeRange(textlen, 0);
+
+      if ([tv shouldChangeTextInRange: end replacementString: s]) {
+        [textbuf replaceCharactersInRange: end withString: s];
+        [tv didChangeText];
+      }
+      [tv setSelectedRange: NSMakeRange([textbuf length],0)];
       [tv scrollRangeToVisible: NSMakeRange([textbuf length],0)];
     }
   }

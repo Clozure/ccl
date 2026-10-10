@@ -23,7 +23,6 @@
 */
 
 #import "AltConsoleDocumentController.h"
-#include <Carbon/Carbon.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -32,16 +31,16 @@
 - (id) init {
   self = [super init];
   if (self) {
-    ProcessSerialNumber psn;
+    NSString *name;
 
     console_documents = 0;
     peer_pid = getppid();
     peer_name = @"Unknown";
-    if (GetProcessForPID(peer_pid, &psn) == 0) {
-      CFStringRef name;
-      if (CopyProcessName(&psn, &name) == 0) {
-        peer_name = [[NSString stringWithString: (NSString *)name] retain];
-      }
+    name = [[NSRunningApplication
+              runningApplicationWithProcessIdentifier: peer_pid]
+             localizedName];
+    if (name) {
+      peer_name = [name retain];
     }
     peer_herald = [[[NSString stringWithFormat: @"~/%@-%d",peer_name, peer_pid]stringByExpandingTildeInPath] retain];
   }

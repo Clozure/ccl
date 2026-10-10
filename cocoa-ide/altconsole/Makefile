@@ -15,10 +15,13 @@ APPBASE=.
 OBJECTS=main.o AltConsoleDocument.o AltConsoleDocumentController.o
 RESOURCES=resource/MainMenu.nib resource/AltConsole.nib resource/Credits.rtf resource/InfoPlist.strings resource/Clear.tiff
 
-CFLAGS=-g -O -mmacosx-version-min=10.9
+# Universal, like the IDE's own executable.
+CFLAGS=-g -O -mmacosx-version-min=10.13 -arch arm64 -arch x86_64
 
 AltConsole: $(OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $(OBJECTS) -framework Cocoa
+
+$(OBJECTS): Makefile
 
 $(APPBASE)/AltConsole.app: AltConsole $(RESOURCES) AltConsole-Info.plist
 	mkdir -p $(APPBASE)
