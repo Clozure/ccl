@@ -115,18 +115,32 @@ endsp makeu64
  *
  * ObjC 2.0 exceptions on 64-bit Darwin are C++-ABI zero-cost
  * exceptions: the unwinder must find unwind info for every frame
- * between the throw and a frame whose personality routine claims the
- * exception, or the throw ends in std::terminate() and the process
- * aborts.  So each ff-call subprim (ffcall, ffcall_return_registers,
- * ffcall_indirect_result) carries unwind info naming a personality
- * routine and an LSDA whose one call-site entry covers the blr into
- * foreign code and catches everything.
+ * between objc_exception_throw and a frame whose personality routine
+ * claims the exception, or the unwind ends in std::terminate() and
+ * the process aborts.  So each ff-call subprim (ffcall,
+ * ffcall_return_registers, ffcall_indirect_result) carries unwind
+ * info naming a personality routine and an LSDA whose one call-site
+ * entry covers the blr into foreign code and catches everything.
  *
- * The unwinder only ever steps INTO the subprim's frame (from the
- * callee), never out of it, so the CFI needs no rules of its own: the
- * callee's unwind info restores sp and x19-x28 (save0-3, rnil, tsp,
- * vsp, allocptr, allocbase, rcontext) to their values at the blr,
- * which is everything the return path runs from.
+ * Unwinding an ObjC exception (_Unwind_RaiseException) only ever
+ * steps INTO the subprim's frame (from the callee): the callee's
+ * unwind info restores sp and x19-x28 (save0-3, rnil, tsp, vsp,
+ * allocptr, allocbase, rcontext) to their values at the blr, which is
+ * everything the return path runs from.
+ *
+ * Other stack walks do step OUT of it.  libobjc's
+ * objc_addExceptionHandler (which AppKit has been observed to call on
+ * mouse tracking, e.g.  -[NSScroller trackPagingArea:]) walks with
+ * unw_step until no frame is left.  With no CFA or return-address
+ * rule, the linker encodes the subprim as frameless, and stepping out
+ * of it takes the cursor's lr, a stale value from the walk's starting
+ * context, as the return address. (This bit us when the arm64e
+ * libunwind on macOS 12 attempted to authenticate that value against
+ * the wrong sp and took a PAC trap.)  So, at the blr, describe the
+ * real frame: save1 (x20, callee-saved) is the boundary lisp_frame,
+ * whose top is the caller's SP and whose savelr slot holds the return
+ * address into lisp.  The walk then reaches the lisp caller, finds no
+ * unwind info there, and stops.
  *
  * The landing pad runs objc_begin_catch/objc_end_catch with the thread
  * still in foreign valence, then joins the normal return path (still
@@ -145,16 +159,27 @@ endsp makeu64
 
 .set XFOREIGNEXCEPTION, (200<<fixnumshift)  /* errors.s deferr(XFOREIGNEXCEPTION,200) */
 
-/* Right after `spentry name': the LSDA's offsets are relative to here. */
+/* Use right after `spentry name'.  L<name>_start is the base for the
+ * LSDA's call-site offsets.
+ *
+ * The LSDA label is linker-private (l), not assembler-local (L).  An
+ * L label never reaches the object file, so the FDE's LSDA pointer is
+ * relocated as "start of __gcc_except_tab + offset", and ld gets the
+ * offset wrong for every LSDA but the first when it keeps the FDE as
+ * DWARF instead of converting it to compact unwind.  The CFA rule in
+ * ffcall_eh_call_begin forces DWARF. */
 .macro ffcall_eh_start name
         .cfi_startproc
         .cfi_personality 0x9b, C(lisp_objc2_personality) /* indirect|pcrel|sdata4 */
-        .cfi_lsda 0x10, L\name\()_lsda                   /* pcrel|absptr */
+        .cfi_lsda 0x10, l\name\()_lsda                   /* pcrel|absptr */
 L\name\()_start:
 .endm
 
-/* Bracket the foreign call: the one region the LSDA covers. */
+/* Bracket the foreign call: the one region the LSDA covers.  save1 =
+ * the boundary lisp_frame from here through the landing pad. */
 .macro ffcall_eh_call_begin name
+        .cfi_def_cfa x20, lisp_frame.size
+        .cfi_offset x30, lisp_frame.savelr - lisp_frame.size
 L\name\()_call:
 .endm
 .macro ffcall_eh_call_end name
@@ -183,8 +208,8 @@ L\name\()_join:
  * never looks inside the LSDA.  Its format comes from the C++ ABI (gcc's
  * "except table"), and ObjC uses it unchanged.
  *
- * A throw takes two passes.  The search pass asks each frame's
- * personality whether it catches the exception.  The second pass
+ * _Unwind_RaiseException makes two passes.  The search pass asks each
+ * frame's personality whether it catches the exception.  The second pass
  * restores registers frame by frame up to the frame that does, then
  * enters its landing pad with x0 = the exception object and x1 = the
  * selector naming the matching catch clause (always 1 here).
@@ -225,7 +250,7 @@ L\name\()_landing_pad:
 
         .section __TEXT,__gcc_except_tab
         .p2align 2
-L\name\()_lsda:
+l\name\()_lsda:
         .byte 0xff              /* @LPStart encoding: omit */
         .byte 0x9b              /* @TType encoding: indirect|pcrel|sdata4 */
         .uleb128 L\name\()_ttbase - L\name\()_ttbaseref
