@@ -450,6 +450,49 @@ foreign_signal_handler_installed(int signum)
   return (sa.sa_handler != SIG_DFL) && (sa.sa_handler != SIG_IGN);
 }
 
+/*
+ * We're declining an exception, so it goes to the next handler.
+ * Usually that's the default one, and the process dies without any
+ * other message, so say what we passed on.  For an illegal
+ * instruction, also name any SIGILL handler it will go to.
+ */
+static void
+report_declined_exception(TCR *tcr,
+                          exception_type_t exception,
+                          mach_exception_data_t code,
+                          mach_msg_type_number_t code_count,
+                          native_thread_state_t *ts)
+{
+  struct sigaction sa;
+
+  fprintf(dbgout,
+          "[darwinarm64] declined Mach exception %d (codes 0x%llx, 0x%llx) "
+          "pc=0x%llx lr=0x%llx sp=0x%llx tcr=0x%lx valence=%ld flags=0x%lx\n",
+          exception,
+          (unsigned long long)code[0],
+          (unsigned long long)((code_count > 1) ? code[1] : 0),
+          (unsigned long long)ts->__pc,
+          (unsigned long long)ts->__lr,
+          (unsigned long long)ts->__sp,
+          (unsigned long)(natural)tcr,
+          (long)tcr->valence,
+          (unsigned long)tcr->flags);
+  if ((exception == EXC_BAD_INSTRUCTION) &&
+      (sigaction(SIGILL, NULL, &sa) == 0) &&
+      (sa.sa_handler != SIG_DFL) && (sa.sa_handler != SIG_IGN)) {
+    Dl_info di;
+
+    fprintf(dbgout, "  SIGILL handler 0x%lx",
+            (unsigned long)(natural)sa.sa_handler);
+    if (dladdr((void *)sa.sa_handler, &di) && di.dli_fname) {
+      fprintf(dbgout, " (%s in %s)",
+              di.dli_sname ? di.dli_sname : "?", di.dli_fname);
+    }
+    fprintf(dbgout, "\n");
+  }
+  fflush(dbgout);
+}
+
 kern_return_t
 catch_mach_exception_raise_state(mach_port_t exception_port,
                                  exception_type_t exception,
@@ -463,6 +506,7 @@ catch_mach_exception_raise_state(mach_port_t exception_port,
 {
   int64_t code0 = code[0];
   int signum = 0;
+  Boolean routine_decline = false;
   TCR *tcr = TCR_FROM_EXCEPTION_PORT(exception_port);
   mach_port_t thread = (mach_port_t)((natural)tcr->native_thread_id);
   kern_return_t kret;
@@ -479,6 +523,7 @@ catch_mach_exception_raise_state(mach_port_t exception_port,
     kret = do_pseudo_sigreturn(thread, tcr, out_ts);
   } else if (tcr->flags & (1 << TCR_FLAG_BIT_PROPAGATE_EXCEPTION)) {
     CLR_TCR_FLAG(tcr, TCR_FLAG_BIT_PROPAGATE_EXCEPTION);
+    report_declined_exception(tcr, exception, code, code_count, ts);
     kret = 17;
   } else {
     switch (exception) {
@@ -579,7 +624,12 @@ catch_mach_exception_raise_state(mach_port_t exception_port,
        */
       if ((tcr->valence == TCR_STATE_FOREIGN) &&
           foreign_signal_handler_installed(SIGILL)) {
-        /* leave signum at 0 */
+        /* Leave signum at 0.  A feature probe is routine, so don't
+           report it; a udf (code[1] is the instruction) is one of
+           ours, and lisp code shouldn't be running in foreign
+           valence. */
+        routine_decline = !((code_count > 1) &&
+                            ((code[1] & 0xffff0000) == 0));
         break;
       }
       /*
@@ -614,6 +664,9 @@ catch_mach_exception_raise_state(mach_port_t exception_port,
        * KERN_SUCCESS suffices to do that; 17 is what previous CCL
        * ports have used, so cargo-cult it forward.
        */
+      if (!routine_decline) {
+        report_declined_exception(tcr, exception, code, code_count, ts);
+      }
       kret = 17;
     }
   }
