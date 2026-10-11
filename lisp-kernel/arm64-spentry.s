@@ -132,15 +132,16 @@ endsp makeu64
  * objc_addExceptionHandler (which AppKit has been observed to call on
  * mouse tracking, e.g.  -[NSScroller trackPagingArea:]) walks with
  * unw_step until no frame is left.  With no CFA or return-address
- * rule, the linker encodes the subprim as frameless, and stepping out
- * of it takes the cursor's lr, a stale value from the walk's starting
- * context, as the return address. (This bit us when the arm64e
- * libunwind on macOS 12 attempted to authenticate that value against
- * the wrong sp and took a PAC trap.)  So, at the blr, describe the
- * real frame: save1 (x20, callee-saved) is the boundary lisp_frame,
- * whose top is the caller's SP and whose savelr slot holds the return
- * address into lisp.  The walk then reaches the lisp caller, finds no
- * unwind info there, and stops.
+ * rule, the linker encodes the subprim as frameless.  Stepping out of
+ * a frameless frame takes x30 as the return address, but by then the
+ * unwinder's copy of x30 is a stale value captured where the walk
+ * started.  (This bit us when the arm64e libunwind on macOS 12
+ * attempted to authenticate that value against the wrong sp and took
+ * a PAC trap.)  So, at the blr, describe the real frame: save1 (x20,
+ * callee-saved) is the boundary lisp_frame, whose top is the caller's
+ * SP and whose savelr slot holds the return address into lisp.  The
+ * walk then reaches the lisp caller, finds no unwind info there, and
+ * stops.
  *
  * The landing pad runs objc_begin_catch/objc_end_catch with the thread
  * still in foreign valence, then joins the normal return path (still
