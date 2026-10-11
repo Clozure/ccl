@@ -1267,15 +1267,23 @@ handle_protection_violation(ExceptionInformation *xp, siginfo_t *info, TCR *tcr,
 #endif
 
   /*
-   * A fault on the stp of a variable-size tsp frame push leaves tsp
-   * pointing at a frame with no backlink.  Roll back construction of
-   * the tsp frame before we run lisp code (which may itself push tsp
-   * frames or run the gc) on this thread.  pc_luser_xp() won't do it
-   * for us: it isn't applied to this thread's own fault context.  (If
-   * pc_luser_xp() already rolled it back while we were waiting for the
-   * exception lock, the pc is at the sub and this does nothing.)
+   * If the fault was on fetching the instruction at the pc (a jump to
+   * an unmapped address, say), we can't look at that instruction
+   * because reading it would just fault again.
    */
-  rollback_tsp_frame_push(xp);
+  if (addr != (BytePtr)xpPC(xp)) {
+    /*
+     * See if the fault was on the stp of a variable-size tsp frame
+     * push.  That leaves tsp pointing at a frame with no backlink, so
+     * roll back construction of the tsp frame before we run lisp code
+     * (which may itself push tsp frames or run the gc) on this
+     * thread.  pc_luser_xp() won't do it for us: it isn't applied to
+     * this thread's own fault context.  (If pc_luser_xp() already
+     * rolled it back while we were waiting for the exception lock,
+     * the pc is at the sub and this does nothing.)
+     */
+    rollback_tsp_frame_push(xp);
+  }
 
   if (is_write_fault(xp,info)) {                  /* ppc:956-969 */
     area = find_protected_area(addr);
