@@ -160,8 +160,6 @@
 (defun win64::generate-callback-return-value (stack-ptr fp-args-ptr result return-type struct-return-arg)
   (declare (ignore fp-args-ptr))
   (unless (eq return-type *void-foreign-type*)
-    (when (typep return-type 'foreign-single-float-type)
-      (setq result `(float ,result 0.0d0)))    
     (let* ((return-type-keyword
             (if (typep return-type 'foreign-record-type)
               (progn
@@ -177,7 +175,8 @@
                 (:address '%get-ptr)
                 (:signed-doubleword '%%get-signed-longlong)
                 (:unsigned-doubleword '%%get-unsigned-longlong)
-                ((:double-float :single-float) '%get-double-float)
+                (:double-float '%get-double-float)
+                (:single-float '%get-single-float)
                 (t '%get-long)) ,stack-ptr ,offset) ,result))))
       
                  
