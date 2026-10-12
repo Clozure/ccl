@@ -3625,10 +3625,15 @@ exception_handler_proc(void *arg)
 {
   extern boolean_t mach_exc_server();
   mach_port_t p = (mach_port_t)((natural)arg);
+  mach_msg_return_t mr;
 
   mach_exception_thread = pthread_mach_thread_np(pthread_self());
-  mach_msg_server(mach_exc_server, 256, p, 0);
+  mr = mach_msg_server(mach_exc_server, 256, p, 0);
   /* Should never return. */
+  if (MACH_PORT_NAMES_EXHAUSTED(mr)) {
+    fprintf(dbgout, "exception thread: no more Mach port names\n");
+  }
+  fprintf(dbgout, "mach_msg_server returned %d (0x%x)\n", (int)mr, (int)mr);
   abort();
 }
 

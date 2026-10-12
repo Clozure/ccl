@@ -843,6 +843,10 @@ new_semaphore(int count)
   semaphore_t s = (semaphore_t)0;
   kret = semaphore_create(mach_task_self(),&s, SYNC_POLICY_FIFO, count);
   if (kret != KERN_SUCCESS) {
+    if (MACH_PORT_NAMES_EXHAUSTED(kret)) {
+      fatal_oserr("Can't create Mach semaphore: no more port names",
+                  (OSErr)kret);
+    }
     fatal_oserr("Can't create Mach semaphore.",(OSErr)kret);
   }
   return (void *)(natural)s;

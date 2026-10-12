@@ -70,6 +70,13 @@ struct timespec {
 #include <mach/mach_init.h>
 #include <mach/task.h>
 #include <mach/semaphore.h>
+
+/* True if kret, from a Mach call or mach_msg(), means that this
+   process has run out of Mach port names.  Each Mach semaphore uses
+   a port name. */
+#define MACH_PORT_NAMES_EXHAUSTED(kret) \
+  ((err_get_system(kret) == err_get_system(err_mach_ipc)) && \
+   (((kret) & MACH_MSG_IPC_SPACE) != 0))
 #endif
 
 #include <limits.h>
