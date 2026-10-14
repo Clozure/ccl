@@ -214,8 +214,11 @@ list, NIL otherwise."
     (let ((extra (rem offset alignment)))
       (if (zerop extra) offset (+ offset (- alignment extra)))))
 
+  ;; 128-bit integers (__int128) are 16-byte aligned on both x86-64
+  ;; and arm64.
   (defun guess-alignment (bits)
     (cond ((null bits) nil)
+          ((> bits 64) 128)
           ((> bits 32) 64)
           ((> bits 16) 32)
           ((> bits 8) 16)
