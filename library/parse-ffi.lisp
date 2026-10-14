@@ -59,6 +59,13 @@
 (defvar *ffi-macro-overrides*
   '((:macro ("{override}" 0) "_IOC_TYPECHECK ( t )" "sizeof(t)")))
 
+;;; Compiler keywords that stand for constant values.  When the
+;;; compiler supports BOOL literals, objc.h does "#define YES
+;;; __objc_yes" and "#define NO __objc_no".
+(defvar *c-builtin-constants*
+  '(("__objc_yes" . 1)
+    ("__objc_no" . 0)))
+
 (defvar *ffi-void-reference* '(:primitive :void))
 
 ;;; ffigen5 gives the 16-bit float types (__fp16, _Float16, __bf16)
@@ -1386,6 +1393,9 @@
                                  (setq value (list value) token-list `(,@value #.*rparen-symbol* ,@token-list))
                                  (parse-parenthesized))
                                 ((setq value (assoc token additional-constants))
+                                 (cdr value))
+                                ((setq value (assoc (symbol-name token) *c-builtin-constants*
+                                                    :test #'string=))
                                  (cdr value))
                                 ((and expand-macros
                                       (setq value (macro-definition-of-token token))
