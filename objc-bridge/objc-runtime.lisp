@@ -962,6 +962,18 @@
 				
 
 
+;;; The layout of an NSConstantString instance, as described above.
+;;; (Foundation declares NSConstantString as an ObjC class, which the
+;;; interface databases don't describe as a struct.)  The header calls
+;;; numBytes an int, followed by an unused int on LP64; treating them
+;;; together as an unsigned long sets both.
+#+apple-objc
+(def-foreign-type nil
+    (:struct :<NSC>onstant<S>tring
+             (:isa (:* :void))
+             (:bytes (:* :signed-char))
+             (:num<B>ytes :unsigned-long)))
+
 ;;; Execute the body with the variable NSSTR bound to a
 ;;; stack-allocated NSConstantString instance (made from
 ;;; *NSConstantString-class*, CSTRING and LEN).
