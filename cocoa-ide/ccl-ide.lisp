@@ -34,26 +34,26 @@
 
 (defvar *cocoa-ide-path* nil)
 (defvar *cocoa-ide-copy-headers-p* nil)
+(defvar *cocoa-ide-copy-sources-p* nil)
 (defvar *cocoa-ide-install-altconsole* nil)
 (defvar *cocoa-ide-bundle-suffix* nil)
 (defvar *cocoa-ide-frameworks* nil)
 (defvar *cocoa-ide-libraries* nil)
 
 (defun ccl-ide (&key (force-compile nil) (save-app nil) (init-file "home:ccl-ide-init"))
-  (multiple-value-bind (os bits cpu) (host-platform)
-    (declare (ignore os))
+  (let* ((bits (nth-value 1 (host-platform))))
     (setf *cocoa-ide-path* 
           (if save-app
             (if (eq t save-app)
-              (format nil "ccl:Clozure CL~a.app;" bits)
+              "ccl:Clozure CL.app;"
               save-app)
             (format nil "ccl:temp bundle~a.app;"
                     bits)))
     (setf *cocoa-ide-install-altconsole* save-app)
     (setf *cocoa-ide-bundle-suffix*
           (if save-app 
-            (format nil "Clozure CL-~a~a" (string-downcase cpu) bits)
-            (format nil "temp bundle-~a~a" (string-downcase cpu) bits)))
+            "ccl-ide"
+            "ccl-ide-temp"))
     (setf *cocoa-ide-frameworks*
           #+cocotron '("ccl:cocotron;Foundation.framework;" "ccl:cocotron;AppKit.framework;" "ccl:cocotron;CoreData.framework;")
           #-cocotron nil)

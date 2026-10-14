@@ -23,6 +23,10 @@
 ;; They are defvar'ed so the caller can set them before loading us.
 (defvar *cocoa-ide-path* nil)
 (defvar *cocoa-ide-copy-headers-p* nil)
+(defvar *cocoa-ide-copy-sources-p* nil)
+;; Where to put the IDE's fasls.  A standalone build uses its own
+;; directory, since it compiles with different features.
+(defvar *cocoa-ide-fasl-directory* "ccl:cocoa-ide;fasls;")
 (require "IDE-BUNDLE")
 
 (require "OBJC-SUPPORT")
@@ -149,9 +153,9 @@
 	    (compile-file source :output-file fasl :verbose t))
 	  (load fasl :verbose t))))))
 
-(defun load-ide-files (names src-dir force-compile)
+(defun load-ide-files (names src-dir force-compile &optional bin-dir)
   (declare (special *hemlock-files*)) ;; kludge
-  (let* ((bin-dir (merge-pathnames ";fasls;" src-dir)))
+  (let* ((bin-dir (or bin-dir (merge-pathnames ";fasls;" src-dir))))
     (ensure-directories-exist bin-dir)
     (with-compilation-unit ()
       (dolist (name names)
@@ -173,6 +177,7 @@
 
 (defun load-ide (&optional force-compile)
   (load-mac-ui-files *mac-ui-files* "ccl:mac-ui;" force-compile)
-  (load-ide-files *ide-files* "ccl:cocoa-ide;" force-compile)
+  (load-ide-files *ide-files* "ccl:cocoa-ide;" force-compile
+                  *cocoa-ide-fasl-directory*)
   (require 'build-application)
   (provide "COCOA"))

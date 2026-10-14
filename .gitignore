@@ -33,6 +33,7 @@ tags
 /*headers64/
 
 /*bundle*.app/
+/cocoa-ide/build/
 /Clozure\ CL*.app/
 cocoa-ide/altconsole/.gdb_history
 cocoa-ide/altconsole/AltConsole

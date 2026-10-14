@@ -46,16 +46,58 @@
     (#/registerDefaults: domain dict)
     (#/release dict)
     (update-cocoa-defaults)
-    #-(or mac-app-store standalone-ide)
     (when *standalone-cocoa-ide*
+      (init-interfaces-root)
+      #-mac-app-store
       (init-ccl-directory-for-ide))))
 
+(defun bundle-ccl-directory ()
+  (ccl::native-to-directory-pathname
+   (concatenate 'string
+                (%get-cfstring (#/resourcePath (#/mainBundle ns:ns-bundle)))
+                "/ccl/")))
+
+;;; A standalone IDE has its own copy of the interfaces, in the same
+;;; directory as the image.  Use those rather than the ones in ccl:,
+;;; which may be missing (if the bundle isn't in a CCL directory) or
+;;; out of date (if ccl: is some old sources we're just using for
+;;; meta-.).
+(defun init-interfaces-root ()
+  (let* ((root (bundle-ccl-directory)))
+    (when (probe-file (make-pathname :directory
+                                     (append (pathname-directory root)
+                                             (ccl::cdb-subdirectory-path))
+                                     :defaults root))
+      (setq ccl::*interfaces-root* root))))
+
+;;; See if the dir looks like it probably contains ccl sources.
+(defun plausible-source-directory-p (dir)
+  (and dir
+       (every #'(lambda (p)
+                  (probe-file (merge-pathnames p dir)))
+              '("lib/compile-ccl.lisp" "level-1/level-1.lisp"))))
+
+;;; Set the ccl: logical host.  This is where M-. finds source files
+;;; and where require finds modules.  Use, in order of preference, the
+;;; "CCL directory" preference or the directory containing the bundle,
+;;; if either looks like a CCL source directory, or else the CCL
+;;; directory embedded in the bundle.
+;;;
+;;; The ccl: logical host starts as the embedded ccl directory.  This
+;;; runs again when the preference changes.
 (defun init-ccl-directory-for-ide ()
+  (declare (special *ccl-directory*))
   (let* ((bundle-path (#/bundlePath (#/mainBundle ns:ns-bundle)))
-         (parent (#/stringByDeletingLastPathComponent bundle-path))
-         (path (ccl::ensure-directory-pathname
-                (lisp-string-from-nsstring parent))))
-    (ccl::replace-base-translation "ccl:" path)))
+         (parent (ccl::native-to-directory-pathname
+                  (%get-cfstring
+                   (#/stringByDeletingLastPathComponent bundle-path))))
+         (preference (and (stringp *ccl-directory*)
+                          (plusp (length *ccl-directory*))
+                          (ccl::native-to-directory-pathname *ccl-directory*)))
+         (dir (or (find-if #'plausible-source-directory-p
+                           (list preference parent))
+                  (bundle-ccl-directory))))
+    (ccl::replace-base-translation "ccl:" dir)))
 
 
 (defvar *ccl-ide-init-file* "home:ccl-ide-init")

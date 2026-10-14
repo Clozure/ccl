@@ -15,33 +15,22 @@
 
 (in-package "GUI")
 
+;;; Did we start up as a double-clicked app?
 (defparameter *standalone-cocoa-ide* nil)
 
 #-cocotron
 (if (< #&NSAppKitVersionNumber 824)
     (error "This application requires features introduced in OSX 10.4."))
 
-(def-cocoa-default  *ccl-directory* :string "" nil
-                    #+no #'(lambda (old new)
-                             (when (equal new "") (setq new nil))
-                             (unless (and new (equal old new))
-                               (init-interfaces-root)
-                               (ccl::replace-base-translation
-                                "ccl:"
-                                (or new (find-ccl-directory))))))
-
-;; If there are interfaces inside the bundle, use those rather than the ones
-;; in CCL:, since they're more likely to be valid.  CCL: could be some random
-;; old sources we're just using for meta-.
-(defun init-interfaces-root ()
-  (let* ((subpath (ccl::cdb-subdirectory-path))
-         (path (pathname-directory (ccl::ccl-directory))))
-    (when (and *standalone-cocoa-ide*
-               (equalp (last path 2) '("Contents" "MacOS")))
-      (setq path (butlast path))
-      (when (or (probe-file (make-pathname :directory (append path subpath)))
-                (probe-file (make-pathname :directory (append (setq path `(,@path "Resources")) subpath))))
-        (setq ccl::*interfaces-root* (make-pathname :directory path))))))
+(def-cocoa-default  *ccl-directory* :string ""
+                    "Directory containing CCL's sources, for M-. and REQUIRE"
+                    #'(lambda (old new)
+                        ;; OLD is NIL when the defaults are first read,
+                        ;; at startup; the app delegate sets up CCL: then.
+                        (declare (ignorable old new))
+                        (when (and old *standalone-cocoa-ide*
+                                   (not (equal old new)))
+                          (init-ccl-directory-for-ide))))
 
 (defun find-ccl-directory ()
   (let* ((path (ccl::ccl-directory))
@@ -140,7 +129,7 @@
 
   #-cocotron
   (ccl::touch bundle-path)
-  (let ((kernel-file (make-pathname :name (ccl::standard-kernel-name) 
+  (let ((kernel-file (make-pathname :name (ccl::ide-bundle-executable-name)
                                     :type nil 
                                     :version nil 
                                     :defaults (merge-pathnames 
@@ -158,19 +147,22 @@
     (format *error-output* "~2%Saving application to ~a~2%" (truename bundle-path))
     (force-output *error-output*)
     (ensure-directories-exist image-file)
+    #+darwin-target
+    (ccl::install-ide-kernel (ccl::kernel-path) kernel-file)
+    #-darwin-target
     (ccl:copy-file (ccl::kernel-path) kernel-file :if-exists :supersede 
                    :preserve-attributes t)
     (save-application image-file
 		      :application-class 'cocoa-ide
 		      #+windows-target #+windows-target
 		      :application-type :gui)))
+
 ;;; If we're running as a standalone .app, try to see if a bundle named
 ;;; AltConsole.app exists in our Resources directory.  If so, execute
 ;;; that bundle'es executable file, with its standard input/output/error
 ;;; descriptors connected to one end of a socketpair, and connect
 ;;; lisp's *TERMINAL-IO* and the kernel's dbgout to the other end
 ;;; of the socket.
-
 (defun try-connecting-to-altconsole ()
   (with-autorelease-pool
       (let* ((main-bundle (#/mainBundle ns:ns-bundle))

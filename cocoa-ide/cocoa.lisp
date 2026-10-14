@@ -23,11 +23,9 @@
           (format nil "ccl:temp bundle~a.app;"
                   bits)))
 (defvar *cocoa-ide-copy-headers-p* nil)
+(defvar *cocoa-ide-copy-sources-p* nil)
 (defvar *cocoa-ide-install-altconsole* nil)
-(defvar *cocoa-ide-bundle-suffix*
-  (multiple-value-bind (os bits cpu) (host-platform)
-    (declare (ignore os))
-    (format nil "temp bundle-~a~a" (string-downcase cpu) bits)))
+(defvar *cocoa-ide-bundle-suffix* "ccl-ide-temp")
 (defvar *cocoa-ide-force-compile* nil)
 (defvar *cocoa-ide-frameworks* #+cocotron '("ccl:cocotron;Foundation.framework;" "ccl:cocotron;AppKit.framework;" "ccl:cocotron;CoreData.framework;") #-cocotron nil)
 (defvar *cocoa-ide-libraries* #+cocotron '("ccl:cocotron;Foundation>.1>.0.dll" "ccl:cocotron;AppKit>.1>.0.dll" "ccl:cocotron;CoreData>.1>.0.dll") #-cocotron nil)

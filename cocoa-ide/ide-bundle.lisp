@@ -20,9 +20,19 @@
 ;;; at some bundle very early in the process, so do that before anything
 ;;; else.
 
+;;; The name of the bundle's executable.  On macOS, it's a universal
+;;; binary that holds the lisp kernel for each architecture that has
+;;; been built into the bundle.  (See INSTALL-IDE-KERNEL.)  The name
+;;; doesn't have to be the same as the file name of the app bundle,
+;;; but it's common for it to be so.
+(defun ide-bundle-executable-name ()
+  #+darwin-target "Clozure CL"
+  #-darwin-target (standard-kernel-name))
+
 (defun create-ide-bundle (bundle-path &key (source "ccl:cocoa-ide;ide-contents;")
 				           (source-ignore '(".svn" "cvs" ".cvsignore"))
 					   (copy-headers *cocoa-ide-copy-headers-p*)
+                                           (copy-sources *cocoa-ide-copy-sources-p*)
                                            (install-altconsole *cocoa-ide-install-altconsole*)
 					   (if-exists :overwrite))
   ;; TODO: Right now if the bundle exists, we leave alone any files that we don't replace.
@@ -58,6 +68,8 @@
 			      (append (pathname-directory contents-dir)
 				      (list* "Resources"  "ccl" subdirs)))))
 	  (recursive-copy-directory ccl-headers dest-headers :if-exists if-exists :test #'ignore-test)))
+      (when copy-sources
+        (copy-ide-sources (subdir (subdir contents-dir "Resources") "ccl")))
       (when install-altconsole
         (install-altconsole bundle-path))
       ;; Is this necessary?
@@ -65,7 +77,7 @@
       ;; contain an executable file whose name matched what was specified
       ;; in its Info.plist file.  That executable file could be practically
       ;; anything, as long as its executable bits were set.
-      (let* ((image-name (ccl::standard-kernel-name))
+      (let* ((image-name (ide-bundle-executable-name))
              #+ignore
 	     (ccl-image (make-pathname :name image-name :host "ccl"))
 	     (dest-image (make-pathname :name image-name
@@ -77,6 +89,98 @@
         )
       #-windows-target
       (ccl::touch target-dir))))
+
+;;; The directories under CCL: that COPY-IDE-SOURCES copies into the
+;;; bundle: everything M-. needs for the IDE's own definitions, and the
+;;; directories that REQUIRE searches.
+(defparameter *ide-bundle-source-directories*
+  '("level-0" "level-1" "lib" "compiler" "library" "tools" "examples"
+    "xdump" "objc-bridge" "mac-ui" "cocoa-ide"))
+
+(defun ide-bundle-source-p (p)
+  (let* ((dirp (directory-pathname-p p))
+         (name (if dirp
+                 (car (last (pathname-directory p)))
+                 (file-namestring p)))
+         (len (length name))
+         (type (and (not dirp) (pathname-type p))))
+    (not (or (zerop len)
+             ;; .DS_Store, .gitignore, editor swap files
+             (eql (char name 0) #\.)
+             ;; editor backup and auto-save files
+             (eql (char name 0) #\#)
+             (eql (char name (1- len)) #\~)
+             ;; build products
+             (and dirp
+                  (or (member name '("altconsole" "ide-contents" "fasls"
+                                     "build")
+                              :test #'string=)
+                      (and (> len 4) (string-equal name ".app" :start1 (- len 4)))))
+             (and (stringp type)
+                  (or (string-equal type "o")
+                      ;; fasl files: dx64fsl, da64fsl, ...
+                      (and (>= (length type) 3)
+                           (string-equal type "fsl" :start1 (- (length type) 3)))))))))
+
+(defun copy-ide-sources (dest-dir)
+  (dolist (dir *ide-bundle-source-directories*)
+    (let* ((source (make-pathname :host "ccl" :directory `(:absolute ,dir)))
+           (dest (make-pathname :directory (append (pathname-directory dest-dir) (list dir))
+                                :defaults dest-dir)))
+      (format t "~&;Copy sources ~s" source)
+      (recursive-copy-directory source dest :if-exists :overwrite
+                                            :test #'ide-bundle-source-p)))
+  (fresh-line))
+
+;;; Add the running lisp kernel to the bundle's universal executable,
+;;; replacing any lisp kernel for the same architecture.  The kernel
+;;; finds its image in the bundle as Contents/Resources/ccl/ followed
+;;; by its standard name and ".image", so each architecture's image
+;;; can live alongside the others.
+#+darwin-target
+(defun install-ide-kernel (kernel executable)
+  (flet ((lipo (&rest args)
+           ;; Return true if lipo succeeds, and its output, minus any
+           ;; trailing newline.
+           (let* ((output (make-string-output-stream)))
+             (multiple-value-bind (exit-status code)
+                 (external-process-status
+                  (run-program "xcrun" (cons "lipo" args)
+                               :output output :error output))
+               (values (and (eq exit-status :exited) (zerop code))
+                       (string-right-trim '(#\newline)
+                                          (get-output-stream-string output)))))))
+    (let* ((arch #+arm64-target "arm64" #+x8664-target "x86_64")
+           (kernel-path (native-translated-namestring kernel))
+           (executable-path (native-translated-namestring executable))
+           (archs (multiple-value-bind (ok output)
+                      (and (probe-file executable)
+                           (lipo "-archs" executable-path))
+                    ;; OUTPUT is a line like "x86_64 arm64".
+                    (when ok
+                      (loop for start = 0 then (1+ end)
+                            for end = (position #\space output :start start)
+                            collect (subseq output start end)
+                            while end)))))
+      (if (or (null archs) (equal archs (list arch)))
+        (copy-file kernel executable :if-exists :supersede :preserve-attributes t)
+        (let* ((temp (make-pathname :name (concatenate 'string
+                                                       (pathname-name executable)
+                                                       "-new")
+                                    :defaults executable))
+               (temp-path (native-translated-namestring temp)))
+          (multiple-value-bind (ok output)
+              (if (member arch archs :test #'string=)
+                (lipo executable-path "-replace" arch kernel-path
+                      "-output" temp-path)
+                (lipo "-create" executable-path kernel-path
+                      "-output" temp-path))
+            (unless ok
+              (error "Adding ~a to ~a with lipo failed:~&~a"
+                     kernel-path executable-path output)))
+          (rename-file temp executable :if-exists :supersede)))
+      (format t "~&;Bundle executable ~s contains ~a~%" executable-path
+              (nth-value 1 (lipo "-archs" executable-path))))))
 
 (defparameter *ide-xib-deployment-target* "10.13"
   "Minimum macOS version for nibs compiled from the IDE's .xib files.
@@ -176,7 +280,7 @@ Keep this in step with OSVERSION in lisp-kernel/darwinx8664/Makefile.")
 ;;; before the CoreFoundation library's initialized.
 
 (defun fake-cfbundle-path (bundle-root info-plist-proto-path bundle-prefix  bundle-suffix install-frameworks install-libraries #+windows-target icon-path)
-  (let* ((kernel-name (standard-kernel-name))
+  (let* ((kernel-name (ide-bundle-executable-name))
          (translated-root (translate-logical-pathname bundle-root))
 	 (bundle-name (let* ((name (if (directory-pathname-p translated-root)
 				       (car (last (pathname-directory translated-root)))

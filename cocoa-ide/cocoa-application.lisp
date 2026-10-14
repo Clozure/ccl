@@ -21,25 +21,18 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (pushnew :cocotron *features*))
 
-#+(or mac-app-store standalone-ide)
 (defvar *cocoa-ide-path* "ccl:Clozure CL.app;")
-#-(or mac-app-store standalone-ide)
-(defvar *cocoa-ide-path*
-  (let* ((bits (nth-value 1 (host-platform))))
-    (format nil "ccl:Clozure CL~a.app;" bits)))
 
-(defvar *cocoa-ide-copy-headers-p* t)
+;;; Whether to copy CCL's sources and interfaces into the bundle.  The
+;;; IDE built here stays in the CCL directory and uses them from there.
+;;; A standalone IDE (see cocoa-ide/Makefile) has its own copies.
+(defvar *cocoa-ide-copy-sources-p* nil)
+(defvar *cocoa-ide-copy-headers-p* nil)
 (defvar *cocoa-ide-install-altconsole* t)
 
 (defvar *cocoa-ide-bundle-suffix*
-  (multiple-value-bind (os bits cpu) (host-platform)
-    (declare (ignore os))
-    #+mac-app-store
-    (format nil "store.ccl-~a~a" (string-downcase cpu) bits)
-    #+standalone-ide
-    (format nil "ccl-~a~a" (string-downcase cpu) bits)
-    #-(or mac-app-store standalone-ide)
-    (format nil "Clozure CL-~a~a" (string-downcase cpu) bits)))
+  #+mac-app-store "store.ccl-ide"
+  #-mac-app-store "ccl-ide")
 
 (defvar *cocoa-ide-frameworks* #+cocotron '("ccl:cocotron;Foundation.framework;" "ccl:cocotron;AppKit.framework;" "ccl:cocotron;CoreData.framework;") #-cocotron nil)
 (defvar *cocoa-ide-libraries* #+cocotron '("ccl:cocotron;Foundation>.1>.0.dll" "ccl:cocotron;AppKit>.1>.0.dll" "ccl:cocotron;CoreData>.1>.0.dll") #-cocotron nil)
