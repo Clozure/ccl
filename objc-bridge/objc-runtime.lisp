@@ -2735,8 +2735,12 @@ argument lisp string."
       (safe-get-ptr classptr meta)
       (unless (%null-ptr-p meta)
 	(safe-get-ptr meta metameta)
+	;; A metaclass also passes the first two tests (its isa is
+	;; the root metaclass, whose isa is itself).  Installing one
+	;; as a class would give it the lisp name of its instance.
 	(when (and (eql metameta (find-class 'ns::+ns-object nil))
-		   (%objc-metaclass-p meta))
+		   (%objc-metaclass-p meta)
+		   (not (%objc-metaclass-p classptr)))
 	  (let* ((classptr (%inc-ptr classptr 0)))
 	    (install-foreign-objc-class classptr nil)
 	    (objc-private-class-id classptr)))))))
