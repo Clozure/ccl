@@ -51,6 +51,7 @@
 (define-special-objc-word "AB")
 (define-special-objc-word "AE")
 (define-special-objc-word "ATS")
+(define-special-objc-word "AV")
 (define-special-objc-word "BMP")
 (define-special-objc-word "CA")
 (define-special-objc-word "CCL")
