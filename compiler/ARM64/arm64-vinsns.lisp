@@ -5993,13 +5993,12 @@
 ;;; unbox-s32 (compiler/ARM64/arm64-vinsns.lisp:2324) was written for
 ;;; fixnumshift = 0 and skips the unshift -- NOT the donor here.
 (define-arm64-vinsn unbox-s32 (((dest :s32))
-                               ((src :lisp))
-                               ((tag :s64)))
+                               ((src :lisp)))
   :again
-  (lsl tag src (:$ (- arm64::nbits-in-word (+ 32 arm64::fixnumshift))))
-  (asr tag tag (:$ (- arm64::nbits-in-word 32)))
-  (lsl tag tag (:$ arm64::fixnumshift))
-  (cmp tag src)
+  (lsl (:x dest) src (:$ (- arm64::nbits-in-word (+ 32 arm64::fixnumshift))))
+  (asr (:x dest) (:x dest) (:$ (- arm64::nbits-in-word 32)))
+  (lsl (:x dest) (:x dest) (:$ arm64::fixnumshift))
+  (cmp (:x dest) src)
   (b.eq :got-it)
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-s32))
   (b :again)
@@ -6113,13 +6112,12 @@
 ;;; above).  Error code arch::error-object-not-signed-byte-16 (verified:
 ;;; w3b:459 brk's it).
 (define-arm64-vinsn unbox-s16 (((dest :s16))
-                               ((src :lisp))
-                               ((tag :s64)))
+                               ((src :lisp)))
   :again
-  (lsl tag src (:$ (- arm64::nbits-in-word (+ 16 arm64::fixnumshift))))
-  (asr tag tag (:$ (- arm64::nbits-in-word 16)))
-  (lsl tag tag (:$ arm64::fixnumshift))
-  (cmp tag src)
+  (lsl (:x dest) src (:$ (- arm64::nbits-in-word (+ 16 arm64::fixnumshift))))
+  (asr (:x dest) (:x dest) (:$ (- arm64::nbits-in-word 16)))
+  (lsl (:x dest) (:x dest) (:$ arm64::fixnumshift))
+  (cmp (:x dest) src)
   (b.eq :got-it)
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-s16))
   (b :again)
@@ -6304,13 +6302,12 @@
 ;;; compare check at width 8, extract = SBFM (imms = fixnumshift+7).
 ;;; Error code arch::error-object-not-signed-byte-8 (x8664-vinsns:1214).
 (define-arm64-vinsn unbox-s8 (((dest :s8))
-                              ((src :lisp))
-                              ((tag :s64)))
+                              ((src :lisp)))
   :again
-  (lsl tag src (:$ (- arm64::nbits-in-word (+ 8 arm64::fixnumshift))))
-  (asr tag tag (:$ (- arm64::nbits-in-word 8)))
-  (lsl tag tag (:$ arm64::fixnumshift))
-  (cmp tag src)
+  (lsl (:x dest) src (:$ (- arm64::nbits-in-word (+ 8 arm64::fixnumshift))))
+  (asr (:x dest) (:x dest) (:$ (- arm64::nbits-in-word 8)))
+  (lsl (:x dest) (:x dest) (:$ arm64::fixnumshift))
+  (cmp (:x dest) src)
   (b.eq :got-it)
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-s8))
   (b :again)
