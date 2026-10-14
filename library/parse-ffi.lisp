@@ -456,7 +456,7 @@
              (:short '(:signed 16))
              (:unsigned-short '(:unsigned 16))
              ((:vec128 :unsigned-long-long-long) '(:unsigned 128))
-             (:signed-long-long-long '(:signed 128))
+             ((:long-long-long :signed-long-long-long) '(:signed 128))
              (:int '(:signed 32))
              (:long (ecase (or
                             (getf
@@ -486,7 +486,6 @@
              (:complex-float :complex-float)
              (:complex-double :complex-double)
              (:complex-long-double :complex-long-float)
-             (:long-long-long :long-long-long)
              #|(:void :void)|#)))))
              
              
