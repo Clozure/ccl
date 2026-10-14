@@ -179,7 +179,7 @@
 		  (new-size (* 2 old-size)))
 	     (declare (fixnum old-size new-size))
 	     (macrolet ((extend (v)
-                              `(setq ,v (%extend-vector old-size ,v new-size))))
+                          `(setq ,v (%extend-vector 0 ,v new-size))))
                    (extend c)
                    (extend m)
                    (extend cw)
