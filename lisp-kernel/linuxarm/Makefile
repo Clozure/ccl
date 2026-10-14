@@ -33,7 +33,7 @@ CC = $(CROSS)gcc
 M4 = m4
 ASFLAGS = -mfpu=vfp -march=armv7-a $(FLOAT_ABI_OPTION)
 M4FLAGS = -DLINUX -DARM
-CDEFINES = -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DVC_REVISION=$(VC_REVISION)
+CDEFINES = -U_TIME_BITS -U_FILE_OFFSET_BITS -DLINUX -DARM -D_REENTRANT -D_GNU_SOURCE -DVC_REVISION=$(VC_REVISION)
 CDEBUG = -g
 COPT = -O2
 # Once in a while, -Wformat says something useful.  The odds are against that,
