@@ -854,11 +854,6 @@ NSObjects describe themselves in more detail than others."
   (augment-objc-interfaces interfaces-name interfaces-dir))
 
                       
-;; Protocol is declared via %ensure-class-declaration (and CDB inject)
-;; so ns:protocol is exported on darwinarm64 too.
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (export (intern "PROTOCOL" "NS") "NS"))
-
 (defmethod print-object ((p ns:protocol) stream)
   (print-unreadable-object (p stream :type t)
     (format stream "~a (#x~x)"
