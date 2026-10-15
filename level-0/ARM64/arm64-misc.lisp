@@ -303,6 +303,16 @@
   (mov arg_z rnil)
   (ret))
 
+;;; Full barrier.  Every memory access before the call is visible to
+;;; other threads before any access after it.  A writer that publishes
+;;; a structure with a plain store calls this between the stores that
+;;; fill the structure and the store that publishes it; a reader that
+;;; follows the published pointer then sees the contents.
+(defarm64lapfunction %memory-barrier ()
+  (dmb (:$ 11))
+  (mov arg_z rnil)
+  (ret))
+
 ;;; =====================================================================
 ;;; %fixnum-truncate — ppc-numbers.lisp:251 (#+ppc64-target arm; placed
 ;;; here like called-for-mv-p below, pending the numbers-file story vs
