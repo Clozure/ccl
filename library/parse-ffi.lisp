@@ -788,6 +788,12 @@
     (record-global-function ffi-function)))
 
 
+(defun ffi-form-static-p (form)
+  "True if FORM, a function or var form, describes something with static
+storage (e.g., a static inline function).  There's no symbol to link
+against for such a thing."
+  (equal (car (last form)) '(:static)))
+
 (defun read-ffi-toplevel-form (stream eof-value)
   (loop
     (let* ((ch (peek-char  nil stream nil eof-value)))
@@ -823,19 +829,21 @@
                   )
                  (process-ffi-objc-method form))
                 (:function
-                 (handler-case
-                     (push (process-ffi-function form) defined-functions)
-                   (error (c)
-                     ;; e.g., a 16-bit float passed by value; skip.
-                     (warn "parse-ffi: skipping function ~s: ~a"
-                           (caddr form) c))))
+                 (unless (ffi-form-static-p form)
+                   (handler-case
+                       (push (process-ffi-function form) defined-functions)
+                     (error (c)
+                       ;; e.g., a 16-bit float passed by value; skip.
+                       (warn "parse-ffi: skipping function ~s: ~a"
+                             (caddr form) c)))))
                 (:macro (let* ((m (process-ffi-macro form))
                                (args (ffi-macro-args m)))
                           (if args
                             (setf (gethash (string (ffi-macro-name m)) argument-macros) args)
                             (push m defined-macros))))
                 (:type (push (process-ffi-typedef form) defined-types))
-                (:var (push (process-ffi-var form) defined-vars))
+                (:var (unless (ffi-form-static-p form)
+                        (push (process-ffi-var form) defined-vars)))
                 (:enum-ident (push (process-ffi-enum-ident form) defined-constants))
                 (:enum (process-ffi-enum form))
                 (:union (push (process-ffi-union form) defined-types))
