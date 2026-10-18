@@ -29,7 +29,7 @@
 void
 sprint_lisp_object(LispObj, int);
 
-#define PBUFLEN 252
+#define PBUFLEN 508
 
 char printbuf[PBUFLEN + 4];
 int bufpos = 0;
@@ -41,7 +41,14 @@ add_char(char c)
 {
   if (bufpos >= PBUFLEN) {
     longjmp(escape, 1);
-  } else {
+  } else if (c == 0) {
+    add_char('<');
+    add_char('n');
+    add_char('u');
+    add_char('l');
+    add_char('>');
+  }
+  else {
     printbuf[bufpos++] = c;
   }
 }
@@ -516,12 +523,12 @@ sprint_ivector(LispObj o)
     add_char('"');
     return;
     
-  case subtag_bignum:
-    if (elements == 1) {
+  case subtag_bignum: // digits are 32-bit words, little endian
+    if (elements == 2) {
       sprint_signed_decimal((signed_natural)(deref(o, 1)));
       return;
-    }
-    if ((elements == 2) && (deref(o, 2) == 0)) {
+    } else if ((elements == 3) && ((deref(o, 2) & 0xffffffff) == 0)) {
+      // 2^63 <= value < 2^64: two digits plus a zero third (sign) digit
       sprint_unsigned_decimal(deref(o, 1));
       return;
     }
@@ -534,11 +541,10 @@ sprint_ivector(LispObj o)
     add_c_string("#<MACPTR ");
     sprint_unsigned_hex(deref(o,1));
     add_c_string(">");
-    break;
-
-  default:
-    sprint_random_vector(o, subtag, elements);
+    return;
   }
+
+  sprint_random_vector(o, subtag, elements);
 }
 
 void
