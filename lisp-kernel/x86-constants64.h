@@ -95,7 +95,7 @@
 #define ivector_class_other_bit fulltag_immheader_0
 
 
-#define subtag_complex_xingle_float_vector SUBTAG(ivector_class_64_bit,12L)
+#define subtag_complex_single_float_vector SUBTAG(ivector_class_64_bit,11L)
 #define subtag_fixnum_vector SUBTAG(ivector_class_64_bit,12L)
 #define subtag_s64_vector SUBTAG(ivector_class_64_bit,13L)
 #define subtag_u64_vector SUBTAG(ivector_class_64_bit,14L)
@@ -118,9 +118,9 @@
 /* There's some room for expansion in non-array ivector space. */
 #define subtag_macptr SUBTAG(ivector_class_64_bit,1)
 #define subtag_dead_macptr SUBTAG(ivector_class_64_bit,2)
-#define subtag_bignum SUBTAG(ivector_class_32_bit,0)
-#define subtag_double_float SUBTAG(ivector_class_32_bit,1)
-#define subtag_xcode_vector SUBTAG(ivector_class_32_bit,2)
+#define subtag_bignum SUBTAG(ivector_class_32_bit,1)
+#define subtag_double_float SUBTAG(ivector_class_32_bit,2)
+#define subtag_xcode_vector SUBTAG(ivector_class_32_bit,3)
 #define subtag_complex_single_float SUBTAG(ivector_class_32_bit,4)
 #define subtag_complex_double_float SUBTAG(ivector_class_32_bit,5)
 
