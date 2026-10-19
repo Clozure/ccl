@@ -899,8 +899,10 @@ before doing so.")
                 do (setf (%svref vector i) rehashing-value-marker))
               (let ((flags (logand $nhash_weak_flags_mask (nhash.vector.flags (nhash.vector hash)))))
 		(when (> vector-size 1000)
-		  ;; Install a tiny temp vector to let the old one get gc'd before consing a big new vector.
-		  (replace-nhash-vector hash 1 0))
+		  ;; Install a small temp vector to let the old one get gc'd before consing a big new vector.
+		  ;; Readers probe whatever vector is installed, so it needs a size the probe code
+		  ;; supports: the size-reciprocal of a 1- or 2-pair vector is not a fixnum.
+		  (replace-nhash-vector hash (%hash-size 0) 0))
                 (replace-nhash-vector hash vector-size flags))
               (setf (nhash.grow-threshold hash) grow-threshold)))
           (%unlock-recursive-lock-object lock))))
