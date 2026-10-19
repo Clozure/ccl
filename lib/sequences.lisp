@@ -1149,7 +1149,8 @@
         (if (neq fill pos) (setf (aref vector fill) val))
         (setq fill (%i+ fill inc))))
     (setq pos (%i+ pos inc)))
-  (if (%i> fill pos) (psetq fill (%i+ pos 1) pos (%i+ fill 1)))
+  (cond ((eq fill pos) (setq fill length pos length))
+        ((%i< inc 0) (psetq fill (%i+ pos 1) pos (%i+ fill 1))))
   (loop
     (if (eq pos length) (return))
     (setf (aref vector fill) (aref vector pos))
