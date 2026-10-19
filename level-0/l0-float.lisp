@@ -299,14 +299,18 @@
                (set-%double-float-exp result 1) ; scale by float-exp -1
                (%%scale-dfloat! result (+ double-float-decode-bias (+ float-exp int)) result)
                result))
-           (if (> new-exp IEEE-double-float-normal-exponent-max) 
-             (error (make-condition 'floating-point-overflow
-                                    :operation 'scale-float
-                                    :operands (list float int)))
-             (let ((new-float (%make-dfloat)))
-               (%copy-double-float float new-float)
-               (set-%double-float-exp new-float new-exp)
-               new-float))))))
+           (cond ((<= new-exp IEEE-double-float-normal-exponent-max)
+                  (let ((new-float (%make-dfloat)))
+                    (%copy-double-float float new-float)
+                    (set-%double-float-exp new-float new-exp)
+                    new-float))
+                 ((get-fpu-mode :overflow)
+                  (error (make-condition 'floating-point-overflow
+                                         :operation 'scale-float
+                                         :operands (list float int))))
+                 ;; Overflow trap is off, return infinity of appropriate sign, or NaN stays as is.
+                 ((eq float-exp 2047) float)
+                 (t (double-float-from-bits (if (minusp float) #xFFF00000 #x7FF00000) 0)))))))
     (short-float
      (let* ((float-exp (%short-float-exp float))
             (new-exp (+ float-exp int)))
@@ -333,17 +337,21 @@
              #+64-bit-target
              (%%scale-sfloat (set-%short-float-exp float 1)
                              (+ single-float-decode-bias (+ float-exp int))))
-           (if (> new-exp IEEE-single-float-normal-exponent-max) 
-             (error (make-condition 'floating-point-overflow
-                                    :operation 'scale-float
-                                    :operands (list float int)))
-             #+32-bit-target
-             (let ((new-float (%make-sfloat)))
-               (%copy-short-float float new-float)
-               (set-%short-float-exp new-float new-exp)
-               new-float)
-             #+64-bit-target
-             (set-%short-float-exp float new-exp))))))))
+           (cond ((<= new-exp IEEE-single-float-normal-exponent-max)
+                  #+32-bit-target
+                  (let ((new-float (%make-sfloat)))
+                    (%copy-short-float float new-float)
+                    (set-%short-float-exp new-float new-exp)
+                    new-float)
+                  #+64-bit-target
+                  (set-%short-float-exp float new-exp))
+                 ((get-fpu-mode :overflow)
+                  (error (make-condition 'floating-point-overflow
+                                         :operation 'scale-float
+                                         :operands (list float int))))
+                 ;; Overflow trap is off, return infinity of appropriate sign, or NaN stays as is.
+                 ((eq float-exp 255) float)
+                 (t (host-single-float-from-unsigned-byte-32 (if (minusp float) #xFF800000 #x7F800000))))))))))
 
 (defun %copy-float (f)
   ;Returns a freshly consed float.  float can also be a macptr.
