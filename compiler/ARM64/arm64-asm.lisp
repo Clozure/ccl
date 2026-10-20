@@ -3311,9 +3311,13 @@
                  (values (make-register-operand :register
                                                 (ref (register-number reg)))
                          (list :reg (register-number reg))))))))))
-    ;; A shifted or extended register: (reg :lsl 3), (reg :uxtw), etc.  The
-    ;; base register may be a hole or literal; the amount must be constant.
-    ((and (consp op) (symbolp (car op))
+    ;; A shifted or extended register: (reg :lsl 3), (reg :uxtw), etc.
+    ;; The base register may be a hole or literal, or a GPR width view
+    ;; of one: e.g., ((:x r) :lsl 3 for a hole whose class is the
+    ;; wrong width.  The amount must be constant.
+    ((and (consp op)
+          (or (symbolp (car op))
+              (and (consp (car op)) (member (caar op) '(:w :x) :test #'eq)))
           (or (member (cadr op) *shift-operators* :test #'eq)
               (member (cadr op) *extend-operators* :test #'eq)))
      (destructuring-bind (reg modifier &optional (amount-form 0)) op
