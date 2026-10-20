@@ -424,27 +424,6 @@
   (ldr prevsp (:@ sp (:$ arm64::node-size)))
   (mov sp prevsp))
 
-#|
-(define-arm64-vinsn unbox-s64 (((dest :s64))
-                               ((src :lisp)))
-  (asr dest src (:$ arm64::fixnumshift))
-  ;; is it a fixnum?
-  (ands xzr src (:$ arm64::fixnummask))
-  (b.eq :good)
-  ;; maybe a 2-digit bignum?
-  (and dest src (:$ arm64::fulltagmask))
-  (cmp dest (:$ arm64::fulltag-misc))
-  (b.eq :miscobj)
-  :bad
-  (uuo-error-reg-not-type src (:$ub arch::error-object-not-signed-byte-64))
-  :miscobj
-  (ldur dest (:@ src (:$ arm64::misc-header-offset)))
-  (cmp dest (:$ arm64::two-digit-bignum-header))
-  (b.ne :bad)
-  (ldur dest (:@ src (:$ arm64::misc-data-offset)))
-  :good)
-|#
-
 ;;; Materialize a Lisp boolean branchlessly: DEST = CC ? t : nil, where CC
 ;;; is a 4-bit condition code and the NZCV flags were set by a preceding
 ;;; compare.  t lives at rnil + t-offset; put it in TRUE, then conditionally
@@ -946,48 +925,128 @@
   (ldur cv (:@ nfn (:$ arm64::function.code-vector)))
   (blr cv))
 
-;;; ============ %unbox-u32 ============
-;;; Donor: vinsn-retrofit-queue.lisp:8 (mov under shift-0); PPC64 original
-;;; ppc64-vinsns.lisp:1376: (rldicl dest src (- 64 fixnumshift) 32) =
-;;; rotate-right by fixnumshift keeping low 32 = extract bits
-;;; [fixnumshift, fixnumshift+32) -- ubfx.  sbfx/ubfx are LAPMACROS in his
-;;; tree (arm64-lapmacros.lisp:18), NOT instruction templates, and vinsn
-;;; bodies don't expand lapmacros -- write the underlying UBFM
-;;; (immr = lsb, imms = lsb+width-1).  dest is :u32 (W-width class), but
-;;; the extract reads bits above 31 of src: force the X view, (:x dest).
+(define-arm64-vinsn %unbox-u8 (((dest :u8))
+                               ((src :lisp)))
+  (ubfx (:x dest) src (:$ arm64::fixnumshift) (:$ 8)))
+
+(define-arm64-vinsn %unbox-u16 (((dest :u16))
+                                ((src :lisp)))
+  (ubfx (:x dest) src (:$ arm64::fixnumshift) (:$ 16)))
+
 (define-arm64-vinsn %unbox-u32 (((dest :u32))
                                 ((src :lisp)))
-  (ubfm (:x dest) src (:$ arm64::fixnumshift)
-        (:$ (+ arm64::fixnumshift 31))))
+  (ubfx (:x dest) src (:$ arm64::fixnumshift) (:$ 32)))
 
-;;; ============ unbox-u32 ============
-;;; Checking variant of %unbox-u32 (distinct vinsn in every backend):
-;;; PPC64 ppc64-vinsns.lisp:1369 traps unless src is a fixnum in
-;;; [0, 2^32) then extracts.  Check = w3b require-u32's TST with
-;;; ~(#xffffffff<<fixnumshift) (mask encodable: 32-one wraparound run);
-;;; extract = %unbox-u32's UBFM.  Trap idiom = the established
-;;; brk #xf0xx (w3b:501 uses this exact error code).
+(define-arm64-vinsn unbox-u8 (((dest :u8))
+                              ((src :lisp)))
+  :again
+  (tst src (:$ #xfffffffffffff807))    ;~(#xff << fixnumshift)
+  (b.eq :got-it)
+  (uuo-error-reg-not-xtype src (:$ arm64::xtype-u8))
+  (b :again)
+  :got-it
+  (ubfx (:x dest) src (:$ arm64::fixnumshift) (:$ 8)))
+
+(define-arm64-vinsn unbox-u16 (((dest :u16))
+                               ((src :lisp)))
+  :again
+  (tst src (:$ #xfffffffffff80007))    ;~(#xffff << fixnumshift)
+  (b.eq :got-it)
+  (uuo-error-reg-not-xtype src (:$ arm64::xtype-u16))
+  (b :again)
+  :got-it
+  (ubfx (:x dest) src (:$ arm64::fixnumshift) (:$ 16)))
+
 (define-arm64-vinsn unbox-u32 (((dest :u32))
                                ((src :lisp)))
   :again
-  (tst src (:$ (logand #xffffffffffffffff
-                       (lognot (ash #xffffffff arm64::fixnumshift)))))
+  (tst src (:$ #xfffffff800000007))     ;~(#xffffffff << fixnumshift)
   (b.eq :got-it)
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-u32))
   (b :again)
   :got-it
-  (ubfm (:x dest) src (:$ arm64::fixnumshift)
-        (:$ (+ arm64::fixnumshift 31))))
+  (ubfx (:x dest) src (:$ arm64::fixnumshift) (:$ 32)))
 
-;;; ============ %unbox-u8 ============
-;;; Donor: vinsn-retrofit-queue.lisp:14; PPC64 ppc64-vinsns.lisp:1436:
-;;; (rldicl dest src (- 64 fixnumshift) 56) = extract 8 bits at
-;;; fixnumshift.  Unsafe (caller type-checked), same UBFM story as
-;;; %unbox-u32.
-(define-arm64-vinsn %unbox-u8 (((dest :u8))
+(define-arm64-vinsn unbox-s8 (((dest :s8))
+                              ((src :lisp)))
+  :again
+  (sbfx (:x dest) src (:$ arm64::fixnumshift) (:$ 8))
+  (cmp src ((:x dest) :lsl arm64::fixnumshift))
+  (b.eq :got-it)
+  (uuo-error-reg-not-xtype src (:$ arm64::xtype-s8))
+  (b :again)
+  :got-it)
+
+(define-arm64-vinsn unbox-s16 (((dest :s16))
                                ((src :lisp)))
-  (ubfm (:x dest) src (:$ arm64::fixnumshift)
-        (:$ (+ arm64::fixnumshift 7))))
+  :again
+  (sbfx (:x dest) src (:$ arm64::fixnumshift) (:$ 16))
+  (cmp src ((:x dest) :lsl arm64::fixnumshift))
+  (b.eq :got-it)
+  (uuo-error-reg-not-xtype src (:$ arm64::xtype-s16))
+  (b :again)
+  :got-it)
+
+(define-arm64-vinsn unbox-s32 (((dest :s32))
+                               ((src :lisp)))
+  :again
+  (sbfx (:x dest) src (:$ arm64::fixnumshift) (:$ 32))
+  (cmp src ((:x dest) :lsl arm64::fixnumshift))
+  (b.eq :got-it)
+  (uuo-error-reg-not-xtype src (:$ arm64::xtype-s32))
+  (b :again)
+  :got-it)
+
+;;; An (unsigned-byte 64) is a non-negative fixnum, a non-negative
+;;; two-digit bignum, or a three-digit bignum whose top digit is 0.
+(define-arm64-vinsn unbox-u64 (((dest :u64))
+                               ((src :lisp)))
+  :again
+  (tst src (:$ arm64::fixnummask))
+  (asr (:x dest) src (:$ arm64::fixnumshift))
+  (b.eq :ok-if-non-negative)
+  (and dest src (:$ arm64::fulltagmask))
+  (cmp dest (:$ arm64::fulltag-misc))
+  (b.ne :bad)
+  (ldur dest (:@ src (:$ arm64::misc-header-offset)))
+  (cmp dest (:$ arm64::two-digit-bignum-header))
+  (b.eq :two-digit)
+  (cmp dest (:$ arm64::three-digit-bignum-header))
+  (b.ne :bad)
+  (ldur (:w dest) (:@ src (:$ (+ arm64::misc-data-offset 8))))
+  (cmp (:w dest) (:$ 0))
+  (b.ne :bad)
+  (ldur (:x dest) (:@ src (:$ arm64::misc-data-offset)))
+  (b :got-it)
+  :two-digit
+  (ldur (:x dest) (:@ src (:$ arm64::misc-data-offset)))
+  :ok-if-non-negative
+  (cmp (:x dest) (:$ 0))
+  (b.ge :got-it)
+  :bad
+  (uuo-error-reg-not-xtype src (:$ arm64::xtype-u64))
+  (b :again)
+  :got-it)
+
+;;; A (signed-byte 64) is a fixnum or a two-digit bignum.
+(define-arm64-vinsn unbox-s64 (((dest :s64))
+                               ((src :lisp)))
+  :again
+  (tst src (:$ arm64::fixnummask))
+  (asr (:x dest) src (:$ arm64::fixnumshift))
+  (b.eq :got-it)
+  (and dest src (:$ arm64::fulltagmask))
+  (cmp dest (:$ arm64::fulltag-misc))
+  (b.ne :bad)
+  (ldur dest (:@ src (:$ arm64::misc-header-offset)))
+  (cmp dest (:$ arm64::two-digit-bignum-header))
+  (b.ne :bad)
+  (ldur (:x dest) (:@ src (:$ arm64::misc-data-offset)))
+  (b :got-it)
+  :bad
+  (uuo-error-reg-not-xtype src (:$ arm64::xtype-s64))
+  (b :again)
+  :got-it)
 
 ;;; ============ adjust-sp ============
 ;;; Donor: vinsn-retrofit-queue.lisp:20; PPC64 ppc64-vinsns.lisp:2797
@@ -3056,8 +3115,7 @@
 (define-arm64-vinsn require-u8 (()
                                 ((object :lisp)))
   :again
-  (tst object (:$ (logand #xffffffffffffffff
-                          (lognot (ash #xff arm64::fixnumshift)))))
+  (tst object (:$ #xfffffffffffff807))    ;~(#xff << fixnumshift)
   (b.eq :got-it)
   (uuo-cerror-reg-not-xtype object (:$ arm64::xtype-u8))
   (b :again)
@@ -3083,8 +3141,7 @@
 (define-arm64-vinsn require-u16 (()
                                  ((object :lisp)))
   :again
-  (tst object (:$ (logand #xffffffffffffffff
-                          (lognot (ash #xffff arm64::fixnumshift)))))
+  (tst object (:$ #xfffffffffff80007))    ;~(#xffff << fixnumshift)
   (b.eq :got-it)
   (uuo-cerror-reg-not-xtype object (:$ arm64::xtype-u16))
   (b :again)
@@ -3113,8 +3170,7 @@
 (define-arm64-vinsn require-u32 (()
                                  ((object :lisp)))
   :again
-  (tst object (:$ (logand #xffffffffffffffff
-                          (lognot (ash #xffffffff arm64::fixnumshift)))))
+  (tst object (:$ #xfffffff800000007))    ;~(#xffffffff << fixnumshift)
   (b.eq :got-it)
   (uuo-cerror-reg-not-xtype object (:$ arm64::xtype-u32))
   (b :again)
@@ -5587,36 +5643,6 @@
   (ldr temp (:@ rcontext temp))
   (blr temp))
 
-;;; ============ unbox-u8 / unbox-u16 ============
-;;; PPC64 ppc64-vinsns.lisp:1425/:1447 -- the CHECKED unboxers (w1's
-;;; %unbox-u8 is the unchecked twin; unbox-u32 @w1:51 is the exact
-;;; trap+extract canon: valid iff every bit outside (mask<<fixnumshift)
-;;; is clear).  l0-io wall (realgate-w10f demanded unbox-u8).  Both
-;;; lognot masks are wraparound one-runs -- encodable logical imms.
-(define-arm64-vinsn unbox-u8 (((dest :u8))
-                              ((src :lisp)))
-  :again
-  (tst src (:$ (logand #xffffffffffffffff
-                       (lognot (ash #xff arm64::fixnumshift)))))
-  (b.eq :got-it)
-  (uuo-error-reg-not-xtype src (:$ arm64::xtype-u8))
-  (b :again)
-  :got-it
-  (ubfm (:x dest) src (:$ arm64::fixnumshift)
-        (:$ (+ arm64::fixnumshift 7))))
-
-(define-arm64-vinsn unbox-u16 (((dest :u16))
-                               ((src :lisp)))
-  :again
-  (tst src (:$ (logand #xffffffffffffffff
-                       (lognot (ash #xffff arm64::fixnumshift)))))
-  (b.eq :got-it)
-  (uuo-error-reg-not-xtype src (:$ arm64::xtype-u16))
-  (b :again)
-  :got-it
-  (ubfm (:x dest) src (:$ arm64::fixnumshift)
-        (:$ (+ arm64::fixnumshift 15))))
-
 ;;; ============ u8->fixnum / u16->fixnum ============
 ;;; PPC64 ppc64-vinsns.lisp u8->fixnum/u16->fixnum (clrlsldi = the w8
 ;;; u32->fixnum UBFM idiom, narrower widths): Xd = ZeroExtend(val[0:N-1])
@@ -5966,47 +5992,6 @@
    (ldr temp (:@ rcontext temp))
    (blr temp)))
 
-;;; ============ unbox-s32 ============
-;;; Checking unbox: trap unless src is a fixnum in (signed-byte 32),
-;;; else extract the raw value.  PPC64 LINE-PORT (ppc64-vinsns.lisp:1385):
-;;;   (sldi dest src (- nbits-in-word (+ 32 fixnumshift)))  ; isolate
-;;;   (sradi dest dest (- nbits-in-word 32))                ; sign-ext 32
-;;;   (sldi dest dest fixnumshift)                          ; re-shift
-;;;   (cmpd crf dest src)                                   ; == original?
-;;;   (sradi dest src fixnumshift)
-;;;   (beq crf :got-it) :bad (uuo_interr error-object-not-signed-byte-32
-;;;   src) :got-it
-;;; The check is the "reconstruct and compare" reconstruction -- VERBATIM
-;;; the check body of our gate-proven require-s32 (w3b:480, same donor
-;;; family ppc64:1195), done in a :s64 temp so src stays live; the brk
-;;; #xf0xx trap idiom + b :again resume loop is the same as require-s32/
-;;; unbox-u32 (w1:51).  Extract = SBFM (immr=lsb, imms=lsb+width-1 =
-;;; sbfx fixnumshift,32 with sign-extension into the X view) -- the
-;;; SIGNED twin of %unbox-u32's UBFM (w1:39; sbfx/ubfx are LAPMACROS in
-;;; his tree, not templates, so the underlying SBFM is written out;
-;;; "sbfm" confirmed present in the assembler's :bitfield table beside
-;;; "ubfm").  dest is :s32 (W class) but the extract reads src bits
-;;; above 31: force the X view, exactly like %unbox-u32 / misc-ref-s32's
-;;; (ldrsw (:x dest) ...) -- the X reg ends up holding the 64-bit
-;;; sign-extension of the s32 value, as PPC's sradi leaves it.
-;;; NOTE fixnumshift = 3 in this lane (Matt low-tag): v2's high-tag
-;;; unbox-s32 (compiler/ARM64/arm64-vinsns.lisp:2324) was written for
-;;; fixnumshift = 0 and skips the unshift -- NOT the donor here.
-(define-arm64-vinsn unbox-s32 (((dest :s32))
-                               ((src :lisp))
-                               ((tag :s64)))
-  :again
-  (lsl tag src (:$ (- arm64::nbits-in-word (+ 32 arm64::fixnumshift))))
-  (asr tag tag (:$ (- arm64::nbits-in-word 32)))
-  (lsl tag tag (:$ arm64::fixnumshift))
-  (cmp tag src)
-  (b.eq :got-it)
-  (uuo-error-reg-not-xtype src (:$ arm64::xtype-s32))
-  (b :again)
-  :got-it
-  (sbfm (:x dest) src (:$ arm64::fixnumshift)
-        (:$ (+ arm64::fixnumshift 31))))
-
 ;;; ============ w11 handler-wave vinsns (level-1 broad map) ============
 
 ;;; sign-extend-halfword -- demanded by the %word-to-int handler
@@ -6053,79 +6038,6 @@
                                      ((src :address)
                                       (index :s64)))
   (ldr (:x dest) (:@ src (:x index))))
-
-;;; An (unsigned-byte 64) is a non-negative fixnum, a non-negative
-;;; two-digit bignum, or a three-digit bignum whose top digit is 0.
-(define-arm64-vinsn unbox-u64 (((dest :u64))
-                               ((src :lisp)))
-  :again
-  (tst src (:$ arm64::fixnummask))
-  (asr (:x dest) src (:$ arm64::fixnumshift))
-  (b.eq :ok-if-non-negative)
-  (and dest src (:$ arm64::fulltagmask))
-  (cmp dest (:$ arm64::fulltag-misc))
-  (b.ne :bad)
-  (ldur dest (:@ src (:$ arm64::misc-header-offset)))
-  (cmp dest (:$ arm64::two-digit-bignum-header))
-  (b.eq :two-digit)
-  (cmp dest (:$ arm64::three-digit-bignum-header))
-  (b.ne :bad)
-  (ldur (:w dest) (:@ src (:$ (+ arm64::misc-data-offset 8))))
-  (cmp (:w dest) (:$ 0))
-  (b.ne :bad)
-  (ldur (:x dest) (:@ src (:$ arm64::misc-data-offset)))
-  (b :got-it)
-  :two-digit
-  (ldur (:x dest) (:@ src (:$ arm64::misc-data-offset)))
-  :ok-if-non-negative
-  (cmp (:x dest) (:$ 0))
-  (b.ge :got-it)
-  :bad
-  (uuo-error-reg-not-xtype src (:$ arm64::xtype-u64))
-  (b :again)
-  :got-it)
-
-;;; A (signed-byte 64) is a fixnum or a two-digit bignum.
-(define-arm64-vinsn unbox-s64 (((dest :s64))
-                               ((src :lisp)))
-  :again
-  (tst src (:$ arm64::fixnummask))
-  (asr (:x dest) src (:$ arm64::fixnumshift))
-  (b.eq :got-it)
-  (and dest src (:$ arm64::fulltagmask))
-  (cmp dest (:$ arm64::fulltag-misc))
-  (b.ne :bad)
-  (ldur dest (:@ src (:$ arm64::misc-header-offset)))
-  (cmp dest (:$ arm64::two-digit-bignum-header))
-  (b.ne :bad)
-  (ldur (:x dest) (:@ src (:$ arm64::misc-data-offset)))
-  (b :got-it)
-  :bad
-  (uuo-error-reg-not-xtype src (:$ arm64::xtype-s64))
-  (b :again)
-  :got-it)
-
-;;; unbox-s16 -- PPC64 LINE-PORT (ppc64-vinsns.lisp:1410): the width-16
-;;; member of the unbox-s32 family above -- check body verbatim
-;;; require-s16 (w3b:450, donor ppc64:1167): reconstruct-and-compare at
-;;; width 16, extract = SBFM at fixnumshift width 16 (imms =
-;;; fixnumshift+15; the signed twin of the w1 UBFM idiom, cf. unbox-s32
-;;; above).  Error code arch::error-object-not-signed-byte-16 (verified:
-;;; w3b:459 brk's it).
-(define-arm64-vinsn unbox-s16 (((dest :s16))
-                               ((src :lisp))
-                               ((tag :s64)))
-  :again
-  (lsl tag src (:$ (- arm64::nbits-in-word (+ 16 arm64::fixnumshift))))
-  (asr tag tag (:$ (- arm64::nbits-in-word 16)))
-  (lsl tag tag (:$ arm64::fixnumshift))
-  (cmp tag src)
-  (b.eq :got-it)
-  (uuo-error-reg-not-xtype src (:$ arm64::xtype-s16))
-  (b :again)
-  :got-it
-  (sbfm (:x dest) src (:$ arm64::fixnumshift)
-        (:$ (+ arm64::fixnumshift 15))))
 
 ;;; scale-64bit-misc-index -- PPC64 LINE-PORT (ppc64-vinsns.lisp:62):
 ;;;   (addi dest idx misc-data-offset)
@@ -6298,32 +6210,6 @@
                                          ((temp :imm)))
   (ldr temp (:@ rcontext (:$ arm64::tcr.tlb-pointer)))
   (ldr dest (:@ temp (:$ arm64::interrupt-level-binding-index))))
-
-;;; unbox-s8 -- PPC64 LINE-PORT (ppc64-vinsns.lisp:1442): the width-8
-;;; member of the unbox-s16/s32 family above, same reconstruct-and-
-;;; compare check at width 8, extract = SBFM (imms = fixnumshift+7).
-;;; Error code arch::error-object-not-signed-byte-8 (x8664-vinsns:1214).
-(define-arm64-vinsn unbox-s8 (((dest :s8))
-                              ((src :lisp))
-                              ((tag :s64)))
-  :again
-  (lsl tag src (:$ (- arm64::nbits-in-word (+ 8 arm64::fixnumshift))))
-  (asr tag tag (:$ (- arm64::nbits-in-word 8)))
-  (lsl tag tag (:$ arm64::fixnumshift))
-  (cmp tag src)
-  (b.eq :got-it)
-  (uuo-error-reg-not-xtype src (:$ arm64::xtype-s8))
-  (b :again)
-  :got-it
-  (sbfm (:x dest) src (:$ arm64::fixnumshift)
-        (:$ (+ arm64::fixnumshift 7))))
-
-;;; %unbox-u16 -- width-16 sibling of w1's %unbox-u8 (:68): unchecked
-;;; UBFM extract (caller type-checked).  PPC64 rldicl family.
-(define-arm64-vinsn %unbox-u16 (((dest :u16))
-                                ((src :lisp)))
-  (ubfm (:x dest) src (:$ arm64::fixnumshift)
-        (:$ (+ arm64::fixnumshift 15))))
 
 (define-arm64-vinsn (bind-nil :call :subprim)
     (() () ((temp (:u64 #.arm64::imm1))))
