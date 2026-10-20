@@ -1654,6 +1654,7 @@
   (cond ((and test-p test-not-p)
          (test-not-error test test-not))
         (test-not-p (setq test nil)))
+  (setq key (or key #'identity))
   (setq count (check-count count))
   (let ((length (length sequence))        )
     (setq end (check-sequence-bounds sequence start end))
@@ -1710,6 +1711,7 @@
   except that all elements equal to OLD are replaced with NEW. The SEQUENCE
   may be destructively modified. See manual for details."
   (setq count (check-count count))
+  (setq key (or key #'identity))
   (let ((incrementer 1)
 	(length (length sequence)))
     (setq end (check-sequence-bounds sequence start end))

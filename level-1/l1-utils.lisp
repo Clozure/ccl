@@ -954,6 +954,7 @@ vector
   (declare (list alist))
   "Return the cons in ALIST whose CDR is equal (by a given test or EQL) to
    the ITEM."
+  (setq key (or key #'identity))
   (if (or test-p (not test-not))
     (progn
       (if test-not (error "Cannot specify both :TEST and :TEST-NOT."))
