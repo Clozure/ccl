@@ -66,6 +66,18 @@ BOOL WINAPI (*pCancelSynchronousIo)(HANDLE) = NULL;
 
 extern void *windows_find_symbol(void*, char*);
 
+/* True if the instruction at where is a UUO.  A thread can be
+   suspended at a UUO while Windows dispatches its exception.  If we
+   then change its context, Windows reports the exception against the
+   new context, on the foreign stack.  suspend_tcr makes the same
+   test. */
+static Boolean
+pc_at_uuo(pc where)
+{
+  return ((*where == INTN_OPCODE) ||
+          ((*where == XUUO_OPCODE_0) && (where[1] == XUUO_OPCODE_1)));
+}
+
 int
 raise_thread_interrupt(TCR *target)
 {
@@ -105,7 +117,8 @@ raise_thread_interrupt(TCR *target)
        !((where < (pc) 0x16000) &&
          (where >= (pc) 0x15000)) &&
        !((where < (pc) (ts->high)) &&
-         (where >= (pc) (ts->low))))) {
+         (where >= (pc) (ts->low)))) ||
+      pc_at_uuo(where)) {
 
     target->interrupt_pending = (1LL << (nbits_in_word - 1LL));
 
