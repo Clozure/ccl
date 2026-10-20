@@ -3210,7 +3210,10 @@ to binary 0."
       `(values ,(floor bit-offset 8) ,(foreign-record-field-type field) ,bit-offset))))
 
 (defmacro record-length (recname)
-  (%foreign-type-or-record-size recname :bytes))
+  (destructuring-bind (recname &rest accessors) (if (symbolp recname)
+                                                  (decompose-record-accessor recname)
+                                                  (list recname))
+    (%foreign-type-or-record-size recname :bytes accessors)))
 
 (defun make-record-form (record-name allocator &rest initforms)
   (let* ((ftype (%foreign-type-or-record record-name))

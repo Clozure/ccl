@@ -1402,17 +1402,24 @@ Keeps ns:ns-range / ns:ns-rect ordinals aligned with make-gcable-record."
               (parsed parsed)
               (t (parse-foreign-type type)))))))
 
-(defun %foreign-type-or-record-size (type &optional (units :bits))
-  (let* ((info (%foreign-type-or-record type))
-         (bits (ensure-foreign-type-bits info)))
-    (if bits
-      (values (ceiling bits
-                       (ecase units
-                         (:bits 1)
-                         (:bytes 8)
-                         (:words 32))))
-      (error "Unknown size for foreign type ~S."
-             (unparse-foreign-type info)))))
+(defun %foreign-type-or-record-size (type &optional (units :bits) accessors)
+  (let* ((info (%foreign-type-or-record type)))
+    (if (null accessors)
+      (let* ((bits (ensure-foreign-type-bits info)))
+        (if bits
+          (values (ceiling bits
+                           (ecase units
+                             (:bits 1)
+                             (:bytes 8)
+                             (:words 32))))
+          (error "Unknown size for foreign type ~S."
+                 (unparse-foreign-type info))))
+      (etypecase info
+        (foreign-record-type
+         (let ((field (%find-foreign-record-type-field info (car accessors))))
+           (%foreign-type-or-record-size (foreign-record-field-type field) units (cdr accessors))))
+        (foreign-pointer-type
+         (%foreign-type-or-record-size (Foreign-pointer-type-to info) units accessors))))))
 
 (defun %find-foreign-record-type-field (type field-name)
   (ensure-foreign-type-bits type)       ;load the record type if necessary.
