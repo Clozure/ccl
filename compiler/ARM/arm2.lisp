@@ -2596,11 +2596,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
            (common-case (backend-get-next-label))
            (is-node (member type-keyword (arch::target-gvector-types arch)))
            (constval (arm2-constant-value-ok-for-type-keyword type-keyword value))
-           (needs-memoization (and is-node (arm2-acode-needs-memoization value)))
-           (index-known-fixnum (acode-fixnum-form-p index)))
-      (when index-known-fixnum
-        (unless (>= index-known-fixnum 0)
-          (setq index-known-fixnum nil)))
+           (needs-memoization (and is-node (arm2-acode-needs-memoization value))))
       (let* ((src ($ arm::arg_x))
              (unscaled-idx ($ arm::arg_y))
              (result-reg ($ arm::arg_z)))
@@ -2640,7 +2636,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
           (@ common-case)
 
 
-        (arm2-vset1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum result-reg (arm2-unboxed-reg-for-aset seg type-keyword result-reg safe constval) constval needs-memoization))))))
+        (arm2-vset1 seg vreg xfer type-keyword src unscaled-idx nil result-reg (arm2-unboxed-reg-for-aset seg type-keyword result-reg safe constval) constval needs-memoization))))))
 
 
 (defun arm2-tail-call-alias (immref sym &optional arglist)

@@ -2707,11 +2707,7 @@
            (common-case (backend-get-next-label))
            (is-node (member type-keyword (arch::target-gvector-types arch)))
            (constval (arm642-constant-value-ok-for-type-keyword type-keyword value))
-           (needs-memoization (and is-node (arm642-acode-needs-memoization value)))
-           (index-known-fixnum (acode-fixnum-form-p index)))
-      (when index-known-fixnum
-        (unless (>= index-known-fixnum 0)
-          (setq index-known-fixnum nil)))
+           (needs-memoization (and is-node (arm642-acode-needs-memoization value))))
       (let* ((src ($ arm64::arg_x))
              (unscaled-idx ($ arm64::arg_y))
              (result-reg ($ arm64::arg_z)))
@@ -2749,7 +2745,7 @@
             (! trap-unless-fixnum unscaled-idx)
             (! check-misc-bound unscaled-idx src))
           (@ common-case)
-          (arm642-vset1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum result-reg (arm642-unboxed-reg-for-aset seg type-keyword result-reg safe constval) constval needs-memoization))))))
+          (arm642-vset1 seg vreg xfer type-keyword src unscaled-idx nil result-reg (arm642-unboxed-reg-for-aset seg type-keyword result-reg safe constval) constval needs-memoization))))))
 
 (defun arm642-tail-call-alias (immref sym &optional arglist)
   (let ((alias (cdr (assq sym *arm642-tail-call-aliases*))))
