@@ -2928,6 +2928,11 @@ interrupt_handler(int signum, siginfo_t *info, ExceptionInformation *context)
           unlock_exception_lock_in_handler(tcr);
           exit_signal_handler(tcr, old_valence, old_last_lisp_frame,
                               old_foreign);
+          /* An interrupt that arrived after the callback returned
+             found this thread in foreign code and was only marked
+             pending.  The thread may run on at a level that never
+             polls, so raise it again. */
+          raise_pending_interrupt(tcr);
         }
       }
     }
