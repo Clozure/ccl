@@ -2749,7 +2749,7 @@
             (! trap-unless-fixnum unscaled-idx)
             (! check-misc-bound unscaled-idx src))
           (@ common-case)
-          (arm642-vset1 seg vreg xfer type-keyword src unscaled-idx index-known-fixnum result-reg (arm642-unboxed-reg-for-aset seg type-keyword result-reg safe constval) constval needs-memoization))))))
+          (arm642-vset1 seg vreg xfer type-keyword src unscaled-idx nil result-reg (arm642-unboxed-reg-for-aset seg type-keyword result-reg safe constval) constval needs-memoization))))))
 
 (defun arm642-tail-call-alias (immref sym &optional arglist)
   (let ((alias (cdr (assq sym *arm642-tail-call-aliases*))))
