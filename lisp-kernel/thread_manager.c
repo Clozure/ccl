@@ -2240,6 +2240,15 @@ suspend_tcr(TCR *tcr)
       SEM_WAIT_FOREVER(TCR_AUX(tcr)->suspend);
       pcontext = NULL;
     }
+#ifdef WIN_64
+    if (pcontext) {
+      /* pcontext can be a copy of a context that Windows built for an
+         exception.  That context can carry CONTEXT_XSTATE, and a copy
+         does not have the extended area, so SetThreadContext in
+         resume_tcr fails with ERROR_INVALID_PARAMETER. */
+      pcontext->ContextFlags &= ~(CONTEXT_XSTATE & ~CONTEXT_AMD64);
+    }
+#endif
     TCR_AUX(tcr)->suspend_context = pcontext;
     return true;
   }
