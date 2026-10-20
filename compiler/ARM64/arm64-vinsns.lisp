@@ -1715,15 +1715,11 @@
 ;;; the caller's nbits formula RELIES on that vinsn-side 1+ (v2's
 ;;; session-84 bug was dropping it: every constant-mask logand kept one
 ;;; extra bit).  v2's corrected body (arm64-vinsns.lisp:4461) is
-;;; (ubfx dest src 0 (- 63 nbits)); ubfx is a LAPMACRO in his tree, not
-;;; a template (w1 %unbox-u32 lesson) -- write the underlying UBFM:
-;;; immr=0, imms = width-1 = (- 62 nbits).  Handler passes nbits in
-;;; [0, 59] (fixlen >= 1); nbits > 62 would produce an invalid imms and
-;;; fail loudly at expand time.
+;;; The handler passes nbits in [0, 59].
 (define-arm64-vinsn clear-left (((dest :imm))
                                 ((src :imm)
                                  (nbits :s8const)))
-  (ubfm dest src (:$ 0) (:$ (:apply - 62 nbits))))
+  (ubfx dest src (:$ 0) (:$ (:apply - 63 nbits))))
 
 ;;; ============ clear-right ============
 ;;; Demand: w1-report item 12 (clear the LOW nbits; the cleared run
@@ -2736,9 +2732,7 @@
   ((:not (:pred < idx 32))
    (ldr temp (:@ v (:$ (:apply + arm64::misc-data-offset
                                (:apply ash (:apply ash idx -5) 2))))))
-  (ubfm temp temp
-        (:$ (:apply logand idx 31))
-        (:$ (:apply logand idx 31)))
+  (ubfx temp temp (:$ (:apply logand idx 31)) (:$ 1))
   (lsl dest (:x temp) (:$ arm64::fixnumshift)))
 
 ;;; ============================================================
@@ -2756,8 +2750,7 @@
 ;;; everything else.  Result is a boxed fixnum -- :imm class is safe.
 (define-arm64-vinsn extract-tag-fixnum (((tag :imm))
                                         ((object :lisp)))
-  (ubfm tag object (:$ (- arm64::nbits-in-word arm64::fixnumshift))
-        (:$ (1- arm64::nlisptagbits))))
+  (ubfiz tag object (:$ arm64::fixnumshift) (:$ arm64::nlisptagbits)))
 
 ;;; ============ extract-fulltag ============
 ;;; Emit site: the w3 consp handler (arm642-additions-w3.lisp:1050,
@@ -2779,8 +2772,7 @@
 ;;; = (object & #b1111) << 3.  UBFIZ: immr = 61, imms = (1- ntagbits) = 3.
 (define-arm64-vinsn extract-fulltag-fixnum (((tag :imm))
                                             ((object :lisp)))
-  (ubfm tag object (:$ (- arm64::nbits-in-word arm64::fixnumshift))
-        (:$ (1- arm64::ntagbits))))
+  (ubfiz tag object (:$ arm64::fixnumshift) (:$ arm64::ntagbits)))
 
 ;;; ============ extract-typecode-fixnum ============
 ;;; Emit site: w3 typecode handler (arm642-additions-w3.lisp:1122).
@@ -2824,8 +2816,7 @@
                                                   (bitnum :u8))
                                                  ((temp :u32)))
   (lsr temp src bitnum)
-  (ubfm dest (:x temp) (:$ (- arm64::nbits-in-word arm64::fixnumshift))
-        (:$ 0)))
+  (ubfiz dest (:x temp) (:$ arm64::fixnumshift) (:$ 1)))
 
 ;;; ============ mask-base-char ============
 ;;; Emit site: w3 arm642-char-p (arm642-additions-w3.lisp:149,
@@ -3088,19 +3079,14 @@
   :got-it)
 
 ;;; ============ require-s8 ============
-;;; PPC64 ppc64-vinsns.lisp:1139: shift the boxed value so only the low
-;;; 8 payload bits survive, arithmetic-shift back, re-box, compare with
-;;; the original -- equal iff object is a fixnum in (signed-byte 8).
-;;; (Non-fixnums can't match: the reconstruction always has tag 000.)
-;;; Line-port at shift 3 (x8664:3501 identical constants).
+;;; Extract the payload sign-extended, and compare it, re-boxed, with
+;;; the original: equal iff object is a fixnum in (signed-byte 8).
 (define-arm64-vinsn require-s8 (()
                                 ((object :lisp))
                                 ((tag :s64)))
   :again
-  (lsl tag object (:$ (- arm64::nbits-in-word (+ 8 arm64::fixnumshift))))
-  (asr tag tag (:$ (- arm64::nbits-in-word 8)))
-  (lsl tag tag (:$ arm64::fixnumshift))
-  (cmp tag object)
+  (sbfx tag object (:$ arm64::fixnumshift) (:$ 8))
+  (cmp object (tag :lsl arm64::fixnumshift))
   (b.eq :got-it)
   (uuo-cerror-reg-not-xtype object (:$ arm64::xtype-s8))
   (b :again)
@@ -3122,15 +3108,13 @@
   :got-it)
 
 ;;; ============ require-s16 ============
-;;; PPC64 ppc64-vinsns.lisp:1167; same reconstruction with width 16.
+;;; As require-s8, with width 16.
 (define-arm64-vinsn require-s16 (()
                                  ((object :lisp))
                                  ((tag :s64)))
   :again
-  (lsl tag object (:$ (- arm64::nbits-in-word (+ 16 arm64::fixnumshift))))
-  (asr tag tag (:$ (- arm64::nbits-in-word 16)))
-  (lsl tag tag (:$ arm64::fixnumshift))
-  (cmp tag object)
+  (sbfx tag object (:$ arm64::fixnumshift) (:$ 16))
+  (cmp object (tag :lsl arm64::fixnumshift))
   (b.eq :got-it)
   (uuo-cerror-reg-not-xtype object (:$ arm64::xtype-s16))
   (b :again)
@@ -3148,18 +3132,13 @@
   :got-it)
 
 ;;; ============ require-s32 ============
-;;; PPC64 ppc64-vinsns.lisp:1195; same reconstruction with width 32.
-;;; (x8664:3552 adds a redundant belt-and-braces fixnummask test; PPC64
-;;; doesn't -- the reconstruction already catches every non-fixnum tag --
-;;; and the PPC64 line is carried.)
+;;; As require-s8, with width 32.
 (define-arm64-vinsn require-s32 (()
                                  ((object :lisp))
                                  ((tag :s64)))
   :again
-  (lsl tag object (:$ (- arm64::nbits-in-word (+ 32 arm64::fixnumshift))))
-  (asr tag tag (:$ (- arm64::nbits-in-word 32)))
-  (lsl tag tag (:$ arm64::fixnumshift))
-  (cmp tag object)
+  (sbfx tag object (:$ arm64::fixnumshift) (:$ 32))
+  (cmp object (tag :lsl arm64::fixnumshift))
   (b.eq :got-it)
   (uuo-cerror-reg-not-xtype object (:$ arm64::xtype-s32))
   (b :again)
@@ -4636,8 +4615,7 @@
   (lsr word-index idx (:$ (:apply + 5 arm64::fixnumshift)))
   (lsl word-index word-index (:$ 2))
   (sub word-index word-index (:$ (:apply - arm64::misc-data-offset)))
-  (ubfm (:x bitnum) (:x idx)
-        (:$ arm64::fixnumshift) (:$ (:apply + arm64::fixnumshift 4))))
+  (ubfx (:x bitnum) (:x idx) (:$ arm64::fixnumshift) (:$ 5)))
 
 ;;; ARM64-DEVIATION: no PPC64 analog -- PPC builds its variable single-bit
 ;;; mask with rlwnm/rotate; ARM64 (like ARM32) has a native variable
@@ -4963,9 +4941,7 @@
 ;;; fixnum, so no overflow.  result :imm holds the boxed fixnum.
 (define-arm64-vinsn u32->fixnum (((result :imm))
                                  ((val :u32)))
-  (ubfm (:x result) (:x val)
-        (:$ (- arm64::nbits-in-word arm64::fixnumshift))
-        (:$ (1- 32))))
+  (ubfiz (:x result) (:x val) (:$ arm64::fixnumshift) (:$ 32)))
 
 ;;; PPC64 LINE-PORT (ppc64-vinsns.lisp:611 node-slot-ref).  Constant-index
 ;;; boxed slot read: dest <- [node + misc-data-offset + cellno*8].
@@ -5650,15 +5626,11 @@
 ;;; u16 sibling ported with it -- w8's u32 note already named the pair).
 (define-arm64-vinsn u8->fixnum (((result :imm))
                                 ((val :u8)))
-  (ubfm (:x result) (:x val)
-        (:$ (- arm64::nbits-in-word arm64::fixnumshift))
-        (:$ (1- 8))))
+  (ubfiz (:x result) (:x val) (:$ arm64::fixnumshift) (:$ 8)))
 
 (define-arm64-vinsn u16->fixnum (((result :imm))
                                  ((val :u16)))
-  (ubfm (:x result) (:x val)
-        (:$ (- arm64::nbits-in-word arm64::fixnumshift))
-        (:$ (1- 16))))
+  (ubfiz (:x result) (:x val) (:$ arm64::fixnumshift) (:$ 16)))
 
 ;;; ============ check-max-nargs-large ============
 ;;; ARM32 arm-vinsns.lisp:3594 (materialize the boxed max in a temp,
@@ -5994,18 +5966,12 @@
 
 ;;; ============ w11 handler-wave vinsns (level-1 broad map) ============
 
-;;; sign-extend-halfword -- demanded by the %word-to-int handler
-;;; (arm642-additions-w11.lisp).  PPC64 LINE-PORT (ppc64-vinsns.lisp:2993):
-;;;   (sldi dest src (- 48 fixnumshift))
-;;;   (sradi dest dest (- 48 fixnumshift))
+;;; sign-extend-halfword -- demanded by the %word-to-int handler.
 ;;; Sign-extend the low 16 bits of a BOXED halfword value, preserving
-;;; the fixnum boxing: shift the boxed sign bit (15 + fixnumshift) to
-;;; bit 63, arithmetic-shift back.  dest==src alias-safe (src read only
-;;; by the first instruction, before any write).
+;;; the fixnum boxing.
 (define-arm64-vinsn sign-extend-halfword (((dest :imm))
                                           ((src :imm)))
-  (lsl dest src (:$ (- 48 arm64::fixnumshift)))
-  (asr dest dest (:$ (- 48 arm64::fixnumshift))))
+  (sbfx dest src (:$ 0) (:$ (+ 16 arm64::fixnumshift))))
 
 ;;; %current-frame-ptr -- demanded by the %current-frame-ptr handler.
 ;;; PPC64 LINE-PORT (ppc64-vinsns.lisp:3398): (mr dest ppc::sp) -- the
@@ -6237,9 +6203,7 @@
 
 (define-arm64-vinsn s32->fixnum (((result :imm))
                                  ((val :s32)))
-  (sbfm (:x result) (:x val)
-        (:$ (- arm64::nbits-in-word arm64::fixnumshift))
-        (:$ (1- 32))))
+  (sbfiz (:x result) (:x val) (:$ arm64::fixnumshift) (:$ 32)))
 
 ;;; ============ set-c-arg / set-single-c-arg / set-double-c-arg ============
 ;;; argnum is a WORD index into the param area (param0 = word 0); the
@@ -7199,71 +7163,65 @@
 
 (define-arm64-vinsn u8->u16 (((dest :u16))
                              ((src :u8)))
-  (ubfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+  (ubfx (:x dest) (:x src) (:$ 0) (:$ 8)))
 
 (define-arm64-vinsn u8->s16 (((dest :s16))
                              ((src :u8)))
-  (ubfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+  (ubfx (:x dest) (:x src) (:$ 0) (:$ 8)))
 
 (define-arm64-vinsn u8->u32 (((dest :u32))
                              ((src :u8)))
-  (ubfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+  (ubfx (:x dest) (:x src) (:$ 0) (:$ 8)))
 
 (define-arm64-vinsn u8->s32 (((dest :s32))
                              ((src :u8)))
-  (ubfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+  (ubfx (:x dest) (:x src) (:$ 0) (:$ 8)))
 
 (define-arm64-vinsn u8->u64 (((dest :u64))
                              ((src :u8)))
-  (ubfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+  (ubfx (:x dest) (:x src) (:$ 0) (:$ 8)))
 
 (define-arm64-vinsn u16->u32 (((dest :u32))
                               ((src :u16)))
-  (ubfm (:x dest) (:x src) (:$ 0) (:$ 15)))
+  (ubfx (:x dest) (:x src) (:$ 0) (:$ 16)))
 
 (define-arm64-vinsn u16->s32 (((dest :s32))
                               ((src :u16)))
-  (ubfm (:x dest) (:x src) (:$ 0) (:$ 15)))
+  (ubfx (:x dest) (:x src) (:$ 0) (:$ 16)))
 
 (define-arm64-vinsn u16->u64 (((dest :u64))
                               ((src :u16)))
-  (ubfm (:x dest) (:x src) (:$ 0) (:$ 15)))
+  (ubfx (:x dest) (:x src) (:$ 0) (:$ 16)))
 
 (define-arm64-vinsn s8->s16 (((dest :s16))
                              ((src :s8)))
-  (sbfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+  (sbfx (:x dest) (:x src) (:$ 0) (:$ 8)))
 
 (define-arm64-vinsn s8->s32 (((dest :s32))
                              ((src :s8)))
-  (sbfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+  (sbfx (:x dest) (:x src) (:$ 0) (:$ 8)))
 
 (define-arm64-vinsn s8->s64 (((dest :s64))
                              ((src :s8)))
-  (sbfm (:x dest) (:x src) (:$ 0) (:$ 7)))
+  (sbfx (:x dest) (:x src) (:$ 0) (:$ 8)))
 
 (define-arm64-vinsn s16->s32 (((dest :s32))
                               ((src :s16)))
-  (sbfm (:x dest) (:x src) (:$ 0) (:$ 15)))
+  (sbfx (:x dest) (:x src) (:$ 0) (:$ 16)))
 
 (define-arm64-vinsn s16->s64 (((dest :s64))
                               ((src :s16)))
-  (sbfm (:x dest) (:x src) (:$ 0) (:$ 15)))
+  (sbfx (:x dest) (:x src) (:$ 0) (:$ 16)))
 
-;;; The two boxing members: SBFIZ (SBFM with immr = -lsb mod 64,
-;;; imms = width-1) sign-extends the low N bits AND shifts left by
-;;; fixnumshift in one instruction -- PPC64's sldi/sradi pair, and the
-;;; exact encoding shape of the landed u8->fixnum / u32->fixnum above.
+;;; The two boxing members: sbfiz sign-extends the low N bits and
+;;; shifts left by fixnumshift in one instruction.
 (define-arm64-vinsn s8->fixnum (((result :imm))
                                 ((val :s8)))
-  (sbfm (:x result) (:x val)
-        (:$ (- arm64::nbits-in-word arm64::fixnumshift))
-        (:$ (1- 8))))
+  (sbfiz (:x result) (:x val) (:$ arm64::fixnumshift) (:$ 8)))
 
 (define-arm64-vinsn s16->fixnum (((result :imm))
                                  ((val :s16)))
-  (sbfm (:x result) (:x val)
-        (:$ (- arm64::nbits-in-word arm64::fixnumshift))
-        (:$ (1- 16))))
+  (sbfiz (:x result) (:x val) (:$ arm64::fixnumshift) (:$ 16)))
 
 
 ;;; ==================================================================
