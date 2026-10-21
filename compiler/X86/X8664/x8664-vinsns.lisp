@@ -213,7 +213,7 @@
 				     ((v :lisp)
 				      (idx :s32const)) ; sic
 				     ())
-  (movslq (:@ (:apply + x8664::misc-data-offset (:apply ash idx x8664::word-shift)) (:%q v)) (:%q dest)))
+  (movslq (:@ (:apply + x8664::misc-data-offset (:apply ash idx 2)) (:%q v)) (:%q dest)))
 
 (define-x8664-vinsn misc-ref-c-single-float  (((dest :single-float))
                                               ((v :lisp)
