@@ -1087,6 +1087,62 @@
     `(%svref ,struct ,offset)
     call))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+
+;;; Given a call's required arguments (in args) and its
+;;; constant-keywords-p keyword plist (in keys), return binding forms
+;;; and declarations that evaluate the forms exactly once, in
+;;; left-to-right order, together with the args and keys rewritten to
+;;; refer to the bound variables.
+(defun argument-binding-forms (args keys env)
+  (let* ((bindings ())
+         (decls ())
+         (new-args ())
+         (new-keys ()))
+    (flet ((add-binding (form)
+             ;; Add a binding for form and return the bound variable,
+             ;; unless form is obviously side-effect-free.
+             (if (or (nx-form-constant-p form env)
+                     (function-form-p form))
+               ;; Leave the side-effect-free form as-is.
+               form
+               (let* ((var (gensym))
+                      (type (nx-form-type form env)))
+                 (push `(,var ,form) bindings)
+                 (unless (eq type t)
+                   (push `(type ,type ,var) decls))
+                 var))))
+      (dolist (arg args)
+        (push (add-binding arg) new-args))
+      (do* ((keys keys (cddr keys)))
+           ((null keys))
+        (push (car keys) new-keys)
+        (push (add-binding (cadr keys)) new-keys))
+      (values (nreverse bindings)
+              (if decls `((declare ,@(nreverse decls))))
+              (nreverse new-args)
+              (nreverse new-keys)))))
+
+;;; Return a form that applies key to the value of elt.
+;;;
+;;; It is expected that key will be the :key value from the keyword
+;;; list returned by argument-binding-forms (see above).  Thus it will
+;;; be something that can be evaluated any number of times (a constant,
+;;; a (function ...) form, a variable, or nil if the call had no :key).
+;;;
+;;; As it may be evaluated more than once, elt should also be a variable.
+(defun key-call-form (key elt env)
+  (cond ((or (null key)
+             (and (nx-form-constant-p key env)
+                  (null (nx-form-constant-value key env))))
+         elt)
+        ((symbolp key)
+         `(if ,key (funcall ,key ,elt) ,elt))
+        ;; A function form or a constant form other than a symbol whose
+        ;; value isn't nil, e.g., #'car or 'car or 42
+        (t `(funcall ,key ,elt))))
+)
+
 ;;; expand find-if and find-if-not
 
 (define-compiler-macro find-if (test sequence &rest keys)
@@ -1105,37 +1161,41 @@
                                     item sequence &rest keys)
   (if (constant-keywords-p keys)
     (destructuring-bind (&key from-end test test-not (start 0) end key) keys
+      (declare (ignore key))
       (if (and (eql start 0)
                (null end)
                (null from-end)
                (not (and test test-not)))
-        (let ((find-test (or test test-not '#'eql))
-              (loop-test (if test-not 'unless 'when))
-              (loop-function (nx-form-sequence-iterator sequence env)))
-          (if loop-function
-            (let ((item-var (unless (or (nx-form-constant-p item env)
-                                        (and (equal find-test '#'funcall)
-                                             (function-form-p item)))
-                              (gensym)))
-                  (elt-var (gensym)))
-              `(let (,@(when item-var `((,item-var ,item))))
-                 (,loop-function (,elt-var ,sequence)
-                                 (,loop-test (funcall ,find-test ,(or item-var item)
-                                                      (funcall ,(or key '#'identity) ,elt-var))
-                                             (return ,elt-var)))))
-            (let ((find-function (if test-not 'find-positional-test-not-key 'find-positional-test-key))
-                  (item-var (gensym))
-                  (sequence-var (gensym))
-                  (test-var (gensym))
-                  (key-var (gensym)))
-              `(let ((,item-var ,item)
-                     (,sequence-var ,sequence)
-                     (,test-var ,(or test test-not))
-                     (,key-var ,key))
-                 (declare (dynamic-extent ,item-var ,sequence-var ,test-var ,key-var))
-                 (,find-function ,item-var ,sequence-var ,test-var ,key-var)))))
+        (let ((loop-test (if test-not 'unless 'when))
+              (looper (nx-form-sequence-iterator sequence env)))
+          (multiple-value-bind (bindings decls args keys)
+              (argument-binding-forms (list item sequence) keys env)
+            (destructuring-bind (item sequence) args
+              (destructuring-bind (&key test test-not key &allow-other-keys) keys
+                (if looper
+                  ;; We know that sequence is a vector or a list: use a
+                  ;; dovector or dolist loop.
+                  (let ((elt-var (gensym)))
+                    `(let* ,bindings
+                       ,@decls
+                       (,looper (,elt-var ,sequence)
+                         (,loop-test (funcall ,(or test test-not '#'eql) ,item
+                                              ,(key-call-form key elt-var env))
+                           (return ,elt-var)))))
+                  ;; Avoid keyword arg parsing by using a BOA function.
+                  (let ((find-fn (if test-not
+                                   'find-positional-test-not-key
+                                   'find-positional-test-key))
+                        (test-var (gensym))
+                        (key-var (gensym)))
+                    `(let* ,bindings
+                       ,@decls
+                       (let ((,test-var ,(or test test-not))
+                             (,key-var ,key))
+                         (declare (dynamic-extent ,test-var ,key-var))
+                         (,find-fn ,item ,sequence ,test-var ,key-var)))))))))
         call))
-      call))
+    call))
 
 ;;; expand position-if and position-if-not
 
@@ -1155,58 +1215,60 @@
                                         item sequence &rest keys)
   (if (constant-keywords-p keys)
     (destructuring-bind (&key from-end test test-not (start 0) end key) keys
+      (declare (ignore key))
       (if (and (eql start 0)
                (null end)
                (null from-end)
                (not (and test test-not)))
-        (let ((position-test (or test test-not '#'eql))
-              (loop-test (if test-not 'unless 'when)))
-          (cond ((nx-form-typep sequence 'list env)
-                 (let ((item-var (unless (or (nx-form-constant-p item env)
-                                             (and (equal position-test '#'funcall)
-                                                  (function-form-p item)))
-                                   (gensym)))
-                       (elt-var (gensym))
-                       (position-var (gensym)))
-                   `(let (,@(when item-var `((,item-var ,item)))
-                          (,position-var 0))
-                      (dolist (,elt-var ,sequence)
-                        (,loop-test (funcall ,position-test ,(or item-var item)
-                                             (funcall ,(or key '#'identity) ,elt-var))
-                                    (return ,position-var))
-                        (incf ,position-var)))))
-                ((nx-form-typep sequence 'vector env)
-                 (let ((item-var (unless (or (nx-form-constant-p item env)
-                                             (and (equal position-test '#'funcall)
-                                                  (function-form-p item)))
-                                   (gensym)))
-                       (sequence-var (gensym))
-                       (position-var (gensym)))
-                   `(let (,@(when item-var `((,item-var ,item)))
-                          (,sequence-var ,sequence))
-                      ,@(let ((type (nx-form-type sequence env)))
-                          (unless (eq type t)
-                            `((declare (type ,type ,sequence-var)))))
-                      (dotimes (,position-var (length ,sequence-var))
-                        (,loop-test (funcall ,position-test ,(or item-var item)
-                                             (funcall ,(or key '#'identity)
-                                                      (locally (declare (optimize (speed 3) (safety 0)))
-                                                        (aref ,sequence ,position-var))))
-                                    (return ,position-var))))))
-                (t
-                 (let ((position-function (if test-not
-                                            'position-positional-test-not-key
-                                            'position-positional-test-key))
-                       (item-var (gensym))
-                       (sequence-var (gensym))
-                       (test-var (gensym))
-                       (key-var (gensym)))
-                   `(let ((,item-var ,item)
-                          (,sequence-var ,sequence)
-                          (,test-var ,(or test test-not))
-                          (,key-var ,key))
-                      (declare (dynamic-extent ,sequence-var ,test-var ,key-var))
-                      (,position-function ,item-var ,sequence-var ,test-var ,key-var))))))
+        (let ((loop-test (if test-not 'unless 'when))
+              (sequence-type (cond ((nx-form-typep sequence 'list env) 'list)
+                                   ((nx-form-typep sequence 'vector env)
+                                    (nx-form-type sequence env)))))
+          (multiple-value-bind (bindings decls args keys)
+              (argument-binding-forms (list item sequence) keys env)
+            (destructuring-bind (item sequence) args
+              (destructuring-bind (&key test test-not key &allow-other-keys) keys
+                (let ((position-test (or test test-not '#'eql)))
+                  `(let* ,bindings
+                     ,@decls
+                     ,(case sequence-type
+                        ((nil)
+                         (let ((position-fn (if test-not
+                                              'position-positional-test-not-key
+                                              'position-positional-test-key))
+                               (test-var (gensym))
+                               (key-var (gensym)))
+                           `(let ((,test-var ,(or test test-not))
+                                  (,key-var ,key))
+                              (declare (dynamic-extent ,test-var ,key-var))
+                              (,position-fn ,item ,sequence ,test-var
+                                            ,key-var))))
+                        (list
+                         (let ((elt-var (gensym))
+                               (position-var (gensym)))
+                           `(let ((,position-var 0))
+                              (dolist (,elt-var ,sequence)
+                                (,loop-test (funcall ,position-test ,item
+                                                     ,(key-call-form
+                                                       key elt-var env))
+                                  (return ,position-var))
+                                (incf ,position-var)))))
+                        (t
+                         (let ((sequence-var (gensym))
+                               (position-var (gensym))
+                               (elt-var (gensym)))
+                           `(let ((,sequence-var ,sequence))
+                              (declare (type ,sequence-type ,sequence-var))
+                              (dotimes (,position-var (length ,sequence-var))
+                                (let ((,elt-var
+                                        (locally
+                                            (declare (optimize (speed 3)
+                                                               (safety 0)))
+                                          (aref ,sequence-var ,position-var))))
+                                  (,loop-test (funcall ,position-test ,item
+                                                       ,(key-call-form
+                                                         key elt-var env))
+                                    (return ,position-var))))))))))))))
         call))
     call))
 
@@ -1216,33 +1278,44 @@
   (declare (ignore ignore))
   (remove-if-transform call env))
 
-(define-compiler-macro remove-if-not (&whole call &environment env &rest ignore)
+(define-compiler-macro remove-if-not (&whole call &environment env
+                                      &rest ignore)
   (declare (ignore ignore))
   (remove-if-transform call env))
 
 (defun remove-if-transform (call env)
   (destructuring-bind (function test sequence &rest keys) call
     (if (constant-keywords-p keys)
-      (destructuring-bind (&key from-end (start 0) end count (key '#'identity)) keys
+      (destructuring-bind (&key from-end (start 0) end count key) keys
+        (declare (ignore key))
         (if (and (eql start 0)
                  (null end)
                  (null from-end)
                  (null count)
                  (nx-form-typep sequence 'list env))
           ;; only do the list case, since it's hard to collect vector results
-          (let ((temp-var (gensym))
-                (result-var (gensym))
-                (elt-var (gensym))
-                (loop-test (ecase function (remove-if 'unless) (remove-if-not 'when))))
-            `(the list
-               (let* ((,temp-var (cons nil nil))
-                      (,result-var ,temp-var))
-                 (declare (dynamic-extent ,temp-var))
-                 (dolist (,elt-var ,sequence (%cdr ,result-var))
-                   (,loop-test (funcall ,test (funcall ,key ,elt-var))
-                               (setq ,temp-var
-                                     (%cdr
-                                      (%rplacd ,temp-var (list ,elt-var)))))))))
+          (multiple-value-bind (bindings decls args keys)
+              (argument-binding-forms (list test sequence) keys env)
+            (destructuring-bind (test sequence) args
+              (destructuring-bind (&key key &allow-other-keys) keys
+                (let ((temp-var (gensym))
+                      (result-var (gensym))
+                      (elt-var (gensym))
+                      (loop-test (ecase function
+                                   (remove-if 'unless)
+                                   (remove-if-not 'when))))
+                  `(the list
+                     (let* (,@bindings
+                            (,temp-var (cons nil nil))
+                            (,result-var ,temp-var))
+                       ,@decls
+                       (declare (dynamic-extent ,temp-var))
+                       (dolist (,elt-var ,sequence (%cdr ,result-var))
+                         (,loop-test (funcall ,test ,(key-call-form
+                                                      key elt-var env))
+                           (setq ,temp-var
+                                 (%cdr (%rplacd ,temp-var
+                                                (list ,elt-var))))))))))))
           call))
       call)))
 
