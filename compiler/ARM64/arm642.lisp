@@ -7644,15 +7644,27 @@
       (arm642-form seg nil xfer num2))
     (let* ((fix1 (acode-fixnum-form-p num1))
            (fix2 (acode-fixnum-form-p num2))
-           (other (if (typep fix1 '(signed-byte 16)) num2 (if (typep fix2 '(signed-byte 16)) num1))))
+           (other (if (typep fix1 '(signed-byte 16))
+                    num2
+                    (if (typep fix2 '(signed-byte 16))
+                      num1))))
       (if (and fix1 fix2)
-        (arm642-lri seg vreg (ash (* fix1 fix2) *arm642-target-fixnum-shift*))
-        (if other
-          (! multiply-immediate vreg (arm642-one-untargeted-reg-form seg other arm64::arg_z) (or fix1 fix2))
-          (multiple-value-bind (rx ry) (arm642-two-untargeted-reg-forms seg num1 arm64::arg_y num2 arm64::arg_z)
-            (ensuring-node-target (target vreg)
-              (! multiply-fixnums target rx ry)))))
-      (^))))
+        ;; Probably can't get here: the front-end will have already done
+        ;; the constant multiply.
+        (arm642-use-operator (%nx1-operator fixnum) seg vreg xfer
+                             (* fix1 fix2))
+        (progn
+          (if other
+            (let* ((reg (arm642-one-untargeted-reg-form seg other
+                                                        arm64::arg_z)))
+              (ensuring-node-target (target vreg)
+                (! multiply-immediate target reg (or fix1 fix2))))
+            (multiple-value-bind (rx ry)
+                (arm642-two-untargeted-reg-forms seg num1 arm64::arg_y
+                                                 num2 arm64::arg_z)
+              (ensuring-node-target (target vreg)
+                (! multiply-fixnums target rx ry))))
+          (^))))))
 
 (defarm642 arm642-nth-value nth-value (seg vreg xfer n form)
   (let* ((*arm642-vstack* *arm642-vstack*))
