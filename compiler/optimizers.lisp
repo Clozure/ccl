@@ -1087,6 +1087,18 @@
     `(%svref ,struct ,offset)
     call))
 
+;;; KEY is the :key form, or NIL if there is none.  A :key of NIL
+;;; means #'identity, and a form that is not constant can be NIL at
+;;; run time.
+(defun key-function-form (key env)
+  (cond ((or (null key)
+             (and (nx-form-constant-p key env)
+                  (null (nx-form-constant-value key env))))
+         '#'identity)
+        ((or (function-form-p key) (nx-form-constant-p key env))
+         key)
+        (t `(or ,key #'identity))))
+
 ;;; expand find-if and find-if-not
 
 (define-compiler-macro find-if (test sequence &rest keys)
@@ -1121,7 +1133,7 @@
               `(let (,@(when item-var `((,item-var ,item))))
                  (,loop-function (,elt-var ,sequence)
                                  (,loop-test (funcall ,find-test ,(or item-var item)
-                                                      (funcall ,(or key '#'identity) ,elt-var))
+                                                      (funcall ,(key-function-form key env) ,elt-var))
                                              (return ,elt-var)))))
             (let ((find-function (if test-not 'find-positional-test-not-key 'find-positional-test-key))
                   (item-var (gensym))
@@ -1172,7 +1184,7 @@
                           (,position-var 0))
                       (dolist (,elt-var ,sequence)
                         (,loop-test (funcall ,position-test ,(or item-var item)
-                                             (funcall ,(or key '#'identity) ,elt-var))
+                                             (funcall ,(key-function-form key env) ,elt-var))
                                     (return ,position-var))
                         (incf ,position-var)))))
                 ((nx-form-typep sequence 'vector env)
@@ -1189,7 +1201,7 @@
                             `((declare (type ,type ,sequence-var)))))
                       (dotimes (,position-var (length ,sequence-var))
                         (,loop-test (funcall ,position-test ,(or item-var item)
-                                             (funcall ,(or key '#'identity)
+                                             (funcall ,(key-function-form key env)
                                                       (locally (declare (optimize (speed 3) (safety 0)))
                                                         (aref ,sequence ,position-var))))
                                     (return ,position-var))))))
@@ -1223,7 +1235,7 @@
 (defun remove-if-transform (call env)
   (destructuring-bind (function test sequence &rest keys) call
     (if (constant-keywords-p keys)
-      (destructuring-bind (&key from-end (start 0) end count (key '#'identity)) keys
+      (destructuring-bind (&key from-end (start 0) end count key) keys
         (if (and (eql start 0)
                  (null end)
                  (null from-end)
@@ -1239,7 +1251,7 @@
                       (,result-var ,temp-var))
                  (declare (dynamic-extent ,temp-var))
                  (dolist (,elt-var ,sequence (%cdr ,result-var))
-                   (,loop-test (funcall ,test (funcall ,key ,elt-var))
+                   (,loop-test (funcall ,test (funcall ,(key-function-form key env) ,elt-var))
                                (setq ,temp-var
                                      (%cdr
                                       (%rplacd ,temp-var (list ,elt-var)))))))))
