@@ -353,7 +353,7 @@
                  (if (not (funcall test (funcall key tree)))
                    (set-cdr last new)))
              (if (not (funcall test (funcall key tree)))
-               (return (set-cdr (cdr last) new))
+               (return (set-cdr last new))
                (set-car tree 
                         (nsubst-if-not new test (car tree) :key key))))
            tree)))
