@@ -1647,7 +1647,7 @@
 
 (defun substitute (new old sequence &key from-end (test #'eql test-p) (test-not nil test-not-p)
                        (start 0) count
-                       end (key #'identity))
+                       end key)
   "Return a sequence of the same kind as SEQUENCE with the same elements,
   except that all elements equal to OLD are replaced with NEW. See manual
   for details."
@@ -1655,6 +1655,7 @@
          (test-not-error test test-not))
         (test-not-p (setq test nil)))
   (setq count (check-count count))
+  (unless key (setq key #'identity))
   (let ((length (length sequence))        )
     (setq end (check-sequence-bounds sequence start end))
     (seq-dispatch 
@@ -1705,11 +1706,12 @@
 
 (defun nsubstitute (new old sequence &key from-end (test #'eql) test-not 
                         end 
-                        (count target::target-most-positive-fixnum) (key #'identity) (start 0))
+                        (count target::target-most-positive-fixnum) key (start 0))
   "Return a sequence of the same kind as SEQUENCE with the same elements
   except that all elements equal to OLD are replaced with NEW. The SEQUENCE
   may be destructively modified. See manual for details."
   (setq count (check-count count))
+  (unless key (setq key #'identity))
   (let ((incrementer 1)
 	(length (length sequence)))
     (setq end (check-sequence-bounds sequence start end))
