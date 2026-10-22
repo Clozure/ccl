@@ -1190,6 +1190,8 @@
                         (key-var (gensym)))
                     `(let* ,bindings
                        ,@decls
+                       ,@(when (assoc sequence bindings)
+                           `((declare (dynamic-extent ,sequence))))
                        (let ((,test-var ,(or test test-not))
                              (,key-var ,key))
                          (declare (dynamic-extent ,test-var ,key-var))
@@ -1231,6 +1233,9 @@
                 (let ((position-test (or test test-not '#'eql)))
                   `(let* ,bindings
                      ,@decls
+                     ,@(when (and (null sequence-type)
+                                  (assoc sequence bindings))
+                         `((declare (dynamic-extent ,sequence))))
                      ,(case sequence-type
                         ((nil)
                          (let ((position-fn (if test-not
