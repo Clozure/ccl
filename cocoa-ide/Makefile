@@ -10,8 +10,8 @@
 #   make notarize     notarize and staple it (needs NOTARY_PROFILE)
 #   make dmg          make build/ClozureCL.dmg from it
 #
-# Signing needs ENTITLEMENTS (at least com.apple.security.cs.allow-jit).
-# NOTARY_PROFILE names credentials saved with
+# Signing uses the entitlements in ccl.entitlements; override with
+# ENTITLEMENTS=file.  NOTARY_PROFILE names credentials saved with
 # "xcrun notarytool store-credentials".
 
 CCL = ..
@@ -20,7 +20,7 @@ APP = $(BUILD)/Clozure CL.app
 LISPS = darm64cl dx86cl64
 
 IDENTITY =
-ENTITLEMENTS =
+ENTITLEMENTS = ccl.entitlements
 NOTARY_PROFILE =
 
 # An ad hoc signature can't have a secure timestamp.
@@ -38,7 +38,6 @@ app:
 
 sign:
 	@test -n "$(IDENTITY)" || { echo "Set IDENTITY"; exit 1; }
-	@test -n "$(ENTITLEMENTS)" || { echo "Set ENTITLEMENTS"; exit 1; }
 	codesign --force --options runtime $(TIMESTAMP) -s "$(IDENTITY)" \
 	  "$(APP)/Contents/Resources/AltConsole.app"
 	codesign --force --options runtime $(TIMESTAMP) -s "$(IDENTITY)" \

@@ -11,6 +11,24 @@
         <string>public.app-category.developer-tools</string>
         <key>LSMinimumSystemVersion</key>
         <string>10.13</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Lisp code running in Clozure CL wants to control another application.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Lisp code running in Clozure CL wants to use the camera.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Lisp code running in Clozure CL wants to use the microphone.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Lisp code running in Clozure CL wants to access your contacts.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Lisp code running in Clozure CL wants to access your calendars.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Lisp code running in Clozure CL wants to access your calendars.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Lisp code running in Clozure CL wants to use your location.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Lisp code running in Clozure CL wants to use your location.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Lisp code running in Clozure CL wants to access your photos.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleDocumentTypes</key>
