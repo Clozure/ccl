@@ -2238,11 +2238,14 @@ unlock_exception_lock_in_handler(TCR *tcr)
 }
 
 /* If an interrupt is pending on exception exit, try to ensure that the
-   thread sees it as soon as it's able to run. */
+   thread sees it as soon as it's able to run.  interrupt_handler records
+   a deferred interrupt in interrupt_pending, so test that word, at a
+   level that allows delivery. */
 void
 raise_pending_interrupt(TCR *tcr)
-{                                 /* ppc-exceptions.c:1803-1809, verbatim */
-  if (TCR_INTERRUPT_LEVEL(tcr) > 0) {
+{
+  if ((TCR_INTERRUPT_LEVEL(tcr) >= 0) &&
+      (tcr->interrupt_pending)) {
     pthread_kill((pthread_t)ptr_from_lispobj(tcr->osid),
                  SIGNAL_FOR_PROCESS_INTERRUPT);
   }
@@ -2897,10 +2900,16 @@ interrupt_handler(int signum, siginfo_t *info, ExceptionInformation *context)
         /* This thread can (allegedly) take an interrupt now.  It's
            tricky to do that if we're executing foreign code.  If we're
            unwinding the stack, we also want to defer the interrupt.
-           ppc:2144-2151 */
+           Record the deferral in interrupt_pending, the word the
+           negative-level case uses.  A mark written into the
+           *interrupt-level* binding slot instead is lost when lisp
+           restores that slot before it polls: nthrow restores the
+           binding that nmkunwind makes around every unwind-protect
+           body, and unbind_interrupt_level does not poll when the old
+           level is >= 0. */
         if ((tcr->valence != TCR_STATE_LISP) ||
             (tcr->unwinding != 0)) {
-          TCR_INTERRUPT_LEVEL(tcr) = (1 << fixnumshift);
+          tcr->interrupt_pending = 1 << fixnumshift;
         } else {
           xframe_list xframe_link;
           int old_valence;
@@ -2919,6 +2928,11 @@ interrupt_handler(int signum, siginfo_t *info, ExceptionInformation *context)
           unlock_exception_lock_in_handler(tcr);
           exit_signal_handler(tcr, old_valence, old_last_lisp_frame,
                               old_foreign);
+          /* An interrupt that arrived after the callback returned
+             found this thread in foreign code and was only marked
+             pending.  The thread may run on at a level that never
+             polls, so raise it again. */
+          raise_pending_interrupt(tcr);
         }
       }
     }

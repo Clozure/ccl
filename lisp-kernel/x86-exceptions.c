@@ -1507,8 +1507,8 @@ signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context
   unlock_exception_lock_in_handler(tcr);
 #ifndef DARWIN_USE_PSEUDO_SIGRETURN
   exit_signal_handler(tcr, old_valence);
+  raise_pending_interrupt(tcr);
 #endif
-  /* raise_pending_interrupt(tcr); */
 #ifndef DARWIN_USE_PSEUDO_SIGRETURN
   SIGRETURN(context);
 #endif
@@ -2000,6 +2000,11 @@ interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
         unlock_exception_lock_in_handler(tcr);
 #ifndef WINDOWS
         exit_signal_handler(tcr, old_valence);
+        /* An interrupt that arrived after the callback returned
+           found this thread in foreign code and was only marked
+           pending.  The thread may run on at a level that never
+           polls, so raise it again. */
+        raise_pending_interrupt(tcr);
 #endif
       }
     }
