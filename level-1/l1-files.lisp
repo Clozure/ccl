@@ -57,9 +57,8 @@
 ;thereby earning the eternal gratitude of any users who find themselves with a
 ;ton of "foo.CL" files...
 (defparameter *.fasl-pathname*
-  (%cons-pathname nil nil
-                  #.(pathname-type
-                     (backend-target-fasl-pathname *target-backend*))))
+  (macrolet ((target-type () (pathname-type (backend-target-fasl-pathname *target-backend*))))
+    (%cons-pathname nil nil (target-type))))
 
 (defparameter *.lisp-pathname* (%cons-pathname nil nil "lisp"))
 

@@ -2196,14 +2196,10 @@
   (make-acode (%nx1-default-operator) (nx1-form :value arg)))
 
 (defnx1 nx1-%ilognot (%ilognot) context (n)
-  ;; Bootstrapping nonsense.
-  (if (aref (backend-p2-dispatch *target-backend*)
-            (logand operator-id-mask (%nx1-operator %ilognot)))
-    (make-acode (%nx1-operator typed-form)
-                'fixnum
-                (make-acode (%nx1-operator %ilognot)
-                            (nx1-form :value n)))
-    (nx1-form context (macroexpand `(%ilognot ,n)))))
+  (make-acode (%nx1-operator typed-form)
+              'fixnum
+              (make-acode (%nx1-operator %ilognot)
+                          (nx1-form :value n))))
 
     
 (defnx1 nx1-ash ((ash)) context (num amt)

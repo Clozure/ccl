@@ -297,9 +297,7 @@ for compiling files that are not expected to change.")
 (defparameter *autoload-lisp-package* nil)   ; Make 'em suffer
 (defparameter *apropos-case-sensitive-p* nil)
 
-(defloadvar *total-gc-microseconds* (let* ((timeval-size
-                                            #.(%foreign-type-or-record-size
-                                               :timeval :bytes))
+(defloadvar *total-gc-microseconds* (let* ((timeval-size (record-length :timeval))
                                            (p (malloc (* 5 timeval-size))))
                                       (#_memset p 0 (* 5 timeval-size))
                                       p))
