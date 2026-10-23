@@ -133,7 +133,10 @@
 ;;; This defines a template.  All expressions in the body must be
 ;;; evaluable at macroexpansion time.
 (defun define-x86-vinsn (backend vinsn-name results args temps body)
-  (let* ((opcode-lookup (backend-lookup-opcode backend))
+  ;; Evaluate expressions like (target-nil-value) for BACKEND, which is not
+  ;; the target when a non-x86 host compiles the x86 backend for itself.
+  (let* ((*target-backend* backend)
+         (opcode-lookup (backend-lookup-opcode backend))
 	 (backend-name (backend-name backend))
          (arch-name (backend-target-arch-name backend))
 	 (template-hash (backend-p2-template-hash-name backend))

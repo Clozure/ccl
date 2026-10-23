@@ -85,30 +85,34 @@
 
 
 
+;; Use macros to get the values at compile time.  #. won't work because *target-backend* is not bound
+;; at read time, just compile time.
+(macrolet ((headers-dir ()
+             (ecase (backend-name *target-backend*)
+               (:linuxppc32 "ccl:headers;")
+               (:darwinppc32 "ccl:darwin-headers;")
+               (:darwinppc64 "ccl:darwin-headers64;")
+               (:linuxppc64 "ccl:headers64;")
+               (:darwinx8632 "ccl:darwin-x86-headers;")
+               (:linuxx8664 "ccl:x86-headers64;")
+               (:darwinx8664 "ccl:darwin-x86-headers64;")
+               (:freebsdx8664 "ccl:freebsd-headers64;")
+               (:solarisx8664 "ccl:solarisx64-headers;")
+               (:win64 "ccl:win64-headers;")
+               (:linuxx8632 "ccl:x86-headers;")
+               (:win32 "ccl:win32-headers;")
+               (:solarisx8632 "ccl:solarisx86-headers;")
+               (:freebsdx8632 "ccl:freebsd-headers;")
+               (:linuxarm "ccl:arm-headers;")
+               (:darwinarm "ccl:darwin-arm-headers;")
+               (:androidarm "ccl:android-headers;")
+               (:linuxarm64 "ccl:arm64-headers;")
+               (:darwinarm64 "ccl:darwin-arm64-headers;")))
+           (pkg-name () (ftd-interface-package-name *target-ftd*)))
+             
 (defvar *host-ftd* (make-ftd
-                    :interface-db-directory
-                    #.(ecase (backend-name *target-backend*)
-                        (:linuxppc32 "ccl:headers;")
-                        (:darwinppc32 "ccl:darwin-headers;")
-                        (:darwinppc64 "ccl:darwin-headers64;")
-                        (:linuxppc64 "ccl:headers64;")
-			(:darwinx8632 "ccl:darwin-x86-headers;")
-                        (:linuxx8664 "ccl:x86-headers64;")
-                        (:darwinx8664 "ccl:darwin-x86-headers64;")
-                        (:freebsdx8664 "ccl:freebsd-headers64;")
-                        (:solarisx8664 "ccl:solarisx64-headers;")
-                        (:win64 "ccl:win64-headers;")
-                        (:linuxx8632 "ccl:x86-headers;")
-                        (:win32 "ccl:win32-headers;")
-                        (:solarisx8632 "ccl:solarisx86-headers;")
-                        (:freebsdx8632 "ccl:freebsd-headers;")
-                        (:linuxarm "ccl:arm-headers;")
-                        (:darwinarm "ccl:darwin-arm-headers;")
-                        (:androidarm "ccl:android-headers;")
-                        (:linuxarm64 "ccl:arm64-headers;")
-                        (:darwinarm64 "ccl:darwin-arm64-headers;"))
-                    :interface-package-name
-                    #.(ftd-interface-package-name *target-ftd*)
+                    :interface-db-directory (headers-dir)
+                    :interface-package-name (pkg-name)
                     :attributes
                     '(:bits-per-word #+64-bit-target 64 #+32-bit-target 32
                       #+win64-target :bits-per-long #+win64-target 32
@@ -137,6 +141,7 @@
                            (:solaris '((:struct :lifnum)
                                        (:struct :lifconf)))
                            (t ()))))))
+)
                     
 (defvar *target-ftd* *host-ftd*)
 (setf (backend-target-foreign-type-data *host-backend*)
