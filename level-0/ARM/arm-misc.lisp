@@ -733,6 +733,16 @@
   (dmb)
   (bx lr))
 
+;;; Full barrier.  Every memory access before the call is visible to
+;;; other threads before any access after it.  A writer that publishes
+;;; a structure with a plain store calls this between the stores that
+;;; fill the structure and the store that publishes it; a reader that
+;;; follows the published pointer then sees the contents.
+(defarmlapfunction %memory-barrier ()
+  (dmb)
+  (mov arg_z 'nil)
+  (bx lr))
+
 ;;; Atomically increment or decrement the gc-inhibit-count kernel-global
 ;;; (It's decremented if it's currently negative, incremented otherwise.)
 (defarmlapfunction %lock-gc-lock ()
