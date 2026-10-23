@@ -407,7 +407,7 @@
        ;(#_GetCurrentEventQueue)
        (create-void-nsthread))))
 
-(pushnew #'load-cocoa-framework *lisp-system-pointer-functions* :key #'function-name)
+(pushnew #'load-cocoa-framework *lisp-system-pointer-functions*)
 
 #+darwin-target
 ;;; Nuke any command-line arguments, to keep the Cocoa runtime from
@@ -848,8 +848,7 @@
     ))
 
 (pushnew #'revive-objc-classes *lisp-system-pointer-functions*
-	 :test #'eq
-	 :key #'function-name)
+	 :test #'eq)
     
 
 (defun %objc-class-instance-size (c)

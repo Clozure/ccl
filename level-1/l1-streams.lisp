@@ -2092,7 +2092,7 @@
   (declare (optimize (speed 3) (safety 0)))
   (when (ioblock-pending-byte-order-mark ioblock)
     (setf (ioblock-pending-byte-order-mark ioblock) nil)
-    (%ioblock-write-u32-code-unit ioblock byte-order-mark))
+    (%ioblock-write-u32-code-unit ioblock byte-order-mark-char-code))
   (if (eq char #\linefeed)
     (setf (ioblock-charpos ioblock) 0)
     (incf (ioblock-charpos ioblock)))
@@ -4315,8 +4315,8 @@
 
 (defun make-broadcast-stream (&rest streams)
   (dolist (s streams (make-instance 'broadcast-stream :streams streams))
-    (unless (output-stream-p s)
-      (report-bad-arg s '(satisfies output-stream-p)))))
+    (unless (and (streamp s) (output-stream-p s))
+      (report-bad-arg s '(and stream (satisfies output-stream-p))))))
 
 
 

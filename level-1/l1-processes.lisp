@@ -79,7 +79,7 @@
 ;;; Done with a queue-fixup so that it will be the last thing
 ;;; that happens on startup.
 (queue-fixup
- (pushnew 'startup-shutdown-processes *lisp-system-pointer-functions*))
+ (pushnew #'startup-shutdown-processes *lisp-system-pointer-functions*))
 
 
 

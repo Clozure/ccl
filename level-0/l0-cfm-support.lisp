@@ -769,7 +769,7 @@ return a fixnum representation of that address, else return NIL."
            (name (%get-cstring nameptr ))
            (lib (%cons-shlib (or (soname-from-mach-header addr) name) name nil addr)))
       (setf (shlib.handle lib)
-            (ff-call *dlopen-entry* :address nameptr :unsigned-fullword (logior #$RTLD_GLOBAL #$RTLD_NOLOAD)))
+            (ff-call *dlopen-entry* :address nameptr :unsigned-fullword (logior #$RTLD_GLOBAL #$RTLD_NOLOAD) :address))
       (push lib *shared-libraries*))))
 
 (init-shared-libraries)
