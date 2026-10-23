@@ -33,7 +33,11 @@
 				  (string name)
                                   (namestring (backend-target-fasl-pathname
                                                *target-backend*)))))
-	       `(%fasload ,namestring))))
+	       `(%fasload ,namestring)))
+	   (bin-load-provide (module name)
+	     `(progn
+	       (bin-load ,name)
+	       (provide ,module))))
 
   (l1-load "l1-cl-package")
   (l1-load "l1-utils")
@@ -106,9 +110,9 @@
   (l1-load "l1-boot-2")
   (l1-load "l1-boot-3")
 
+  (bin-load-provide "PREPARE-MCL-ENVIRONMENT" "prepare-mcl-environment")
   )
 
-(require "PREPARE-MCL-ENVIRONMENT")
 (progn
   (%set-toplevel #'(lambda ()
                      (setq *loading-file-source-file* nil
