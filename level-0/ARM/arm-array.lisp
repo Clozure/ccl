@@ -162,7 +162,11 @@
   (cmp val (:lsl imm0 (:$ arm::fixnumshift)))
   (bne @bad)
   @set16
-  (orr imm0 imm0 (:lsl imm0 (:$ 16)))
+  ;; Shift left first to discard the sign bits of a sign-extended
+  ;; (signed-byte 16) before shifting back in the orr.  Otherwise
+  ;; sign bits leak into the other halfword.
+  (mov imm0 (:lsl imm0 (:$ 16)))
+  (orr imm0 imm0 (:lsr imm0 (:$ 16)))
   (add imm2 temp1 '1)
   (mov temp1 (:$ (- arm::fixnumone)))
   (and temp1 temp1 (:lsr imm2 (:$ 1)))
@@ -179,8 +183,10 @@
   (cmp val (:lsl imm0 (:$ arm::fixnumshift)))  
   (bne @bad)
   @set8
-  (orr imm0 imm0 (:lsl imm0 (:$ 8)))
-  (orr imm0 imm0 (:lsl imm0 (:$ 16)))
+  ;; Likewise for a sign-extended (signed-byte 8).
+  (mov imm0 (:lsl imm0 (:$ 24)))
+  (orr imm0 imm0 (:lsr imm0 (:$ 8)))
+  (orr imm0 imm0 (:lsr imm0 (:$ 16)))
   (unbox-fixnum imm2 temp1)
   (add imm2 imm2 (:$ 3))
   (mov imm2 (:lsr imm2 (:$ 2)))

@@ -248,27 +248,25 @@
   @char8                                ; ppc:416 — unreachable in the PPC64 source
                                         ; too (base-strings are 32-bit); kept for fidelity
   (unbox-base-char imm0 val t)          ; ppc:417
-  @set-8                                ; ppc:418 propagate low 8 bits into low 16
-  (add imm3 imm3 (:$ 1))                ; ppc:419
-  (lsl imm1 imm0 (:$ 8))                ; ppc:420 rlwimi → lsl+orr (imm1 dead here;
-  (orr imm0 imm0 imm1)                  ;   avoids bfi-lsb / shifted-orr encode landmines)
-  (lsr imm3 imm3 (:$ 1))                ; ppc:421
-  @set-16                               ; ppc:422 propagate low 16 bits into high 16
-  (add imm3 imm3 (:$ 1))                ; ppc:423
-  (lsl imm1 imm0 (:$ 16))               ; ppc:424
-  (orr imm0 imm0 imm1)
-  (lsr imm3 imm3 (:$ 1))                ; ppc:425
-  @set-32                               ; ppc:426 propagate low 32 bits into high 32
-  (add imm3 imm3 (:$ 1))                ; ppc:427
-  (lsl imm1 imm0 (:$ 32))               ; ppc:428 rldimi
-  (orr imm0 imm0 imm1)
-  (lsr imm3 imm3 (:$ 1))                ; ppc:429
-  @set-64                               ; ppc:430
-  (subs imm3 imm3 (:$ 1))               ; ppc:431-432 (subs at loop top)
-  (str imm0 (:@ miscobj imm4))          ; ppc:433 stdx (regoff)
-  (add imm4 imm4 (:$ 8))                ; ppc:434
-  (b.ne @set-64)                        ; ppc:435
-  (ret))                                ; ppc:436
+  ;; Replicate the element across a 64-bit word.
+  @set-8
+  (add imm3 imm3 (:$ 1))
+  (bfi imm0 imm0 (:$ 8) (:$ 8))         ;(dpb imm0 (byte 8 8) imm0)
+  (lsr imm3 imm3 (:$ 1))
+  @set-16
+  (add imm3 imm3 (:$ 1))
+  (bfi imm0 imm0 (:$ 16) (:$ 16))       ;(dpb imm0 (byte 16 16) imm0)
+  (lsr imm3 imm3 (:$ 1))
+  @set-32
+  (add imm3 imm3 (:$ 1))
+  (bfi imm0 imm0 (:$ 32) (:$ 32))       ;(dpb imm0 (byte 32 32) imm0)
+  (lsr imm3 imm3 (:$ 1))
+  @set-64
+  (subs imm3 imm3 (:$ 1))
+  (str imm0 (:@ miscobj imm4))          ;store full 64-bit word
+  (add imm4 imm4 (:$ 8))
+  (b.ne @set-64)
+  (ret))
 
 ;;; =====================================================================
 ;;; %array-header-data-and-offset — ppc:706
