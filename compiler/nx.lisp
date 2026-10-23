@@ -23,6 +23,7 @@
   (require 'optimizers))
 
 (eval-when (:load-toplevel :execute :compile-toplevel)
+  (require 'nxenv)   ; nx-init-var etc.
   (require 'numbers) ; just calls 'logcount' and 'integer-length'
   (require 'sort)    ; just calls '%sort-list-no-keys'
   (require 'hash))

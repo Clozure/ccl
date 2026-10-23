@@ -2500,12 +2500,15 @@ Or something. Right? ~s ~s" var varbits))
 
 (defun nx-form-constant-p (form env)
   (declare (ignore env))
+  (form-constant-p form))
+
+(defun form-constant-p (form)
   (or (quoted-form-p form)
       (self-evaluating-p form)))
 
 (defun nx-form-constant-value (form env)
   (declare (ignore env))
-  (declare (type (satisfies nx-form-constant-p) form))
+  (declare (type (satisfies form-constant-p) form))
   (if (consp form) (%cadr form) form))
 
 ; Returns two values: expansion & win
