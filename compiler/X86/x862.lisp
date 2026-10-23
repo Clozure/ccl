@@ -6471,10 +6471,16 @@
                                (insert-dll-node-after jump adjust)
                                (elide-vinsn last-vinsn)
                                (setq handled-crf unconditional)))))))
-                (unless handled-crf
-                  (x862-unwind-set seg xfer old-stack)
-                  (when vreg (<- *x862-arg-z*))
-                  (^))))))))))
+                (if handled-crf
+                  ;; In the shortcut above, we replaced a constant
+                  ;; load with a vstack discard and a jump.  Make the
+                  ;; compile-time model of the vstack match.  In the
+                  ;; usual case, x862-unwind-set (below) does this.
+                  (x862-set-vstack (nth-value 2 (x862-decode-stack old-stack)))
+                  (progn
+                    (x862-unwind-set seg xfer old-stack)
+                    (when vreg (<- *x862-arg-z*))
+                    (^)))))))))))
 
 
 (defun x862-unwind-set (seg xfer encoding)
