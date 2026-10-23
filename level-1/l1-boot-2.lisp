@@ -38,6 +38,16 @@
                                                *target-backend*)))))
                `(let* ((*loading-file-source-file* *loading-file-source-file*)
                        (*loading-toplevel-location* *loading-toplevel-location*))
+                  (%fasload ,namestring))))
+	   (library-load (name)
+	     (let* ((namestring
+		     (concatenate 'simple-base-string
+                                  "./library/"
+				  (string name)
+                                  (namestring (backend-target-fasl-pathname
+                                               *target-backend*)))))
+               `(let* ((*loading-file-source-file* *loading-file-source-file*)
+                       (*loading-toplevel-location* *loading-toplevel-location*))
                   (%fasload ,namestring)))))
 
 
@@ -229,6 +239,10 @@ present and false otherwise. This variable shouldn't be set by user code.")
 	       (bin-load-provide (module path)
 		 `(let* ((*package* *package*))
 		   (bin-load ,path)
+		   (provide ,module)))
+	       (library-load-provide (module path)
+		 `(let* ((*package* *package*))
+		   (library-load ,path)
 		   (provide ,module))))
       (bin-load-provide "SORT" "sort")
       (bin-load-provide "NUMBERS" "numbers")
@@ -410,13 +424,13 @@ present and false otherwise. This variable shouldn't be set by user code.")
       (bin-load-provide "SWANK-LOADER" "swank-loader")
       (bin-load-provide "REMOTE-LISP" "remote-lisp")
       (bin-load-provide "MCL-COMPAT" "mcl-compat")
-      (require "LOOP")
+      (library-load-provide "LOOP" "loop")
       (bin-load-provide "CCL-EXPORT-SYMS" "ccl-export-syms")
       (l1-load-provide "VERSION" "version")
-      (require "JP-ENCODE")
-      (require "CN-ENCODE")
-      (require "LISPEQU") ; Shouldn't need this at load time ...
-      (require "SOCKETS")
+      (bin-load-provide "JP-ENCODE" "jp-encode")
+      (bin-load-provide "CN-ENCODE" "cn-encode")
+      (library-load-provide "LISPEQU" "lispequ") ; Shouldn't need this at load time ...
+      (library-load-provide "SOCKETS" "sockets")
       )
     (setq *%fasload-verbose* nil)
     )
