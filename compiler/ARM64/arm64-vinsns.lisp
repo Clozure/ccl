@@ -1706,38 +1706,6 @@
   (eor dest src (:$ (logand #xffffffffffffffff
                             (lognot arm64::fixnummask)))))
 
-;;; ============ clear-left ============
-;;; Demand: w1-report item 11; emit sites :412/:536 (contiguous
-;;; positive-mask logand path, nbits = (- 64 (1+ (+ fixnumshift
-;;; fixlen)))).  PPC64 clear-left ppc64-vinsns.lisp:2865:
-;;;   (rldicl dest src 0 (:apply 1+ nbits))
-;;; -- clears the top (1+ nbits) bits, KEEPING the low (63 - nbits) bits;
-;;; the caller's nbits formula RELIES on that vinsn-side 1+ (v2's
-;;; session-84 bug was dropping it: every constant-mask logand kept one
-;;; extra bit).  v2's corrected body (arm64-vinsns.lisp:4461) is
-;;; The handler passes nbits in [0, 59].
-(define-arm64-vinsn clear-left (((dest :imm))
-                                ((src :imm)
-                                 (nbits :s8const)))
-  (ubfx dest src (:$ 0) (:$ (:apply - 63 nbits))))
-
-;;; ============ clear-right ============
-;;; Demand: w1-report item 12 (clear the LOW nbits; the cleared run
-;;; always covers the tag bits -- callers pass (+ fixlen fixnumshift)
-;;; >= 4, so the result stays a fixnum); emit sites :413/:537.  PPC64
-;;; clear-right ppc64-vinsns.lisp:2870: (rldicr dest src 0 (:apply -
-;;; 63 nbits)) -- keep the top (64 - nbits) bits.  One AND with the
-;;; expand-time mask (ash -1 nbits) (unsigned-clamped): a contiguous
-;;; ones-run from bit nbits to 63, an encodable logical immediate for
-;;; any nbits in 1..63 (nbits=0 would be all-ones -- unencodable -- and
-;;; is never passed).  v2 (arm64-vinsns.lisp:4473) used an lsr/lsl
-;;; pair; the single AND is the tighter mirror of PPC's one rldicr.
-(define-arm64-vinsn clear-right (((dest :imm))
-                                 ((src :imm)
-                                  (nbits :s8const)))
-  (and dest src (:$ (:apply logand #xffffffffffffffff
-                            (:apply ash -1 nbits)))))
-
 ;;; ============ %ilogbitp-constant-bit ============
 ;;; Demand: w1-report item 13 ((crf) (fixnum :lisp) (bit :u8const)) --
 ;;; TST bit (+ bit fixnumshift) of the BOXED word; handler pre-clamps

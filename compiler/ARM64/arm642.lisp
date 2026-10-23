@@ -7440,9 +7440,7 @@
       (if (and fix1 fix2)
         (arm642-use-operator (%nx1-operator fixnum) seg vreg xfer (logand fix1 fix2))
         (let* ((fixval (or fix1 fix2))
-               (fixlen (if fixval (integer-length fixval)))
                (unboxed-fixval (if fixval (ash fixval *arm642-target-fixnum-shift*)))
-               (maskable (and fixval (= fixlen (logcount fixval))))
                (otherform (if fixval (if fix1 form2 form1)))
                (out-of-line (backend-get-next-label))
                (done (backend-get-next-label)))
@@ -7460,13 +7458,11 @@
                   (arm642-branch-unless-both-args-fixnums seg ($ arm64::arg_y) ($ arm64::arg_z) (aref *backend-labels* out-of-line)))))
             (if otherform
               (cond
-                (maskable
-                 (let* ((nbits (- *arm642-target-bits-in-word*
-                                  (1+ (+ *arm642-target-fixnum-shift* fixlen)))))
-                   (if (> fixval 0)
-                     (! clear-left ($ arm64::arg_z) ($ arm64::arg_z) nbits)
-                     (! clear-right ($ arm64::arg_z) ($ arm64::arg_z) (+ fixlen
-                                                                         *arm642-target-fixnum-shift*)))))
+                ;; An arm64 logical immediate can't encode 0, but that
+                ;; doesn't even matter here: we know arg_z is a fixnum,
+                ;; so the result is 0.
+                ((eql fixval 0)
+                 (arm642-lri seg ($ arm64::arg_z) 0))
                 ((arm64::encode-logical-immediate unboxed-fixval)
                  (! logand-imm ($ arm64::arg_z) ($ arm64::arg_z) unboxed-fixval))
                 (t
