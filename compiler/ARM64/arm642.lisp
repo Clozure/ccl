@@ -4210,7 +4210,8 @@
             (if src-gpr
               ;; "Copying" a GPR to a CR field means comparing it to rnil
               (! compare-to-nil dest src)
-              (! compare-to-nil dest arm64::rnil))
+              ;; A non-GPR value (e.g., an unboxed float) is never NIL.
+              (! clr-eq-bit))
             (if (and dest-gpr src-gpr)
               ;; This is the "GPR <- GPR" case.  There are
               ;; word-size dependencies, but there's also

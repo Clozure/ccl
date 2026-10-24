@@ -6896,6 +6896,13 @@
                                 ())
   (cmp rnil rnil))
 
+;;; The opposite: make the flags say NE, i.e. "the value is not NIL".
+;;; arm642-copy-register uses this when "copying" a non-GPR (an
+;;; unboxed float, say) to a CRF destination.  sp is never 0.
+(define-arm64-vinsn clr-eq-bit (()
+                                ())
+  (cmp sp (:$ 0)))
+
 ;;; ============================================================
 ;;; set-carry-if-fixnum-in-range / ijmp -- the casejump pair.
 ;;;
