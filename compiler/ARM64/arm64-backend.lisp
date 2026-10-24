@@ -397,17 +397,6 @@
 ;;; the callback generators) live in lib/ffi-arm64.lisp, shared by both
 ;;; arm64 OS targets.
 
-;;; A resident (native) arm64 compiler is DEMAND-LOADED module by module,
-;;; not dumped into the image the way the ppc/x86 ones are, so nothing pulls
-;;; NXENV before nx1 needs it and the first (defun ...) dies on an undefined
-;;; CCL::NX-INIT-VAR.  ppc64-backend.lisp:21 and x8664-backend.lisp:21 have
-;;; the same require, but inside (eval-when (:compile-toplevel :execute)) --
-;;; compile-time only, which suffices for them and not for us.  Same reason
-;;; the vinsns are required here rather than assumed present; compare
-;;; ppc64-backend.lisp:305 (require "PPC64-VINSNS").
-#+arm64-target
-(require "NXENV")
-
 #+arm64-target
 (require "ARM64-VINSNS")
 
