@@ -522,8 +522,17 @@ sprint_ivector(LispObj o)
     add_lisp_base_string(o);
     add_char('"');
     return;
-    
+
   case subtag_bignum: // digits are 32-bit words, little endian
+#if WORD_SIZE == 32
+    if (elements == 1) {
+      sprint_signed_decimal((signed_natural)(deref(o, 1)));
+      return;
+    } else if ((elements == 2) && (deref(o, 2) == 0)) {
+      sprint_unsigned_decimal(deref(o, 1));
+      return;
+    }
+#elif WORD_SIZE == 64
     if (elements == 2) {
       sprint_signed_decimal((signed_natural)(deref(o, 1)));
       return;
@@ -532,8 +541,11 @@ sprint_ivector(LispObj o)
       sprint_unsigned_decimal(deref(o, 1));
       return;
     }
+#else
+#error "bad value for WORD_SIZE"
+#endif
     break;
-    
+
   case subtag_double_float:
     break;
 
