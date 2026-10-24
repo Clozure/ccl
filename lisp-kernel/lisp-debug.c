@@ -268,8 +268,8 @@ char* Iregnames[] = {"r8 ","r9 ","r10","r11","r12","r13","r14","r15",
 		     "rdi","rsi","rbp", "rbx", "rdx", "rax", "rcx","rsp"};
 #endif
 #ifdef SOLARIS
-char* Iregnames[] = {"r15 ","r14 ","r13","r12","r11","r10","r9 ","r8 ",
-		     "rdi","rsi","rbp", "rbx", "rdx", "rcx", "rcx","rsp"};
+char* Iregnames[] = {"r15","r14","r13","r12","r11","r10","r9 ","r8 ",
+		     "rdi","rsi","rbp", "rbx", "rdx", "rcx", "rax","rsp"};
 #endif
 #ifdef FREEBSD
 char* Iregnames[] = {"???", "rdi", "rsi", "rdx", "rcx", "r8 ", "r9 ", "rax",
@@ -303,16 +303,17 @@ char *Iregnames[] = {"edi", "esi", "ebx", "edx", "ecx", "eax",
                      "ebp", "eip", "???", "efl", "esp"};
 #endif
 #ifdef FREEBSD
-char *Iregnames[] = {"???", "???", "???", "???", "???"
-                     "edi", "esi", "ebp", "ebx", "edx", 
-		     "ecx", "eax", "???", "???", "eip",
-		     "???", "efl", "esp"};
-#endif
-#ifdef SOLARIS
 char *Iregnames[] = {"???", "???", "???", "???", "???",
                      "edi", "esi", "ebp", "???", "ebx",
                      "edx", "ecx", "eax", "???", "???",
                      "eip", "???", "efl", "esp"};
+#endif
+#ifdef SOLARIS
+char *Iregnames[] = {"???", "???", "???", "???",
+                     "edi", "esi", "ebp", "???",
+                     "ebx", "edx", "ecx", "eax",
+                     "???", "???", "eip", "???",
+                     "efl", "esp"};
 #endif
 #endif
 
