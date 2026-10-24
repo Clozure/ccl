@@ -1866,12 +1866,39 @@ arbstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation *conte
 }
 
 #else
+/*
+ * If we're not on the C stack, we need to move there before doing any
+ * real work.  If we're already on the C stack, we need to stay put.
+ *
+ * Don't completely trust SS_ONSTACK: illumos leaves it set while an
+ * earlier handler is running on the C stack.  Look at the stack
+ * pointer too.
+ */
+static Boolean
+need_stack_switch(TCR *tcr)
+{
+  BytePtr current_sp = (BytePtr) current_stack_pointer();
+  area *vs = tcr->vs_area;
+  stack_t ss;
+
+  if ((current_sp >= vs->low) &&
+      (current_sp < vs->high)) {
+    return true;
+  }
+  if ((sigaltstack(NULL, &ss) == 0) &&
+      (ss.ss_flags & SS_ONSTACK) &&
+      (current_sp >= (BytePtr)ss.ss_sp) &&
+      (current_sp < ((BytePtr)ss.ss_sp + ss.ss_size))) {
+    return true;
+  }
+  return false;
+}
+
 void
 altstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *context)
 {
   TCR* tcr = get_tcr(true);
   Boolean do_stack_switch = false;
-  stack_t ss;
 
   if ((tcr->valence != TCR_STATE_LISP) &&
       (tcr->safe_ref_address) &&
@@ -1905,19 +1932,12 @@ altstack_signal_handler(int signum, siginfo_t *info, ExceptionInformation  *cont
      and whether a JVM steals the signal used for PROCESS-INTERRUPT
      is platform-dependent.  On those platforms where the same signal
      is used, we should strongly consider trying to use another one.
-  */
-  sigaltstack(NULL, &ss);
-  if (ss.ss_flags == SS_ONSTACK) {
-    do_stack_switch = true;
-  } else {
-    area *vs = tcr->vs_area;
-    BytePtr current_sp = (BytePtr) current_stack_pointer();
 
-    if ((current_sp >= vs->low) &&
-        (current_sp < vs->high)) {
-      do_stack_switch = true;
-    }
-  }
+     Another case: we may already be on the C stack, if this signal
+     arrived while an earlier handler was running there (i.e., on the
+     C stack).
+  */
+  do_stack_switch = need_stack_switch(tcr);
   if (do_stack_switch) {
     handle_signal_on_foreign_stack(tcr,signal_handler,signum,info,context,(LispObj)SIGRETURN_ADDRESS());
   } else {
@@ -2048,8 +2068,19 @@ void
 altstack_interrupt_handler (int signum, siginfo_t *info, ExceptionInformation *context)
 {
   TCR *tcr = get_interrupt_tcr(false);
-  handle_signal_on_foreign_stack(tcr,interrupt_handler,signum,info,context,(LispObj)__builtin_return_address(0)
-                                 );
+
+  /*
+   * Despite this function's name, we may not be on the altstack: a
+   * signal that arrives while an earlier handler is running on the C
+   * stack may be delivered there (illumos does this).
+   */
+  if (need_stack_switch(tcr)) {
+    handle_signal_on_foreign_stack(tcr, interrupt_handler, signum, info,
+                                   context,
+                                   (LispObj)__builtin_return_address(0));
+  } else {
+    interrupt_handler(signum, info, context);
+  }
 }
 
 #endif
@@ -2440,16 +2471,26 @@ arbstack_thread_kill_handler(int signum, siginfo_t *info, ExceptionInformation *
 
 #else
 void
-altstack_thread_kill_handler(int signum, siginfo_t *info, ExceptionInformation *context)
+altstack_thread_kill_handler(int signum, siginfo_t *info,
+                             ExceptionInformation *context)
 {
   TCR* tcr = get_tcr(true);
-  handle_signal_on_foreign_stack(tcr,
-                                 thread_kill_handler,
-                                 signum,
-                                 info,
-                                 context,
-                                 (LispObj)__builtin_return_address(0)
-                                 );
+
+  /*
+   * Despite this function's name, we may not be on the altstack: a
+   * signal that arrives while an earlier handler is running on the C
+   * stack may be delivered there (illumos does this).
+   */
+  if (need_stack_switch(tcr)) {
+    handle_signal_on_foreign_stack(tcr,
+                                   thread_kill_handler,
+                                   signum,
+                                   info,
+                                   context,
+                                   (LispObj)__builtin_return_address(0));
+  } else {
+    thread_kill_handler(signum, info, context);
+  }
 }
 #endif
 #endif
