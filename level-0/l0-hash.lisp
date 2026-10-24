@@ -761,6 +761,9 @@ before doing so.")
     (when (%needs-rehashing-p new-vector) ;; keys moved, but at least can use the same new-vector.
       (%lock-free-rehash-in-place hash new-vector))
     (setf (nhash.vector.hash new-vector) hash)
+    ;; Readers follow nhash.vector with no lock.  Make every store
+    ;; that filled NEW-VECTOR visible before the store that installs it.
+    #+(or arm-target arm64-target) (%memory-barrier)
     (setf (nhash.vector hash) new-vector)
     (setf (nhash.grow-threshold hash) grow-threshold)))
 
@@ -870,6 +873,9 @@ before doing so.")
 (defun replace-nhash-vector (hash size flags)
   (let ((vector (%cons-nhash-vector size flags)))
     (setf (nhash.vector.hash vector) hash)
+    ;; As in %lock-free-rehash: the fill must be visible before the
+    ;; install, because readers take no lock.
+    #+(or arm-target arm64-target) (%memory-barrier)
     (setf (nhash.vector hash) vector)))
 
 (defun lock-free-clrhash (hash)
