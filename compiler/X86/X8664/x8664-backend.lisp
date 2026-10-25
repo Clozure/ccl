@@ -61,7 +61,7 @@
                 ))
 
 
-#+darwinx86-target
+#+(or darwinx86-target (not x86-target))
 (defvar *darwinx8664-backend*
   (make-backend :lookup-opcode 'lookup-x86-opcode
 		:lookup-macro #'false
@@ -180,7 +180,7 @@
 (pushnew *linuxx8664-backend* *known-x8664-backends* :key #'backend-name)
 
 
-#+darwinx86-target
+#+(or darwinx86-target (not x86-target))
 (pushnew *darwinx8664-backend* *known-x8664-backends* :key #'backend-name)
 
 #+freebsdx86-target
@@ -310,6 +310,10 @@
 (setup-x8664-ftd *x8664-backend*)
 
 (pushnew *x8664-backend* *known-backends* :key #'backend-name)
+#-x86-target
+(progn
+  (pushnew *darwinx8664-backend* *known-backends* :key #'backend-name)
+  (pushnew *linuxx8664-backend* *known-backends* :key #'backend-name))
 
 ;;; FFI stuff.  Seems to be shared by Darwin/Linux/FreeBSD.
 
