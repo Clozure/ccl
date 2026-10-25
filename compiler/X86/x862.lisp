@@ -9051,7 +9051,8 @@
 
 (defx862 x862-%aset1 aset1 (seg vreg xfer v i n)
   (let* ((vtype (acode-form-type v t))
-         (atype (if vtype (specifier-type vtype)))
+         (atype (if vtype (let* ((a (specifier-type vtype)))
+                            (if (typep a 'array-ctype) a))))
          (maybe-1d (and atype
                         (let* ((dims (array-ctype-dimensions atype)))
                           (or (eq dims '*)
@@ -10410,7 +10411,7 @@
          (ctype (if atype0 (specifier-type atype0)))
          (atype (if (array-ctype-p ctype) ctype))
 	 (dims (and atype (array-ctype-dimensions atype)))
-         (simple (not (array-ctype-complexp atype)))
+         (simple (and atype (not (array-ctype-complexp atype))))
          (keyword (and atype
 		       (or (eq dims '*)
 			   (unless (atom dims)
