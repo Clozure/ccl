@@ -1975,6 +1975,14 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
            continue on another thread before throwing to toplevel */
         if (tcr->cs_limit == CS_OVERFLOW_FORCE_LIMIT) {
           reset_lisp_process(xp);
+        } else {
+          /* Past the hard limit.  Nothing protects the stack below it,
+             so if we return, the thread recurses until the signal
+             frame no longer fits and the process dies with no message.
+             Bug returns when no debugger can run (stdin is /dev/null);
+             the thread cannot run lisp code again, so end the process. */
+          Bug(xp, "Unrecoverable stack overflow.");
+          Fatal("Unrecoverable stack overflow.", "");
         }
       } else {
         if (tcr->cs_limit == CS_OVERFLOW_FORCE_LIMIT) { /* ppc:1610 */
