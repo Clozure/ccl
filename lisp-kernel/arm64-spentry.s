@@ -2307,8 +2307,8 @@ misc_set_string:
         ret
 misc_set_bit_vector:
         /* ARM64 LSB0 bit order */
-        cmp arg_z, #(1<<fixnumshift)
-        b.hi misc_set_bad
+        tst arg_z, #(~(1 << fixnumshift)) /* fixnum 0 or 1? */
+        b.ne misc_set_bad
         lsr imm0, arg_y, #fixnumshift
         lsr imm2, imm0, #5
         lsl imm2, imm2, #2

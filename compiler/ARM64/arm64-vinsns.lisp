@@ -3300,19 +3300,13 @@
   :got-it)
 
 ;;; ============ unbox-bit ============
-;;; Emit site: w3 aset bit leg (arm642-additions-w3.lisp:483).  PPC64
-;;; ppc64-vinsns.lisp:1465: unsigned-compare boxed value against boxed 1
-;;; (fixnumone), shift to unbox, trap unless <=.  LSB0 semantics per the
-;;; w3 U6m carry (Uw3b-6): the bit value lands at bit 0 of dest, agreeing
-;;; with extract-variable-bit-fixnum and the 1-bit store family's input
-;;; position.  PPC64 quirk carried verbatim: a raw 1..7 (non-fixnum low
-;;; bits, unsigned < 8) would pass the compare and unbox to 0 -- callers
-;;; guarantee a fixnum, as on PPC64.
+;;; A mask test, not a range test: 0.0f0 and #\Nul are the words 1 and 2,
+;;; below the fixnum 1, and are not bits.
 (define-arm64-vinsn unbox-bit (((dest :u32))
                                ((src :lisp)))
-  (cmp src (:$ arm64::fixnumone))
+  (tst src (:$ #xfffffffffffffff7))    ;~(1 << fixnumshift)
   (lsr (:x dest) src (:$ arm64::fixnumshift))
-  (b.ls :got-it)
+  (b.eq :got-it)
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-bit))
   :got-it)
 
