@@ -621,11 +621,11 @@
     (header-size len word-offset)       ; ppc:27
     ;; ppc:32-33 (stru sp -(c-frame) sp): str sp unencodable (Rt=xzr) —
     ;; stage the saved SP through imm1 (wave-3 idiom).
+    ;; One pre-indexed store, so that sp never points at the frame before
+    ;; its header is there: the GC's cstack walk reads a header at sp.
     (mov imm1 sp)
-    (sub sp sp (:$ arm64::c-frame.ffcall-size))  ; 16 head + 8 params + 4 reserved
     (movz imm3 (:$ arm64::c-frame.ffcall-header))
-    (str imm3 (:@ sp (:$ arm64::c-frame.header)))
-    (str imm1 (:@ sp (:$ arm64::c-frame.savedsp)))
+    (stp imm3 imm1 (:@! sp (:$ (- arm64::c-frame.ffcall-size))))
     (sub imm0 codev (:$ (- arm64::misc-data-offset))) ; ppc:34 (la; canonical la→sub idiom)
     (lsl len len (:$ 2))                ; ppc:35 slri — 32-bit code elements
     (str imm0 (:@ sp (:$ arm64::c-frame.param0)))         ; ppc:36
