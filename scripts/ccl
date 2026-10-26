@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -eu
+
 # Change the definition of CCL_DEFAULT_DIRECTORY below to refer to
 # your Clozure CL installation directory.  The lisp will use this
 # environment variable to set up translations for the CCL: logical
@@ -8,43 +10,45 @@
 # Any definition of CCL_DEFAULT_DIRECTORY already present in the
 # environment takes precedence over definition made below.
 
-if [ -z "$CCL_DEFAULT_DIRECTORY" ]; then
+if [ -z "${CCL_DEFAULT_DIRECTORY:-}" ]; then
   CCL_DEFAULT_DIRECTORY=/usr/local/src/ccl
 fi
 
-# If you don't want to guess the name of the lisp kernel on
+# If you don't want to guess the name of the OpenMCL kernel on
 # every invocation (or if you want to use a kernel with a
 # non-default name), you might want to uncomment and change
 # the following line:
 #OPENMCL_KERNEL=some_name
 
-if [ -z "$OPENMCL_KERNEL" ]; then
-  case `uname -s` in
-    Darwin) case `arch` in
-              ppc*) OPENMCL_KERNEL=dppccl ;;
-              i386) OPENMCL_KERNEL=dx86cl ;;
-            esac ;;
-    Linux) case `uname -m` in
-              ppc*) OPENMCL_KERNEL=ppccl ;;
-              *86*) OPENMCL_KERNEL=lx86cl ;;
-              *arm*) OPENMCL_KERNEL=armcl ;;
-	      *aarch64*) OPENMCL_KERNEL=armcl ;;
-           esac ;;
+if [ -z "${OPENMCL_KERNEL:-}" ]; then
+  case "$(uname -s)" in
+    Darwin) case "$(arch)" in
+      ppc*) OPENMCL_KERNEL=dppccl ;;
+      i386) OPENMCL_KERNEL=dx86cl ;;
+      *)
+        echo "Unsupported architecture"
+        exit 1 ;;
+      esac ;;
+    Linux)
+      case "$(uname -m)" in
+        ppc*) OPENMCL_KERNEL=ppccl ;;
+        *86*) OPENMCL_KERNEL=lx86cl ;;
+        *arm*) OPENMCL_KERNEL=armcl ;;
+        *aarch64*) OPENMCL_KERNEL=armcl ;;
+        *)
+          echo "Unsupported architecture"
+          exit 1 ;;
+      esac ;;
+    FreeBSD) OPENMCL_KERNEL=fx86cl ;;
+    SunOS) OPENMCL_KERNEL=sx86cl ;;
     CYGWIN*)
        OPENMCL_KERNEL=wx86cl.exe
-       CCL_DEFAULT_DIRECTORY="C:/cygwin$CCL_DEFAULT_DIRECTORY"
-    ;;
-    SunOS) OPENMCL_KERNEL=sx86cl
-    ;;
-    FreeBSD) OPENMCL_KERNEL=fx86cl
-    ;;
+       CCL_DEFAULT_DIRECTORY="C:/cygwin$CCL_DEFAULT_DIRECTORY" ;;
     *)
-    echo "Can't determine host OS.  Fix this."
-    exit 1
-    ;;
+      echo "Can't determine host OS."
+      exit 1 ;;
   esac
 fi
 
 export CCL_DEFAULT_DIRECTORY
-exec ${CCL_DEFAULT_DIRECTORY}/${OPENMCL_KERNEL} "$@"
-
+exec "${CCL_DEFAULT_DIRECTORY}/${OPENMCL_KERNEL}" "$@"
