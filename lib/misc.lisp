@@ -951,8 +951,7 @@ are running on, or NIL if we can't find any useful information."
     (when (plusp attempt) (gc) (sleep 0.2))
     (handler-case
         (let ((s (make-string-output-stream))
-              (git-dir (native-translated-namestring
-                        (merge-pathnames (ccl-directory) ".git"))))
+              (git-dir (native-translated-namestring "ccl:.git")))
           (multiple-value-bind (status exit-code)
               (external-process-status
                (run-program "git" (list "--git-dir" git-dir "describe" "--dirty")
