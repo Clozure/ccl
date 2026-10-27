@@ -562,9 +562,9 @@
 ;;;
 ;;; ARM64-DEVIATIONs from the PPC64 source:
 ;;;  - 8 FP arg regs (d0..d7), not PowerOpen's 13 (f1..f13).
-;;;  - an FP register arg consumes NO slot in the linear gpr/stack
-;;;    offset stream (PowerOpen reserved a param word per FP arg):
-;;;    delta = 0 when the arg lands in d0..d7.
+;;;  - GPR slots and stack slots are counted apart (NGRN and NSAA):
+;;;    an FP arg in d0..d7 consumes neither, and an FP arg past d7
+;;;    takes the next stack slot, not a GPR slot.
 ;;;  - little-endian: sub-word integers read at bias 0 (PPC64-BE biased
 ;;;    7/6/4 toward the high end of the doubleword).
 ;;;  - single-float args in registers were saved by the trampoline as
@@ -576,13 +576,10 @@
 ;;;    one per member, read from the fp save area (C.2 -- see the
 ;;;    HFA-BASE case below); other records: <=64 bits arrive in one GPR
 ;;;    slot, read low-justified (no BE (ash _ (- 64 bits)) re-justify);
-;;;    65..128 bits inline in two slots (%inc-ptr, delta 16); >128 bits
+;;;    65..128 bits inline in two slots (%inc-ptr); >128 bits
 ;;;    arrive BY REFERENCE in one GPR (AAPCS64 B.4) — read the pointer.
-;;;    (PowerOpen passed any record inline at full size.)  KNOWN GAP,
-;;;    documented: a 9..16-byte record with exactly one GPR left goes
-;;;    wholly to the stack under AAPCS64 (no register/stack split); this
-;;;    generator would read it one slot early.  No boot-path callback
-;;;    has such a signature.
+;;;    A 9..16-byte record with exactly one GPR left goes wholly to the
+;;;    stack (AAPCS64 C.11: no register/stack split, x7 is skipped).
 ;;;  - fp-regs-form is frame arithmetic (%inc-ptr CBF -64), not PPC's
 ;;;    deref of a pointer the trampoline stored into its frame.
 (defun arm64::generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name)
@@ -622,8 +619,9 @@
         (do* ((argvars argvars (cdr argvars))
               (argspecs argspecs (cdr argspecs))
               (fp-arg-num 0)
-              (offset 0 (+ offset delta))
-              (delta 8 8)
+              (ngrn 0)
+              (stack-offset arm64::callback-frame.stack-args-offset)
+              (offset 0)
               (bias 0 0)
               (use-fp-args nil nil))
              ((null argvars)
@@ -638,14 +636,28 @@
             (when (typep argtype 'foreign-record-type)
               (multiple-value-setq (hfa-base hfa-count)
                 (arm64::hfa-type-info argtype)))
+            (labels ((stack-slot (words)
+                       (prog1 stack-offset
+                         (incf stack-offset (* 8 words))))
+                     (gpr-slot (words)
+                       ;; x0..x7, then the caller's stack args.  A record
+                       ;; never straddles the two: with one GPR left it
+                       ;; goes wholly to the stack and x7 is skipped
+                       ;; (AAPCS64 C.11).
+                       (if (<= (+ ngrn words) 8)
+                         (prog1 (* 8 ngrn)
+                           (incf ngrn words))
+                         (progn
+                           (setq ngrn 8)
+                           (stack-slot words)))))
             (cond
               ;; HFA/HVA argument: it arrived in one V register per
               ;; member (AAPCS64 C.2), NOT in the GPR save area the
               ;; size-dispatched record cases below read.  The trampoline
               ;; saved d0-d7 at CBF-64..-8, so member i of an HFA whose
               ;; first member landed at NSRN n reads from the fp save
-              ;; area at 8*(n+i); the arg consumes NO gpr/stack slot
-              ;; (delta 0).  LE: a single-float member's payload sits at
+              ;; area at 8*(n+i); the arg consumes NO gpr/stack slot.
+              ;; LE: a single-float member's payload sits at
               ;; its d-save slot's BASE (same reasoning as the scalar
               ;; single-float case below).  An HFA that would overflow
               ;; v0-v7 goes WHOLLY to the stack (C.3) -- stack-passed
@@ -663,7 +675,6 @@
                       (accessor (if single-p '%get-single-float '%get-double-float))
                       (memsize (if single-p 4 8)))
                  (incf fp-arg-num hfa-count)
-                 (setq delta 0)
                  (set-fp-regs-form)
                  (when name
                    (rlets (list name (foreign-record-type-name argtype)))
@@ -672,23 +683,29 @@
                               (,accessor ,fp-args-ptr ,(* 8 (+ nsrn i)))))))))
               ((and (typep argtype 'foreign-record-type)
                     (<= bits 64))
+               (setq offset (gpr-slot 1))
                (when name (rlets (list name (foreign-record-type-name argtype))))
                ;; ARM64-DEVIATION (LE): copy the slot verbatim — the value
                ;; is low-justified in its doubleword.
                (when name (inits `(setf (%%get-unsigned-longlong ,name 0)
                                    (%%get-unsigned-longlong ,stack-ptr ,offset)))))
               (t
+               ;; An FP arg past d7 takes the next stack slot, not a GPR
+               ;; slot (AAPCS64 C.5).
+               (if (typep argtype 'foreign-float-type)
+                 (if (< (incf fp-arg-num) 9)
+                   (setq use-fp-args t)
+                   (setq offset (stack-slot 1)))
+                 (setq offset
+                       (gpr-slot (if (and (typep argtype 'foreign-record-type)
+                                          (<= bits 128))
+                                   2
+                                   1))))
                (let* ((access-form
                       `(,(cond
                           ((typep argtype 'foreign-single-float-type)
-                           (when (< (incf fp-arg-num) 9)
-                             (setq use-fp-args t
-                                   delta 0))
                            '%get-single-float)
                           ((typep argtype 'foreign-double-float-type)
-                           (when (< (incf fp-arg-num) 9)
-                             (setq use-fp-args t
-                                   delta 0))
                            '%get-double-float)
                           ((and (typep argtype 'foreign-integer-type)
                                 (= (foreign-integer-type-bits argtype) 64)
@@ -703,9 +720,7 @@
                            '%get-ptr)
                           ((typep argtype 'foreign-record-type)
                            (if (<= bits 128)
-                             (progn
-                               (setq delta 16)
-                               '%inc-ptr)
+                             '%inc-ptr
                              ;; ARM64-DEVIATION: >128-bit records arrive
                              ;; by reference (AAPCS64 B.4).
                              '%get-ptr))
@@ -735,7 +750,7 @@
                         ,(if use-fp-args (* 8 (1- fp-arg-num))
                              `(+ ,offset ,bias)))))
                  (when name (lets (list name access-form)))
-                 (when use-fp-args (set-fp-regs-form)))))))))))
+                 (when use-fp-args (set-fp-regs-form))))))))))))
 
 
 ;;;-----------------------------------------------------------------------
