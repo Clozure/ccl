@@ -786,7 +786,7 @@ function to the indicated name is true.")
     (:double-float-vector arch::error-object-not-simple-array-double-float-3d)
     (:single-float-vector arch::error-object-not-simple-array-single-float-3d)
     (:fixnum-vector arch::error-object-not-simple-array-fixnum-3d)
-    (:complex-simple-float-vector arch::error-object-not-simple-array-complex-single-float-3d)
+    (:complex-single-float-vector arch::error-object-not-simple-array-complex-single-float-3d)
     (:complex-double-float-vector arch::error-object-not-simple-array-complex-double-float-3d)))
 
 (defun acode-s16-constant-p (x)
