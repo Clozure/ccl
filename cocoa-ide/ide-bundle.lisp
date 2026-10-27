@@ -104,23 +104,29 @@
                  (file-namestring p)))
          (len (length name))
          (type (and (not dirp) (pathname-type p))))
-    (not (or (zerop len)
-             ;; .DS_Store, .gitignore, editor swap files
-             (eql (char name 0) #\.)
-             ;; editor backup and auto-save files
-             (eql (char name 0) #\#)
-             (eql (char name (1- len)) #\~)
-             ;; build products
-             (and dirp
-                  (or (member name '("altconsole" "ide-contents" "fasls"
-                                     "build")
-                              :test #'string=)
-                      (and (> len 4) (string-equal name ".app" :start1 (- len 4)))))
-             (and (stringp type)
-                  (or (string-equal type "o")
-                      ;; fasl files: dx64fsl, da64fsl, ...
-                      (and (>= (length type) 3)
-                           (string-equal type "fsl" :start1 (- (length type) 3)))))))))
+    (or
+     ;; (require 'asdf) is slow from source, and the bundle can't be
+     ;; written to once it's signed, so copy this lisp's asdf fasl.
+     (and (equal (pathname-name p) "asdf")
+          (equal (car (last (pathname-directory p))) "tools")
+          (equal type (pathname-type *.fasl-pathname*)))
+     (not (or (zerop len)
+              ;; .DS_Store, .gitignore, editor swap files
+              (eql (char name 0) #\.)
+              ;; editor backup and auto-save files
+              (eql (char name 0) #\#)
+              (eql (char name (1- len)) #\~)
+              ;; build products
+              (and dirp
+                   (or (member name '("altconsole" "ide-contents" "fasls"
+                                      "build")
+                               :test #'string=)
+                       (and (> len 4) (string-equal name ".app" :start1 (- len 4)))))
+              (and (stringp type)
+                   (or (string-equal type "o")
+                       ;; fasl files: dx64fsl, da64fsl, ...
+                       (and (>= (length type) 3)
+                            (string-equal type "fsl" :start1 (- (length type) 3))))))))))
 
 (defun copy-ide-sources (dest-dir)
   (dolist (dir *ide-bundle-source-directories*)
