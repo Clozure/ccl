@@ -1391,6 +1391,10 @@
     (vector fixnum)
     (vector single-float)
     (vector double-float)
+    (simple-array (complex single-float) (* *))
+    (simple-array (complex single-float) (* * *))
+    (simple-array (complex double-float) (* *))
+    (simple-array (complex double-float) (* * *))
 
     ))
 
