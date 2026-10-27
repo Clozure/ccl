@@ -393,9 +393,18 @@
          t)))))
 
 (defun thread-handle-interrupts ()
-  (let* ((thread *current-lisp-thread*))
+  (let* ((thread *current-lisp-thread*)
+         (tcr (%current-tcr)))
     (with-process-whostate ("Active")
       (loop
+        ;; A signal that lands while this loop runs asks for what the loop
+        ;; already does, but the flag it leaves behind makes the poll at
+        ;; the end of this callback deliver it again, on top of this
+        ;; callback's frames.  Clear the flag before the queue is checked:
+        ;; a sender pushes its function first and then reads the flag, so
+        ;; a push before the check is drained here and a push after the
+        ;; check finds the flag clear and signals.
+        (setf (%fixnum-ref tcr (- target::tcr.interrupt-pending target::tcr-bias)) 0)
         (let* ((f (with-lock-grabbed ((lisp-thread.interrupt-lock thread))
                     (pop (lisp-thread.interrupt-functions thread)))))
           (if f
