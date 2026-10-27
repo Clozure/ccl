@@ -421,6 +421,6 @@ typedef struct {
 #define EFL_DF 1024
 #endif
 
-#define ABI_VERSION_MIN 1042
-#define ABI_VERSION_CURRENT 1042
-#define ABI_VERSION_MAX 1042
+#define ABI_VERSION_MIN 1047
+#define ABI_VERSION_CURRENT 1047
+#define ABI_VERSION_MAX 1047

@@ -341,6 +341,6 @@ typedef struct {
 #define heap_segment_size 0x00020000L
 #define log2_heap_segment_size 17L
 
-#define ABI_VERSION_MIN 1042
-#define ABI_VERSION_CURRENT 1042
-#define ABI_VERSION_MAX 1042
+#define ABI_VERSION_MIN 1047
+#define ABI_VERSION_CURRENT 1047
+#define ABI_VERSION_MAX 1047

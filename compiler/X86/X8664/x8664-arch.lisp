@@ -1389,9 +1389,9 @@
 
 (defconstant arg-check-trap-pc-limit 7)
 
-(defconstant fasl-version #x62)
+(defconstant fasl-version #x63)
 (defconstant fasl-max-version #x63)
-(defconstant fasl-min-version #x62)
-(defparameter *image-abi-version* 1042)
+(defconstant fasl-min-version #x63)
+(defparameter *image-abi-version* 1047)
 
 (provide "X8664-ARCH")

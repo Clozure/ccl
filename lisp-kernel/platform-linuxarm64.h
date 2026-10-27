@@ -71,13 +71,6 @@ typedef ucontext_t ExceptionInformation;   /* platform-linuxarm.h:31 */
 #ifndef slot_unbound
 #define slot_unbound slot_unbound_marker   /* ARM32 precedent (arm-constants.h:251) */
 #endif
-/* Image ABI version (image.c): fresh number for the new target; ARM32
-   uses 1045, PPC64 1040.  PROPOSED: 1046 (next free). */
-#ifndef ABI_VERSION_CURRENT
-#define ABI_VERSION_MIN 1046
-#define ABI_VERSION_CURRENT 1046
-#define ABI_VERSION_MAX 1046
-#endif
 /* C-side `struct lisp_frame` is now provided by his arm64-constants.h C
    section (RECONCILED 556aebe8: our duplicate typedef dropped).  He does
    NOT define lisp_frame_size, so keep that (ours-only). */

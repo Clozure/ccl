@@ -1341,9 +1341,9 @@
 (defconstant arg-check-trap-pc-limit 8)
 
 ;; These values are per-(architecture + word size)
-(defconstant fasl-version #x1)
+(defconstant fasl-version #x2)
 (defconstant fasl-max-version #x2)
-(defconstant fasl-min-version #x1)
-(defparameter *image-abi-version* 1046)
+(defconstant fasl-min-version #x2)
+(defparameter *image-abi-version* 1047)
 
 (provide "ARM64-ARCH")

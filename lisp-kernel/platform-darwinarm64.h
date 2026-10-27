@@ -46,12 +46,6 @@ typedef ucontext_t ExceptionInformation;
 #define slot_unbound slot_unbound_marker
 #endif
 
-#ifndef ABI_VERSION_CURRENT
-#define ABI_VERSION_MIN 1046
-#define ABI_VERSION_CURRENT 1046
-#define ABI_VERSION_MAX 1046
-#endif
-
 #ifndef lisp_frame_size
 #define lisp_frame_size sizeof(lisp_frame)
 #endif
