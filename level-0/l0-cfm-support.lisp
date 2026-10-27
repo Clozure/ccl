@@ -34,9 +34,10 @@
   ;; On PPC32, all function addresses have their low 2 bits clear;
   ;; so do fixnums.
   (%setf-macptr-to-object addr entry)
-  #+ppc64-target
-  ;; On PPC64, some addresses can use the fixnum trick.  In other
-  ;; cases, an "entry" is just a MACPTR.
+  #+(or ppc64-target arm64-target)
+  ;; On PPC64 and ARM64, some addresses can use the fixnum trick (on
+  ;; ARM64, kernel imports are fixnum-locatives).  In other cases, an
+  ;; "entry" is just a MACPTR.
   (if (typep entry 'fixnum)
     (%setf-macptr-to-object addr entry)
     (%setf-macptr addr entry))
@@ -49,8 +50,6 @@
                       (if (< entry 0)
                         (logand entry (1- (ash 1 target::nbits-in-word)))
                         entry)))
-  #+arm64-target
-  (%setf-macptr addr entry)
   #-(or ppc-target x86-target arm-target arm64-target) (dbg "Fix entry->addr"))
 
 
@@ -594,7 +593,8 @@
 
 (defun foreign-symbol-entry (name &optional (handle *rtld-use*))
   "Try to resolve the address of the foreign symbol name. If successful,
-return a fixnum representation of that address, else return NIL."
+return an object representing that address, suitable for use with
+FF-CALL; return NIL on failure."
   (with-cstrs ((n name))
     #+ppc-target
     (with-macptrs (addr)      
@@ -618,9 +618,11 @@ return a fixnum representation of that address, else return NIL."
                           :unsigned-doubleword)))
       (unless (eql 0 addr) addr))
     #+arm64-target
-    ;; On ARM64, an "entry" is always a MACPTR; no PPC64-style
-    ;; fixnum-packing trick (MACPTR->FIXNUM has no arm64 lap), and
-    ;; .SPffcall dereferences macptr entries directly.
+    ;; We always return a macptr on arm64.  We could use the
+    ;; ppc64-style fixnum trick, but it hardly seems worth it: only
+    ;; some entry points are 8-byte aligned, and eep.address would
+    ;; become mixed-type for little gain.  Kernel imports are
+    ;; fixnum-locatives, and .SPffcall accepts either kind.
     (with-macptrs (addr)
       (%setf-macptr addr
                     (ff-call (%kernel-import target::kernel-import-FindSymbol)
