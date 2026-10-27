@@ -939,4 +939,8 @@
   (:byte #xe8)
   (box-fixnum imm0 arg_z)
   (single-value-return))
-  
+
+;;; A no-op on x86, which never reorders a store with an earlier store.
+(defx8632lapfunction %store-store-barrier ()
+  (movl ($ (target-nil-value)) (% arg_z))
+  (single-value-return))

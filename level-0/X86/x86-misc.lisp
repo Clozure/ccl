@@ -993,8 +993,10 @@
   (movl ($ (target-nil-value)) (% arg_z.l))
   (single-value-return))
 
-
-  
+;;; A no-op on x86, which never reorders a store with an earlier store.
+(defx86lapfunction %store-store-barrier ()
+  (movl ($ (target-nil-value)) (% arg_z.l))
+  (single-value-return))
 
 ;;; end of x86-misc.lisp
 ) ; #+x8664-target

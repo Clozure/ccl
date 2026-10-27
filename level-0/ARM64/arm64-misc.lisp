@@ -303,13 +303,13 @@
   (mov arg_z rnil)
   (ret))
 
-;;; Full barrier.  Every memory access before the call is visible to
-;;; other threads before any access after it.  A writer that publishes
-;;; a structure with a plain store calls this between the stores that
-;;; fill the structure and the store that publishes it; a reader that
-;;; follows the published pointer then sees the contents.
-(defarm64lapfunction %memory-barrier ()
-  (dmb (:$ 11))
+;;; Store-store barrier.  Makes every store before the barrier visible
+;;; to other threads before any store after it; loads are not ordered.
+;;; Call it between initializing a structure and storing the pointer that
+;;; publishes it.  Readers need no barrier, because their loads carry an
+;;; address dependency on that pointer.
+(defarm64lapfunction %store-store-barrier ()
+  (dmb (:$ 10))       ;ishst: orders stores only
   (mov arg_z rnil)
   (ret))
 
