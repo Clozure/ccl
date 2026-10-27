@@ -925,6 +925,14 @@
   (ldur cv (:@ nfn (:$ arm64::function.code-vector)))
   (blr cv))
 
+(define-arm64-vinsn unbox-bit (((dest :u32))
+                               ((src :lisp)))
+  (tst src (:$ #xfffffffffffffff7))    ;fixnum 0 or 1?
+  (b.eq :got-it)
+  (uuo-error-reg-not-xtype src (:$ arm64::xtype-bit))
+  :got-it
+  (lsr (:x dest) src (:$ arm64::fixnumshift)))
+
 (define-arm64-vinsn %unbox-u8 (((dest :u8))
                                ((src :lisp)))
   (ubfx (:x dest) src (:$ arm64::fixnumshift) (:$ 8)))
@@ -939,69 +947,56 @@
 
 (define-arm64-vinsn unbox-u8 (((dest :u8))
                               ((src :lisp)))
-  :again
   (tst src (:$ #xfffffffffffff807))    ;~(#xff << fixnumshift)
   (b.eq :got-it)
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-u8))
-  (b :again)
   :got-it
   (ubfx (:x dest) src (:$ arm64::fixnumshift) (:$ 8)))
 
 (define-arm64-vinsn unbox-u16 (((dest :u16))
                                ((src :lisp)))
-  :again
   (tst src (:$ #xfffffffffff80007))    ;~(#xffff << fixnumshift)
   (b.eq :got-it)
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-u16))
-  (b :again)
   :got-it
   (ubfx (:x dest) src (:$ arm64::fixnumshift) (:$ 16)))
 
 (define-arm64-vinsn unbox-u32 (((dest :u32))
                                ((src :lisp)))
-  :again
   (tst src (:$ #xfffffff800000007))     ;~(#xffffffff << fixnumshift)
   (b.eq :got-it)
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-u32))
-  (b :again)
   :got-it
   (ubfx (:x dest) src (:$ arm64::fixnumshift) (:$ 32)))
 
 (define-arm64-vinsn unbox-s8 (((dest :s8))
                               ((src :lisp)))
-  :again
   (sbfx (:x dest) src (:$ arm64::fixnumshift) (:$ 8))
   (cmp src ((:x dest) :lsl arm64::fixnumshift))
   (b.eq :got-it)
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-s8))
-  (b :again)
   :got-it)
 
 (define-arm64-vinsn unbox-s16 (((dest :s16))
                                ((src :lisp)))
-  :again
   (sbfx (:x dest) src (:$ arm64::fixnumshift) (:$ 16))
   (cmp src ((:x dest) :lsl arm64::fixnumshift))
   (b.eq :got-it)
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-s16))
-  (b :again)
   :got-it)
 
 (define-arm64-vinsn unbox-s32 (((dest :s32))
                                ((src :lisp)))
-  :again
   (sbfx (:x dest) src (:$ arm64::fixnumshift) (:$ 32))
   (cmp src ((:x dest) :lsl arm64::fixnumshift))
   (b.eq :got-it)
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-s32))
-  (b :again)
   :got-it)
 
 ;;; An (unsigned-byte 64) is a non-negative fixnum, a non-negative
 ;;; two-digit bignum, or a three-digit bignum whose top digit is 0.
 (define-arm64-vinsn unbox-u64 (((dest :u64))
                                ((src :lisp)))
-  :again
   (tst src (:$ arm64::fixnummask))
   (asr (:x dest) src (:$ arm64::fixnumshift))
   (b.eq :ok-if-non-negative)
@@ -1025,13 +1020,11 @@
   (b.ge :got-it)
   :bad
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-u64))
-  (b :again)
   :got-it)
 
 ;;; A (signed-byte 64) is a fixnum or a two-digit bignum.
 (define-arm64-vinsn unbox-s64 (((dest :s64))
                                ((src :lisp)))
-  :again
   (tst src (:$ arm64::fixnummask))
   (asr (:x dest) src (:$ arm64::fixnumshift))
   (b.eq :got-it)
@@ -1045,7 +1038,6 @@
   (b :got-it)
   :bad
   (uuo-error-reg-not-xtype src (:$ arm64::xtype-s64))
-  (b :again)
   :got-it)
 
 ;;; ============ adjust-sp ============
@@ -3299,17 +3291,6 @@
   (uuo-error-reg-not-xtype src (:$ arm64::subtag-character))
   :got-it)
 
-;;; ============ unbox-bit ============
-;;; A mask test, not a range test: 0.0f0 and #\Nul are the words 1 and 2,
-;;; below the fixnum 1, and are not bits.
-(define-arm64-vinsn unbox-bit (((dest :u32))
-                               ((src :lisp)))
-  (tst src (:$ #xfffffffffffffff7))    ;~(1 << fixnumshift)
-  (lsr (:x dest) src (:$ arm64::fixnumshift))
-  (b.eq :got-it)
-  (uuo-error-reg-not-xtype src (:$ arm64::xtype-bit))
-  :got-it)
-
 ;;; ============ u32->char ============
 ;;; Emit sites: w3 char vref legs (arm642-additions-w3.lisp:574/:621).
 ;;; PPC64 ppc64-vinsns.lisp:2740: (sldi dest src charcode-shift) /
@@ -5142,20 +5123,18 @@
   (uuo-error-reg-not-xtype object (:$ arm64::subtag-character))
   :ok)
 
-;;; PPC64 :1275: fixnum AND unsigned-< (ash #x110000 fixnumshift).
-;;; Reformulated for imm12: code < #x110000 <=> (code >> 16) < #x11,
-;;; and boxed code>>16 = object >> (fixnumshift+16).
+;;; Require a fixnum in [0, char-code-limit).  Rotating right by
+;;; fixnumshift unboxes a fixnum but moves any tag bits to the top,
+;;; and a negative fixnum's sign bit lands in bit 60, so one unsigned
+;;; compare rejects both.
 (define-arm64-vinsn require-char-code (()
                                        ((object :lisp))
                                        ((tag :u64)))
   :again
-  (tst object (:$ arm64::fixnummask))
-  (b.ne :bad)
-  (lsr tag object (:$ (+ arm64::fixnumshift 16)))
-  (cmp tag (:$ #x11))
+  (ror tag object (:$ arm64::fixnumshift))
+  (cmp tag (:$ #x110 :lsl 12))          ;char-code-limit
   (b.lo :got-it)
-  :bad
-  (uuo-error-reg-not-xtype object (:$ arm64::xtype-char-code))
+  (uuo-cerror-reg-not-xtype object (:$ arm64::xtype-char-code))
   (b :again)
   :got-it)
 
