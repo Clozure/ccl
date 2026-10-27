@@ -1377,7 +1377,7 @@
 (defconstant arg-check-trap-pc-limit 7)
 
 (defconstant fasl-version #x67)
-(defconstant fasl-max-version #x67)
+(defconstant fasl-max-version #x68)
 (defconstant fasl-min-version #x67)
 (defparameter *image-abi-version* 1042)
 

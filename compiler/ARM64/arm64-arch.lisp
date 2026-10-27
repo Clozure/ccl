@@ -1342,7 +1342,7 @@
 
 ;; These values are per-(architecture + word size)
 (defconstant fasl-version #x1)
-(defconstant fasl-max-version #x1)
+(defconstant fasl-max-version #x2)
 (defconstant fasl-min-version #x1)
 (defparameter *image-abi-version* 1046)
 

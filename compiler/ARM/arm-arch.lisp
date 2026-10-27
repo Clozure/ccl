@@ -1455,7 +1455,7 @@
 
   
 (defconstant fasl-version #x66)
-(defconstant fasl-max-version #x66)
+(defconstant fasl-max-version #x67)
 (defconstant fasl-min-version #x66)
 (defparameter *image-abi-version* 1045)
 
