@@ -12,7 +12,7 @@ endif
 VC_REVISION := "$(shell git describe --dirty 2>/dev/null || echo unknown)"
 
 # arm64 macOS exists only on Big Sur and later.
-OSVERSION ?= 11.0
+OSVERSION = 11.0
 
 VPATH = ../
 RM = /bin/rm
