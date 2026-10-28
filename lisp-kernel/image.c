@@ -579,7 +579,11 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 	if (bias) {
 	  LispObj static_conses = lisp_global(STATIC_CONSES);
 	  if (static_conses && static_conses != lisp_nil) {
+	    /* On ARM64 the word-wise pass over the static area has
+	       already rebased the kernel globals, this one among them. */
+#ifndef ARM64
 	    lisp_global(STATIC_CONSES) += bias;
+#endif
 	    relocate_area_contents(a, bias);
 	  }
 	} else if (static_space_bias && (a->active > a->low)) {
