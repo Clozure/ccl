@@ -417,6 +417,12 @@
                       (ash offset 3))))))))))
 
 
+;;; The superclass's instance size may differ between the OS release
+;;; on which the image was saved and the one it's running on now, so
+;;; the runtime may assign ivar offsets that differ from the ones
+;;; recorded in the image.  Adopt the runtime's offsets, then recompute
+;;; the locations of the class's foreign effective slots.  This assumes
+;;; that a user-defined superclass has already been revived.
 #+(or apple-objc-2.0 cocotron-objc)
 (defun %revive-foreign-slots (class)
   (dolist (dslotd (class-direct-slots class))
@@ -430,13 +436,17 @@
              (align (round (log (ceiling (foreign-type-alignment type) 8) 2))))
         (with-cstrs ((name string)
                      (encoding encoding))
-          (#_class_addIvar class name size align encoding)
+          (when (eql #$NO (#_class_addIvar class name size align encoding))
+            (error "Can't add instance variable ~s to ~s" string class))
           (with-macptrs ((ivar (#_class_getInstanceVariable class name)))
-              (unless (%null-ptr-p ivar)
-                (let* ((offset (#_ivar_getOffset ivar)))
-                  (unless (eql (foreign-direct-slot-definition-bit-offset dslotd)
-                               (ash offset 3))
-                    (dbg))))))))))
+            (setf (foreign-direct-slot-definition-bit-offset dslotd)
+                  (ash (#_ivar_getOffset ivar) 3)))))))
+  (when (class-finalized-p class)
+    (dolist (eslotd (class-slots class))
+      (when (typep eslotd 'foreign-effective-slot-definition)
+        (setf (%slot-definition-location eslotd)
+              (determine-foreign-slot-location class
+                                               (slot-definition-name eslotd)))))))
 
 (defun lisp-defined-slot-name-to-objc-slot-name (lisp-name)
   (lisp-to-objc-message (list lisp-name)))
@@ -919,9 +929,35 @@
   (find-class 'standard-writer-method))
 
 
+;;; Return the effective slot definition of the foreign slot named
+;;; SLOT-NAME in the ObjC class named CLASS-NAME.
+(defun %foreign-effective-slotd (class-name slot-name)
+  (let* ((class (find-class class-name)))
+    (unless (class-finalized-p class)
+      (finalize-inheritance class))
+    (let* ((eslotd (find slot-name (class-slots class)
+                         :key #'slot-definition-name)))
+      (unless (typep eslotd 'foreign-effective-slot-definition)
+        (error "~s is not a foreign slot in ~s" slot-name class))
+      eslotd)))
+
 ;;; By the time we see this, the slot name has been transformed to the form
 ;;; "(load-time-value (ensure-slot-id <slot-name>))".
 ;;; This only works if the setter is SETF inverse of the getter.
+;;;
+;;; A foreign slot's location depends on its ObjC superclass's
+;;; instance size, which can differ between OS releases (see
+;;; %REVIVE-FOREIGN-SLOTS), so it can't be a compile-time constant.
+;;; Get it from the effective slot definition at runtime instead.
+;;; (This is like the ivar offset variables that the ObjC runtime
+;;; adjusts at load time.)
+;;;
+;;; This is an important optimization.  Without it, a foreign slot
+;;; access takes the generic SLOT-ID-VALUE path, which is much slower
+;;; (about 18 times slower on arm64 as I write this).  It matters in
+;;; methods like the IDE's #/string method on HEMLOCK-TEXT-STORAGE,
+;;; which NSTextView calls constantly: without the optimization each
+;;; call takes about 2.5 times as long.
 (define-compiler-macro slot-id-value (&whole call instance slot-name &environment env)
   (or
    (let* ((type nil))
@@ -947,7 +983,10 @@
                   (name (if (typep getter 'compiled-function)
                           (function-name getter))))
              (when name
-               `(,name ,instance ,(slot-definition-location eslotd))))))))
+               `(,name ,instance
+                       (standard-effective-slot-definition.location
+                        (load-time-value
+                         (%foreign-effective-slotd ',type ',slot-name))))))))))
    call))
 
 
