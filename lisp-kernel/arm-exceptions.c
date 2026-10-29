@@ -1925,7 +1925,14 @@ pc_luser_xp(ExceptionInformation *xp, TCR *tcr, signed_natural *alloc_disp)
       } else {
         restart_allocation(xp);
       }
+      /*
+       * Void allocbase too, so that the next allocation traps.  The
+       * GC would void it anyway, but an interrupt doesn't, and lisp
+       * code that ran with a void allocptr and a real allocbase
+       * would store through a wild pointer.
+       */
       xpGPR(xp,allocptr) = VOID_ALLOCPTR;
+      tcr->save_allocbase = (void *)VOID_ALLOCPTR;
     } else {
       Bug(xp, "urecognized allocation atate");
     }
