@@ -3039,38 +3039,42 @@ unprotect_all_areas()
 }
 
 /*
-  The tlb-too-small trap (udf unary-misc sub 2) carries the INDEX
-  register; extend the tcr's tlb so the index is in bounds, filling new
-  pages with no_thread_local_binding_marker.  ppc-exceptions.c:2282-2321,
-  3-arg signature per ARM32 (arm-exceptions.c:2014 -- the drafts' binding
-  subprims reload tcr.tlb_limit from the tcr each time, so there is no
-  live limit REGISTER to update, unlike PPC's twlle shape).
-*/
+ * Grow the tlb vector so that the index in idx_regno is in bounds.
+ * Fill the new slots with no_thread_local_binding_marker.
+ */
 Boolean
 extend_tcr_tlb(TCR *tcr, ExceptionInformation *xp, unsigned idx_regno)
 {
-  unsigned
-    index = (unsigned)(xpGPR(xp, idx_regno)),
+  natural
+    index = xpGPR(xp, idx_regno),
     old_limit = tcr->tlb_limit,
-    new_limit = align_to_power_of_2(index + 1, 12),
+    new_limit = align_to_power_of_2(index + 1, 12), /* next 4K boundary up */
     new_bytes = new_limit - old_limit;
   LispObj
     *old_tlb = tcr->tlb_pointer,
-    *new_tlb = realloc(old_tlb, new_limit),
+    *new_tlb = malloc(new_limit),
     *work;
 
   if (new_tlb == NULL) {
     return false;
   }
 
+  memcpy(new_tlb, old_tlb, old_limit);
   work = (LispObj *)((BytePtr)new_tlb + old_limit);
 
   while (new_bytes) {
     *work++ = no_thread_local_binding_marker;
     new_bytes -= sizeof(LispObj);
   }
+
+  /*
+   * Because signals are unmasked at this point, we store the new tlb
+   * vector before freeing the old one; that way, a signal handler
+   * that reads via a stale tlb_pointer still sees valid data.
+   */
   tcr->tlb_pointer = new_tlb;
   tcr->tlb_limit = new_limit;
+  free(old_tlb);
   return true;
 }
 

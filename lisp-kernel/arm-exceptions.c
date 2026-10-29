@@ -2149,16 +2149,11 @@ unprotect_all_areas()
 }
 
 /*
-  A binding subprim has just done "twlle limit_regno,idx_regno" and
-  the trap's been taken.  Extend the tcr's tlb so that the index will
-  be in bounds and the new limit will be on a page boundary, filling
-  in the new page(s) with 'no_thread_local_binding_marker'.  Update
-  the tcr fields and the registers in the xp and return true if this
-  all works, false otherwise.
-
-  Note that the tlb was allocated via malloc, so realloc can do some
-  of the hard work.
-*/
+ * Extend the tcr's tlb so that the index will be in bounds and the
+ * new limit will be on a page boundary, filling in the new page(s)
+ * with 'no_thread_local_binding_marker'.  Update the tcr fields and
+ * return true if this all works, false otherwise.
+ */
 Boolean
 extend_tcr_tlb(TCR *tcr, 
                ExceptionInformation *xp, 
@@ -2171,21 +2166,29 @@ extend_tcr_tlb(TCR *tcr,
     new_bytes = new_limit-old_limit;
   LispObj 
     *old_tlb = tcr->tlb_pointer,
-    *new_tlb = realloc(old_tlb, new_limit),
+    *new_tlb = malloc(new_limit),
     *work;
 
   if (new_tlb == NULL) {
     return false;
   }
-  
+
+  memcpy(new_tlb, old_tlb, old_limit);
   work = (LispObj *) ((BytePtr)new_tlb+old_limit);
 
   while (new_bytes) {
     *work++ = no_thread_local_binding_marker;
     new_bytes -= sizeof(LispObj);
   }
+
+  /*
+   * Because signals are unmasked at this point, we store the new tlb
+   * vector before freeing the old one; that way, a signal handler
+   * that reads via a stale tlb_pointer still sees valid data.
+   */
   tcr->tlb_pointer = new_tlb;
   tcr->tlb_limit = new_limit;
+  free(old_tlb);
   return true;
 }
 

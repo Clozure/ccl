@@ -1072,7 +1072,10 @@ handle_floating_point_exception(TCR *tcr, ExceptionInformation *xp, siginfo_t *i
   }
 }
 
-
+/*
+ * Grow the tlb vector so that the index is in bounds, filling in the
+ * new entries with no_thread_local_binding_marker.
+ */
 Boolean
 extend_tcr_tlb(TCR *tcr, ExceptionInformation *xp)
 {
@@ -1085,19 +1088,31 @@ extend_tcr_tlb(TCR *tcr, ExceptionInformation *xp)
   
   new_limit = align_to_power_of_2(index+1,12);
   new_bytes = new_limit-old_limit;
-  new_tlb = realloc(old_tlb, new_limit);
+  new_tlb = malloc(new_limit);
 
   if (new_tlb == NULL) {
+    /*
+     * The malloc failed, but we have already popped sp.  That's
+     * probably bad.  However, we're also probably dead anyway.
+     */
     return false;
   }
+  memcpy(new_tlb, old_tlb, old_limit);
   work = (LispObj *) ((BytePtr)new_tlb+old_limit);
 
   while (new_bytes) {
     *work++ = no_thread_local_binding_marker;
     new_bytes -= sizeof(LispObj);
   }
+
+  /*
+   * Because signals are unmasked at this point, we store the new tlb
+   * vector before freeing the old one; that way, a signal handler
+   * that reads via a stale tlb_pointer still sees valid data.
+   */
   tcr->tlb_pointer = new_tlb;
   tcr->tlb_limit = new_limit;
+  free(old_tlb);
   return true;
 }
 
