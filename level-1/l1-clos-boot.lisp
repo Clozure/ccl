@@ -877,6 +877,24 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
                          (error "~s does not specify keys: ~s" method gkeys))
                        (return nil)))))))))
 
+;;; Which metaclasses other than STANDARD-CLASS may take the standard
+;;; slot-vector path (%STD-SLOT-ACCESS-METACLASS-WRAPPER-P): entries 0-7
+;;; are wrappers of eligible metaclasses, 8-15 of ineligible ones.  The
+;;; vector is replaced whole, never cleared in place, whenever one of
+;;; the slot-access generic functions gains or loses a method or a
+;;; wrapper is made obsolete, so an answer worked out against the old
+;;; methods can only land in the discarded vector.
+(defstatic *std-slot-access-metaclass-cache* (make-array 16 :initial-element nil))
+
+(defun %invalidate-std-slot-access-metaclass-cache ()
+  (setq *std-slot-access-metaclass-cache* (make-array 16 :initial-element nil)))
+
+(defun %std-slot-access-gf-p (gf)
+  (let* ((name (%gf-name gf)))
+    (or (eq name 'slot-value-using-class)
+        (eq name 'slot-boundp-using-class)
+        (equal name '(setf slot-value-using-class)))))
+
 (defun %add-method (gf method)
   (%add-standard-method-to-standard-gf gf method))
 
@@ -902,6 +920,8 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
     (setf (%gf-dispatch-table-methods dt) (sgf.methods gfn))
     (setf (%method-gf method) gfn)
     (%add-direct-methods method)
+    (when (%std-slot-access-gf-p gfn)
+      (%invalidate-std-slot-access-metaclass-cache))
     (compute-dcode gfn dt)
     (when (sgf.dependents gfn)
       (map-dependents gfn #'(lambda (d)
@@ -1055,6 +1075,8 @@ Generic-function's   : ~s~%" method (or (generic-function-name gf) gf) (flatten-
         (setf (%gf-dispatch-table-methods dt) methods
 	      (sgf.methods gf) methods)
         (%remove-direct-methods method)
+        (when (%std-slot-access-gf-p gf)
+          (%invalidate-std-slot-access-metaclass-cache))
         (remove-obsoleted-combined-methods method dt)
         (apply #'invalidate-initargs-vector-for-gf gf (%method-specializers method))
         (compute-dcode gf dt)
@@ -2884,6 +2906,49 @@ to replace that class with ~s" name old-class new-class)
  	      slotd loc (slot-definition-allocation slotd)))))))
 
 
+;;; A metaclass that inherits from STANDARD-CLASS can take the same
+;;; slot-vector path as STANDARD-CLASS itself, provided that no method
+;;; on SLOT-VALUE-USING-CLASS, (SETF SLOT-VALUE-USING-CLASS) or
+;;; SLOT-BOUNDP-USING-CLASS is specialized (on its class argument) on a
+;;; class that the metaclass inherits from and STANDARD-CLASS does not,
+;;; or by EQL on one of the metaclass's instances.  Otherwise every
+;;; accessor, SLOT-VALUE and SLOT-BOUNDP on an instance of a class with
+;;; such a metaclass makes a full generic call.
+;;;
+;;; The answer is cached by the metaclass's wrapper in a direct-mapped
+;;; vector (*STD-SLOT-ACCESS-METACLASS-CACHE*, near %ADD-METHOD).
+(defun %std-slot-access-metaclass-p (metaclass)
+  (let* ((cpl (%inited-class-cpl metaclass t)))
+    (when (memq *standard-class-class* cpl)
+      (let* ((std-cpl (%inited-class-cpl *standard-class-class*)))
+        (flet ((overridden-p (gf argnum)
+                 (dolist (m (sgf.methods gf))
+                   (let* ((spec (nth argnum (%method-specializers m))))
+                     (when (if (eql-specializer-p spec)
+                             (eq (class-of (eql-specializer-object spec)) metaclass)
+                             (and (memq spec cpl) (not (memq spec std-cpl))))
+                       (return t))))))
+          (not (or (overridden-p #'slot-value-using-class 0)
+                   (overridden-p #'(setf slot-value-using-class) 1)
+                   (overridden-p #'slot-boundp-using-class 0))))))))
+
+(defun %note-std-slot-access-metaclass-wrapper (wrapper cache index)
+  (declare (fixnum index))
+  (unless (eql 0 (%wrapper-hash-index wrapper)) ; obsolete
+    (let* ((ok (%std-slot-access-metaclass-p (%wrapper-class wrapper))))
+      (setf (%svref cache (if ok index (+ index 8))) wrapper)
+      ok)))
+
+(declaim (inline %std-slot-access-metaclass-wrapper-p))
+(defun %std-slot-access-metaclass-wrapper-p (wrapper)
+  (or (eq wrapper *standard-class-wrapper*)
+      (let* ((cache *std-slot-access-metaclass-cache*)
+             (index (logand (the fixnum (%wrapper-hash-index wrapper)) 7)))
+        (declare (fixnum index))
+        (cond ((eq wrapper (%svref cache index)) t)
+              ((eq wrapper (%svref cache (+ index 8))) nil)
+              (t (%note-std-slot-access-metaclass-wrapper wrapper cache index))))))
+
 (defmethod slot-value-using-class ((class standard-class)
 				   instance
 				   (slotd standard-effective-slot-definition))
@@ -2896,7 +2961,7 @@ to replace that class with ~s" name old-class new-class)
 	   (eql (typecode slotd) target::subtag-instance)
 	   (eq *standard-effective-slot-definition-class-wrapper*
 	       (instance.class-wrapper slotd))
-	   (eq *standard-class-wrapper* (instance.class-wrapper class))
+	   (%std-slot-access-metaclass-wrapper-p (instance.class-wrapper class))
            (let* ((allocation (standard-effective-slot-definition.allocation slotd)))
              (or (eq allocation :instance) (eq allocation :class))))
     (%std-slot-vector-value (instance-slots instance) slotd)
@@ -2943,7 +3008,7 @@ to replace that class with ~s" name old-class new-class)
 	   (eql (typecode slotd) target::subtag-instance)
 	   (eq *standard-effective-slot-definition-class-wrapper*
 	       (instance.class-wrapper slotd))
-	   (eq *standard-class-wrapper* (instance.class-wrapper class))
+	   (%std-slot-access-metaclass-wrapper-p (instance.class-wrapper class))
            (let* ((allocation (standard-effective-slot-definition.allocation slotd)))
              (or (eq allocation :instance) (eq allocation :class))))
     ;; Not safe to use instance.slots here, since the instance is not
@@ -3061,7 +3126,7 @@ to replace that class with ~s" name old-class new-class)
 	   (eql (typecode slotd) target::subtag-instance)
 	   (eq *standard-effective-slot-definition-class-wrapper*
 	       (instance.class-wrapper slotd))
-	   (eq *standard-class-wrapper* (instance.class-wrapper class))
+	   (%std-slot-access-metaclass-wrapper-p (instance.class-wrapper class))
            (let* ((allocation (standard-slot-definition.allocation slotd)))
              (or (eq allocation :class)
                  (eq allocation :instance))))
@@ -3214,7 +3279,8 @@ to replace that class with ~s" name old-class new-class)
 	     (%wrapper-slot-id->slotd wrapper) #'%slot-id-lookup-obsolete
 	     (%wrapper-slot-id-value wrapper) #'%slot-id-ref-obsolete
 	     (%wrapper-set-slot-id-value wrapper) #'%slot-id-set-obsolete
-             ))))
+             )
+       (%invalidate-std-slot-access-metaclass-cache))))
   wrapper)
 
 (defun %clear-class-primary-slot-accessor-offsets (class)
