@@ -132,7 +132,7 @@
                (high (opcode-op-high original-opcode))
                (low (opcode-op-low original-opcode))
                (link-p (logbitp 0 low))
-               (new-label (make-lap-label (gensym)))
+               (new-label (make-lap-label (make-symbol "BRANCH")))
                (idx -1))
           (declare (fixnum high low))
           ; Assemble all operands but the last
@@ -389,7 +389,7 @@
                              (<= 0 addrexp #x7ffc)      ; not really right
                              (not (logtest 3 addrexp))))
                  (warn "Invalid logical VSP: ~s.  ~s ignored." addr form)
-                 (setq *ppc-lap-regsave-label* (emit-lap-label (gensym))
+                 (setq *ppc-lap-regsave-label* (emit-lap-label (make-symbol "REGSAVE"))
                        *ppc-lap-regsave-reg* regno
                        *ppc-lap-regsave-addr* (- (+ addrexp)
                                                  (* 4 (1+ (- ppc::save0 regno))))))))))))

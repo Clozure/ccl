@@ -191,7 +191,7 @@
                             (trailing-instructions (make-dll-header))
                             (next (arm::lap-instruction-succ ref))
                             (last (dll-header-last primary))
-                            (after-data-label-name (gensym)))
+                            (after-data-label-name (make-symbol "AFTER-DATA")))
                        (remove-dll-node-list next last)
                        (insert-dll-node-after next trailing-instructions last)
                        (arm::assemble-instruction primary `(b ,after-data-label-name))
