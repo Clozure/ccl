@@ -7383,92 +7383,35 @@
    (ldp save3 save2 (:@ (:x basereg) (:$ 0)))
    (ldp save1 save0 (:@ (:x basereg) (:$ (* 2 arm64::node-size))))))
 
-;;; ============ clear-pending-fpu-exceptions ============
-;;; No PPC64 analog EXISTS (checked before consulting ARM32): PPC
-;;; enables FP exceptions in its one combined FPSCR
-;;; (ppc-float.lisp:384-390, mtfsf) and takes them synchronously as
-;;; SIGFPE (ppc-exceptions.c), so it needs no per-operation polling
-;;; prelude.  The compiler analog is ARM32's read-modify-write
-;;; (arm-vinsns.lisp:1339-1344: fmrx / bic #xff / fmxr), kept here: the
-;;; body below clears only the cumulative status byte -- IOC/DZC/OFC/UFC/IXC
-;;; (bits 0-4) and IDC (bit 7) -- and leaves FPSR bits 8-31 alone.
-;;;
-;;; CORRECTED (this comment previously said a bare `msr fpsr, xzr` "would
-;;; erase unrelated state: refused").  That was wrong and it contradicted
-;;; live code.  The narrowing here is a strict SUPERSET of what is required,
-;;; not a correction of the bare write:
-;;;   * PPC's own clear-fpu-exceptions (ppc-lapmacros.lisp:682) is
-;;;     `mtfsf #xfc fp-zero', an 8-bit field mask that zeroes FPSCR fields
-;;;     0-5 = bits 0-23, its ENTIRE status half, preserving only fields 6-7
-;;;     = the enables and the rounding mode.  On AArch64 those live in FPCR,
-;;;     which `msr fpsr' cannot reach, so a bare FPSR zeroing is the exact
-;;;     PPC64 contract -- the LAPMACRO clear-fpu-exceptions
-;;;     (arm64-lapmacros.lisp) and four kernel sites (C(zero_fpscr) in
-;;;     arm64-asmutils.s, arm64-spentry.s ffcall open+close,
-;;;     spentry-E-ffi.s) are correct as written.
-;;;   * FPSR bits 8-31 are unobservable here anyway: QC (27) is set only by
-;;;     Advanced SIMD integer saturating operations and this assembler
-;;;     defines none of them; NZCV (28-31) are AArch32 comparison flags
-;;;     (A64 FCMP writes PSTATE.{N,Z,C,V}); and %get-fpscr-status /
-;;;     %get-post-ffi-fpsr both mask (:$ #xff).
-;;;   * %set-fpscr-status (arm64-float.lisp) is RMW for a different reason:
-;;;     it STORES a caller byte rather than clearing.  ARM32's RMW is
-;;;     MANDATORY for ARM32, whose single FPSCR holds the enables and the
-;;;     rounding mode -- that constraint does not exist here.
-;;; The RMW is kept because this vinsn already declares its own :u64 temp,
-;;; so narrowing costs one instruction pair and no hidden clobber, and it
-;;; keeps the ARM32 line-port shape.  FPCR is not touched.
-;;; The sysreg is written as its raw 15-bit op0:op1:CRn:CRm:op2
-;;; encoding #x5a21 (= "fpsr" in *system-registers*, arm64-asm.lisp):
-;;; LAP's parse-operand resolves sysreg NAMES, but the vinsn body
-;;; parser (vinsn-parse-operand) has no sysreg arm, so a name here
-;;; fails at definition time.
-;;; Emit path today: DEAD.  Emitted only under *arm642-float-safety*
-;;; (defarm642-df-op/-sf-op), which no live code sets: safety 3 emits
-;;; $decl_full_safety without $decl_float_safety (nx0.lisp:944-948),
-;;; and the alternate policy lookup key is misspelled singular vs the
-;;; constructor's plural (nx-basic.lisp:208,235).  Defined now so the
-;;; settled semantics need not be re-derived when float-safety
-;;; plumbing lands.
 
+;;; Emitted only under *arm642-float-safety* (defarm642-df-op/-sf-op),
+;;; and always paired with trap-if-fpu-exception, which isn't defined
+;;; yet (see below), so no compiled code contains this today.
 (define-arm64-vinsn clear-pending-fpu-exceptions (()
                                                   ()
                                                   ((imm :u64)))
-  (mrs imm (:$ #x5a21))
-  (and imm imm (:$ (ldb (byte 64 0) (lognot #xff)))) ; ldb-wrap: encoder rejects negative logimms
-  (msr (:$ #x5a21) imm))
+  (mrs imm fpsr)
+  (bic imm imm (:$ #xff))
+  (msr fpsr imm))
 
-;;; ==================================================================
-;;; DELIBERATELY NOT DEFINED -- one emitted-but-undefined name remains.
-;;; A missing definition fails LOUDLY ("Unknown vinsn") the first time
-;;; codegen reaches it; a guessed one compiles clean and corrupts
-;;; silently, which is the worse failure and the reason it is absent.
-;;;
-;;;   trap-if-fpu-exception (defarm642-df-op/-sf-op, the same dead
-;;;     float-safety path as clear-pending-fpu-exceptions above)
-;;;     Stays undefined per P2.4 (ledger 2a180688) until THREE pieces
-;;;     land together as one reviewed unit:
-;;;     (a) a per-thread software enable mask (a raw TCR field, init
-;;;         #x0700 = invalid/div0/overflow).  It cannot come from
-;;;         FPCR: hardware trap enables are RAZ/WI on the supported
-;;;         Graviton target (measured: writing #x1f00 reads back 0,
-;;;         arm64-float.lisp), so an FPCR-sourced mask is always 0 and
-;;;         silently suppresses every inline FP condition; and the
-;;;         current *fp-logical-enables* special is process-global,
-;;;         not per-thread.  ARM32 reads its mask from tcr.lisp-fpscr
-;;;         (arm-vinsns.lisp:1346-1355); Matt's arm64 TCR has no such
-;;;         field yet.
-;;;     (b) live float-safety plumbing ($decl_float_safety is emitted
-;;;         by no current declaration path -- see the clear-pending
-;;;         notes above), positive-controlled so the pair provably
-;;;         appears around a typed FP operation.
-;;;     (c) specific condition decode: binary-info case 4
-;;;         (arm64-exceptions.c -> arm64-trap-support.lisp) today
-;;;         signals only a generic "FPU exception" and must first
-;;;         decode the faulting A64 FP instruction and operands, as
-;;;         ppc-error-signal.lisp does.
-;;;     Full analysis: comms/VINSN-UNRESOLVED-16m63.md item 4.
-;;; ==================================================================
+;;; A sketch of trap-if-fpu-exception, left commented out so that reaching
+;;; it still fails with "Unknown vinsn".  This can actually happen:
+;;; the default policy requests float safety above 1, so a typed fp
+;;; operation at safety 2 and speed >= 2 will cause it.  (Weirdly,
+;;; safety 3 never requests float safety, but this is clearly not
+;;; what we ultimately want, although we'll leave it for now.)
+#|
+(define-arm64-vinsn trap-if-fpu-exception (()
+                                           ()
+                                           ((signaled :u64)
+                                            (enabled :u64)))
+  (mrs signaled fpsr)
+  (ldr enabled (:@ rcontext (:$ arm64::tcr.lisp-fpscr)))
+  (and signaled signaled (enabled :lsr 8))
+  (cbz signaled :no-trap)
+  (uuo-error-fpu-exception signaled enabled)
+  :no-trap)
+|#
 
 ;;; ---------------------------------------------------------------
 ;;; arm64: define call-known-symbol-ool and jump-known-symbol-ool
