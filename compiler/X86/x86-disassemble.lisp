@@ -46,8 +46,9 @@
     (let* ((op0 (x86-di-op0 xdi))
 	   (op1 (x86-di-op1 xdi))
 	   (op2 (x86-di-op2 xdi))
-	   (ds (make-x86-disassembly-state :mode-64 #+x8664-target t
-					            #+x8632-target nil
+	   (ds (make-x86-disassembly-state :mode-64 (target-arch-case
+                                                      (:x8632 nil)
+                                                      (:x8664 t))
 					   :code-vector nil
 					   :code-pointer 0)))
       (when op0
@@ -3006,15 +3007,16 @@
     (break())))
 
 (defun x86-disassemble-xfunction (function xfunction
-                                  &key (symbolic-names #+x8664-target target::*x8664-symbolic-register-names*
-                                                       #+x8632-target target::*x8632-symbolic-register-names*)
+                                  &key (symbolic-names (target-arch-case
+                                                        (:x8632 x8632::*x8632-symbolic-register-names*)
+                                                        (:x8664 x8664::*x8664-symbolic-register-names*)))
                                        (collect-function #'x86-print-disassembled-instruction)
                                        (header-function #'x86-print-disassembled-function-header))
   (check-type xfunction xfunction)
   (check-type (uvref xfunction 0) (simple-array (unsigned-byte 8) (*)))
-  (let* ((entry-point  #+x8664-target 7  #+x8632-target 2)
+  (let* ((entry-point (target-arch-case (:x8632 2) (:x8664 7)))
          (ds (make-x86-disassembly-state
-              :mode-64 #+x8664-target t #+x8632-target nil
+              :mode-64 (target-arch-case (:x8632 nil) (:x8664 t))
               :code-vector (uvref xfunction 0)
               :constants-vector xfunction
               :entry-point entry-point
@@ -3023,8 +3025,9 @@
               :pending-labels (list entry-point)))
          (blocks (x86-ds-blocks ds)))
     (setf (x86-ds-code-limit ds)
-          #+x8664-target (ash (x86-ds-next-u32 ds) 3)
-          #+x8632-target (ash (x86-ds-next-u16 ds) 2))
+          (target-arch-case
+           (:x8632 (ash (x86-ds-next-u16 ds) 2))
+           (:x8664 (ash (x86-ds-next-u32 ds) 3))))
     (do* ()
          ((null (x86-ds-pending-labels ds)))
       (let* ((lab (pop (x86-ds-pending-labels ds)))

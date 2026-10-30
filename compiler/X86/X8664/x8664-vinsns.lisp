@@ -4341,11 +4341,11 @@
   (ud2a)
   (:byte 1)
   :tlb-ok
-  (movq (:rcontext target::tcr.tlb-pointer) (:%q tlb-pointer))
+  (movq (:rcontext x8664::tcr.tlb-pointer) (:%q tlb-pointer))
   (pushq (:@ (:%q tlb-pointer) (:%q idx)))
   (pushq (:%q idx))
-  (pushq (:rcontext target::tcr.db-link))
-  (movq (:%q target::rsp)(:rcontext target::tcr.db-link))
+  (pushq (:rcontext x8664::tcr.db-link))
+  (movq (:%q x8664::rsp)(:rcontext x8664::tcr.db-link))
   (movq (:%q val) (:@ (:%q tlb-pointer) (:%q idx))))
 
 
@@ -4356,13 +4356,13 @@
                                     (idx :lisp)
                                     (val :lisp)))
   
-  (movq (:rcontext target::tcr.db-link) (:%q link))
-  (movq (:rcontext target::tcr.tlb-pointer) (:%q tlb-pointer))
+  (movq (:rcontext x8664::tcr.db-link) (:%q link))
+  (movq (:rcontext x8664::tcr.tlb-pointer) (:%q tlb-pointer))
   (movq (:@  8 (:%q link)) (:%q idx))
   (movq (:@ 16 (:%q link)) (:%q val))
   (movq (:@ (:%q link)) (:%q link))
   (movq (:% val) (:@ (:%q tlb-pointer) (:% idx)))
-  (movq (:%q link) (:rcontext target::tcr.db-link)))
+  (movq (:%q link) (:rcontext x8664::tcr.db-link)))
         
   
 
@@ -5295,7 +5295,7 @@
      ((src :complex-double-float)))
   ((:not (:pred = (:apply %hard-regspec-value src ) (:apply %hard-regspec-value dest)))
    (movapd (:%xmm src) (:%xmm dest)))
-  (shufpd (:$ub 1) (:%xmm target::fpzero) (:%xmm dest)))
+  (shufpd (:$ub 1) (:%xmm x8664::fpzero) (:%xmm dest)))
 
 
 (define-x8664-vinsn %make-complex-single-float
