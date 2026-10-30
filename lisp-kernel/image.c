@@ -517,21 +517,25 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 	image_nil = (LispObj)(a->low) + (1024*4) + fulltag_nil;
 #endif
 	set_nil(image_nil);
-#ifdef ARM64
-        /* nilreg is raw slots (globals page + nil pun + nrs symbols),
-           not an object stream; relocate word-wise.  This also covers
-           WEAKVLL and the other globals. */
-        if (bias || static_space_bias) {
-          relocate_static_area_words(a, bias);
-        }
-#else
 	if (bias) {
+          /* WEAKVLL holds an untagged heap address, so the relocation
+             below does not see it; rebase it by range here. */
           LispObj weakvll = lisp_global(WEAKVLL);
 
           if ((weakvll >= ((LispObj)image_base-bias)) &&
               (weakvll < (ptr_to_lispobj(active_dynamic_area->active)-bias))) {
             lisp_global(WEAKVLL) = weakvll+bias;
           }
+	}
+#ifdef ARM64
+        /* nilreg is raw slots (globals page + nil pun + nrs symbols),
+           not an object stream; relocate word-wise.  This rebases
+           only words with a pointer tag. */
+        if (bias || static_space_bias) {
+          relocate_static_area_words(a, bias);
+        }
+#else
+	if (bias) {
 	  relocate_area_contents(a, bias);
 	}
 #endif
@@ -575,7 +579,11 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 	if (bias) {
 	  LispObj static_conses = lisp_global(STATIC_CONSES);
 	  if (static_conses && static_conses != lisp_nil) {
+	    /* On ARM64 the word-wise pass over the static area has
+	       already rebased the kernel globals, this one among them. */
+#ifndef ARM64
 	    lisp_global(STATIC_CONSES) += bias;
+#endif
 	    relocate_area_contents(a, bias);
 	  }
 	} else if (static_space_bias && (a->active > a->low)) {
