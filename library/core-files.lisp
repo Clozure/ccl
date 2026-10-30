@@ -169,8 +169,8 @@
     (if (< fd 0)
       (signal-file-error fd pathname)
       (let* ((size (fd-size fd))
-             (map (#_mmap +null-ptr+ size #$PROT_READ #$MAP_PRIVATE fd 0)))
-        (if (eql map #$MAP_FAILED)
+             (map (#_mmap (%null-ptr) size #$PROT_READ #$MAP_PRIVATE fd 0)))
+        (if (eql map (%int-to-ptr (1- (ash 1 target::nbits-in-word)))) ; #$MAP_FAILED
           (progn
             (fd-close fd)
             (error "Can't memory map file ~a." pathname))
