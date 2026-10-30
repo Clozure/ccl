@@ -358,26 +358,15 @@
                                        :write-p (not (zerop arg1)))
                        ()
                        frame-ptr))
-              ;; unary unbound: gpr holds the SYMBOL (handler contract,
-              ;; arm64-exceptions.c uuo_unary_unbound; the emit sites are
-              ;; spentry-A specrefcheck and spentry-C's binding path).
-              ;; PPC continues from this trap by writing the restart's
-              ;; value over the register that held the unbound marker
-              ;; (ppc:905-915); the ARM64 uuo encodes only the symbol
-              ;; register, so the value cannot be delivered to the
-              ;; resume site — signal the standard unbound-variable
-              ;; error, but refuse to continue if a restart returns.
-              ;; RATIFY: continuing needs a following uuo_extra_registers
-              ;; (binary info 7) naming the value register at both emit
-              ;; sites, plus a handler-side PC adjustment.
+              ;; unary unbound: gpr holds the SYMBOL.  The trap does not
+              ;; name the register that should receive a value, so we
+              ;; cannot offer USE-VALUE, STORE-VALUE or CONTINUE.
               ((and (eql (uuo-format the-trap) 1)  ;uuo_format_unary
                     (eql (uuo-unary-info the-trap) 2)) ;unary_info_unbound
-               (%kernel-restart-internal
-                $xvunbnd
-                (list (xp-gpr-lisp xp (uuo-unary-gpr the-trap)))
-                frame-ptr)
-               (%error "Can't continue from an unbound-variable trap on ARM64 (the resume site's value register is not encoded in the trap)."
-                       nil frame-ptr))
+               (%error (make-condition 'unbound-variable
+                                       :name (xp-gpr-lisp xp (uuo-unary-gpr the-trap)))
+                       ()
+                       frame-ptr))
               ;; unary slot_unbound (patch 0052 assigns the code): a
               ;; THREE-register error, so the primary uuo names only the
               ;; SLOT VECTOR and the kernel hands us its
