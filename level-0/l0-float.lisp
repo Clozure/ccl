@@ -1162,8 +1162,8 @@
             (etypecase b
               (float
                ;; calc pow(|b|, e)
-               (let ((r (with-stack-double-floats ((b1 (abs b)) (e1 e))
-                          (%double-float-expt! b1 e1 (%make-dfloat)))))
+               (let ((r (abs (with-stack-double-floats ((b1 b) (e1 e))
+                              (%double-float-expt! b1 e1 (%make-dfloat))))))
                  ;; when b is minus and e is odd
                  ;; => invert the sign of the result.
                  (when (and (minusp (float-sign b)) ;; -0d0 is minus
