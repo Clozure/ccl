@@ -610,12 +610,15 @@ create_reserved_area(natural totalsize)
   base = (natural) start;
   image_base = base;
   lastbyte = (BytePtr) (start+totalsize);
-#if defined(DARWIN) && defined(ARM64)
+#if (defined(DARWIN) || defined(LINUX)) && defined(ARM64)
   /* Hardened VM policy (dyld-ro, MIE) can reject MAP_FIXED at the
      canonical static base: dyld's read-only state region starts one
-     page above it.  Probe the canonical base; on failure let the OS
-     choose and relocate static-space references at image load
-     (static_space_bias in image.c). */
+     page above it.  A Linux kernel with a 39-bit user address space
+     cannot map it at all.  Probe the canonical base; on failure let
+     the OS choose and relocate static-space references at image load
+     (static_space_bias in image.c).  On Linux, MAP_FIXED would
+     replace an existing mapping there; MAP_FIXED_NOREPLACE fails
+     instead, and kernels that predate it treat it as a hint. */
   {
     natural static_rsv = align_to_power_of_2(STATIC_RESERVE, log2_page_size);
     BytePtr sbase;
@@ -629,7 +632,11 @@ create_reserved_area(natural totalsize)
       sbase = (BytePtr)mmap((void *)STATIC_BASE_ADDRESS,
                             static_rsv,
                             MEMPROTECT_RW,
+#ifdef LINUX
+                            MAP_PRIVATE|MAP_ANON|MAP_FIXED_NOREPLACE,
+#else
                             MAP_PRIVATE|MAP_ANON|MAP_FIXED,
+#endif
                             -1,
                             0);
     }
