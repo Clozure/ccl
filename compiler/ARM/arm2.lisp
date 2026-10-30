@@ -4297,7 +4297,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                               (with-fp-target (dest src) (temp :single-float)
                                 (! clear-pending-fpu-exceptions)
                                 (! double-to-single temp src)
-                                (! trap-if-fpu-execption)
+                                (! trap-if-fpu-exception)
                                 (! single-to-single dest temp))
                               (! double-to-single dest src)))
                            (#.hard-reg-class-fpr-mode-double
