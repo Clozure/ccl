@@ -3352,9 +3352,14 @@
                          (list :opnd index))))))
          ;; a literal register name (e.g. vsp, sp, fn)
          (let ((reg (lookup-register op)))
-           (when reg
+           (if reg
              (values (make-register-operand :register reg)
-                     (list :reg (register-number reg))))))))))
+                     (list :reg (register-number reg)))
+             ;; a named system register is an immediate, as in parse-operand
+             (let ((sysreg (lookup-system-register op)))
+               (when sysreg
+                 (values (make-immediate-operand :value sysreg :shift 0)
+                         (list :imm sysreg 0)))))))))))
 
 ;;; Like match-template, but support *wild-immediate* and *wild-condition*
 ;;; markers.
