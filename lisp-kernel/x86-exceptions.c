@@ -1657,6 +1657,39 @@ copy_avx(ExceptionInformation *xp, LispObj *current, FPREGS *destptr)
 }
 #endif
 
+#if defined(SOLARIS) && defined(UC_XSAVE)
+/*
+ * uc_xsave points at the extended FP state, which the kernel puts on
+ * the stack next to the signal frame.  It starts with a header that
+ * <sys/ucontext.h> only defines for the kernel (uc_xsave_t); ucx_len
+ * counts the header.
+ */
+typedef struct {
+  uint32_t ucx_vers;
+  uint32_t ucx_len;
+  uint64_t ucx_bv;
+} solaris_uc_xsave_t;
+
+LispObj *
+copy_xsave(ExceptionInformation *xp, LispObj *current, void **destptr)
+{
+  natural sp;
+  solaris_uc_xsave_t *src = (solaris_uc_xsave_t *)(xp->uc_xsave);
+
+  *destptr = (void *)src;
+
+  if ((xp->uc_flags & UC_XSAVE) && src) {
+    sp = (natural)current;
+    sp -= src->ucx_len;
+    sp = truncate_to_power_of_2(sp,6);
+    memcpy((void *)sp,(void *)src,src->ucx_len);
+    current = (LispObj *)sp;
+    *destptr = (void *)current;
+  }
+  return current;
+}
+#endif
+
 #ifdef DARWIN
 LispObj *
 copy_darwin_mcontext(MCONTEXT_T context, 
@@ -1707,6 +1740,15 @@ copy_ucontext(ExceptionInformation *context, LispObj *current, copy_ucontext_las
 #ifdef FREEBSD
   if (AVX_CONTEXT_PRESENT(context)) {
     AVX_CONTEXT_PTR(context) = (natural)fp;
+  }
+#endif
+#if defined(SOLARIS) && defined(UC_XSAVE)
+  /*
+   * The original may be on the lisp stack, where lisp code will
+   * overwrite it before we get to setcontext().
+   */
+  if (dest->uc_flags & UC_XSAVE) {
+    dest->uc_xsave = (long)fp;
   }
 #endif
   dest->uc_stack.ss_sp = 0;
@@ -1823,6 +1865,9 @@ handle_signal_on_foreign_stack(TCR *tcr,
 #endif
 #ifdef FREEBSD
   foreign_rsp = copy_avx(context, foreign_rsp, &fpregs);
+#endif
+#if defined(SOLARIS) && defined(UC_XSAVE)
+  foreign_rsp = copy_xsave(context, foreign_rsp, &fpregs);
 #endif
 #ifdef DARWIN
   foreign_rsp = copy_darwin_mcontext(UC_MCONTEXT(context), foreign_rsp, &mcontextp);
