@@ -46,13 +46,19 @@
              (/ -0d0))
 	(ccl:set-fpu-mode :division-by-zero division-by-zero))))
 
+;;; Below is a different definition of double-float-nan than in 1.14.
+;;; The redefinition triggers a bug in define-constant when it's looking at NaN's.
+#-bootstrapped (undefine-constant 'double-float-nan) ;;  Can remove this once the release image has define-constant fixed.
+
 (defconstant double-float-nan
   #.(let ((invalid (get-fpu-mode :invalid)))
       (declare (notinline +))
       (unwind-protect
 	   (progn
 	     (set-fpu-mode :invalid nil)
-	     (+ double-float-positive-infinity double-float-negative-infinity))
+             ;; The sign of this sum varies (sign bit is set on x86 and not on arm64).
+             ;; ABS is so this is the same NaN whatever machine compiles this file.
+	     (abs (+ double-float-positive-infinity double-float-negative-infinity)))
 	(set-fpu-mode :invalid invalid))))
 
 (defun parse-float (str len off)  
