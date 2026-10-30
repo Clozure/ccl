@@ -214,14 +214,27 @@
 (defparameter *x86-lap-fixed-code-words* nil)
 (defvar *x86-lap-lfun-bits* 0)
 
+;;; All x86 backends use the same table of lap macro definitions.
+;;; (The lap macros are the same for 32- and 64-bit.)
+;;;
+;;; For bootstrapping: if we're already on an x86 host, use the
+;;; existing table, which already contains the macros.  However, when
+;;; the boot image loads this file, there isn't a host backend yet
+;;; (and the macros haven't been loaded), so guard against that.
+(defvar *x86-lap-macros*
+  (or (and (boundp '*host-backend*)
+           (member (backend-target-arch-name *host-backend*) '(:x8632 :x8664))
+           (backend-lap-macros *host-backend*))
+      (make-hash-table :test #'equalp)))
+
 (defun x86-lap-macro-function (name)
-  (gethash (string name) (backend-lap-macros *target-backend*)))
+  (gethash (string name) *x86-lap-macros*))
 
 (defun (setf x86-lap-macro-function) (def name)
   (let* ((s (string name)))
     (when (gethash s x86::*x86-opcode-template-lists*)
       (error "~s already defines an x86 instruction." name))
-    (setf (gethash s (backend-lap-macros *target-backend*)) def)))
+    (setf (gethash s *x86-lap-macros*) def)))
 
 (defmacro defx86lapmacro (name arglist &body body)
   `(progn
@@ -396,10 +409,13 @@
 	 (register-entries (target-arch-case (:x8632 x86::*x8632-register-entries*)
 					     (:x8664 x86::*x8664-register-entries*)))
 	 (r (typecase regname
-              (symbol (or (gethash (string regname) registers)
-                          (if (eq regname :rcontext)
+              ;; Check the backend for :rcontext first; the entry (if
+              ;; any) for :rcontext in the registers hash table is for
+              ;; the host's OS, not the target's.
+              (symbol (or (if (eq regname :rcontext)
                             (svref register-entries
                                    (ccl::backend-lisp-context-register *target-backend*)))
+                          (gethash (string regname) registers)
                           (and (boundp regname)
                                (let* ((val (symbol-value regname)))
                                  (and (typep val 'fixnum)
