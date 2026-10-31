@@ -913,6 +913,9 @@
                 (arm642-vinsn-note-label-address endlab nil sym))))
       *arm642-recorded-symbols*)))
 
+;;; Ignore $decl_float_safety for now: *arm642-float-safety* stays nil.
+;;; trap-if-fpu-exception isn't defined yet, and emitting it would be
+;;; a compile-time error.
 (defun arm642-decls (decls)
   (if (fixnump decls)
     (locally (declare (fixnum decls))
@@ -921,7 +924,9 @@
                                                         decls))
             *arm642-full-safety* (neq 0 (%ilogand2 $decl_full_safety decls))
             *arm642-reckless* (neq 0 (%ilogand2 $decl_unsafe decls))
+            #|
             *arm642-float-safety*  (neq 0 (%ilogand2 $decl_float_safety decls))
+            |#
             *arm642-trust-declarations* (neq 0 (%ilogand2 $decl_trustdecls
                                                           decls))))))
 

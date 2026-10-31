@@ -7394,11 +7394,11 @@
   (bic imm imm (:$ #xff))
   (msr fpsr imm))
 
-;;; A sketch of trap-if-fpu-exception, left commented out so that reaching
-;;; it still fails with "Unknown vinsn".  This can actually happen:
-;;; the default policy requests float safety above 1, so a typed fp
-;;; operation at safety 2 and speed >= 2 will cause it.  (Weirdly,
-;;; safety 3 never requests float safety, but this is clearly not
+;;; A sketch of trap-if-fpu-exception, left commented out.  Nothing reaches
+;;; it for now, because arm642-decls ignores $decl_float_safety.  Otherwise
+;;; the default policy, which requests float safety above 1, would make a
+;;; typed fp operation at safety 2 and speed >= 2 fail with "Unknown vinsn".
+;;; (Weirdly, safety 3 never requests float safety, but this is clearly not
 ;;; what we ultimately want, although we'll leave it for now.)
 #|
 (define-arm64-vinsn trap-if-fpu-exception (()
