@@ -4766,7 +4766,8 @@
   (cmp tag flags)
   (b.eq :good)
   :bad
-  (uuo-error-array-flags tag object)
+  (movz tag (:$ (:apply ash type-error arm64::fixnumshift)))
+  (uuo-error-object-not-type tag object)
   :good)
 
 ;;; PPC64 LINE-PORT (ppc64-vinsns.lisp:585 trap-unless-simple-array-3).
@@ -4794,7 +4795,8 @@
   (cmp tag flags)
   (b.eq :good)
   :bad
-  (uuo-error-array-flags tag object)
+  (movz tag (:$ (:apply ash type-error arm64::fixnumshift)))
+  (uuo-error-object-not-type tag object)
   :good)
 
 ;;; ARM32 LINE-PORT (arm-vinsns.lisp:3090 trap-unless-typed-array-2); PPC64

@@ -15,7 +15,7 @@
 ;;;    word and the scan machinery has no analog here.
 ;;;  - The kernel routes to lisp cmain exactly: unary unbound, unary
 ;;;    slot_unbound (which also forwards its uuo_extra_registers
-;;;    companion word as arg0), all binary infos 0-6, wrong_type, misc
+;;;    companion word as arg0), binary infos 0-6 and 8, wrong_type, misc
 ;;;    interrupt_now/too_few/too_many/wrong_number, and SIGBUS faults
 ;;;    (upstream-port/lisp-kernel/arm64-exceptions.c handle_uuo,
 ;;;    callback_for_trap).  Everything errnum-shaped goes to
@@ -468,6 +468,13 @@
                                :expected-type `(,(if (logbitp $arh_simple_bit flags) 'simple-array 'array) ,element-type))
                               nil
                               frame-ptr)))
+                   (8      ; object not of type: ra = a boxed type-error
+                           ; code, rb = the object
+                    (%err-disp-internal
+                     #.(car (rassoc 'type-error *kernel-simple-error-classes*))
+                     (list (xp-gpr-lisp xp rb)
+                           (logandc2 (xp-gpr-lisp xp ra) arch::error-type-error))
+                     frame-ptr))
                    (t      ; 7 = two_registers extends a preceding uuo and
                            ; never faults alone (kernel refuses it)
                     (%error "Unknown binary trap: #x~x~%xp: ~s, fn: ~s, pc: #x~x"

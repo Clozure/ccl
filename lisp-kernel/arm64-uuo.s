@@ -54,6 +54,7 @@ uuo_format_binary = 2
   binary_info_array_rank = 5
   binary_info_array_flags = 6
   binary_info_two_registers = 7  // extra register pair for preceding uuo
+  binary_info_type_error = 8
 
 /*
  * All type errors: "this register doesn't hold the expected type"
