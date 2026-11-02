@@ -640,7 +640,8 @@ some point in the near future, and then return to what it was doing."
       ;; output lock on a stream we want to flush.  Don't block
       ;; waiting on the lock if so.
       (flet ((flush-stream (s)
-	       (let* ((lock (ioblock-outbuf-lock (basic-stream-ioblock s)))
+	       ;; *STDOUT* and *STDERR* needn't be basic streams.
+	       (let* ((lock (and (basic-stream-p s) (ioblock-outbuf-lock (basic-stream-ioblock s))))
 		      (locked (make-lock-acquisition)))
 		 (declare (dynamic-extent locked))
 		 (when (or (null lock)
