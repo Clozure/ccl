@@ -491,6 +491,9 @@
    (def uuo-error-array-rank ((:ruuo :x) (:ruuo2 :x)) (logior (ash 5 12) 2) #xfffff003)
    (def uuo-error-array-flags ((:ruuo :x) (:ruuo2 :x)) (logior (ash 6 12) 2) #xfffff003)
    (def uuo-extra-registers ((:ruuo :x) (:ruuo2 :x)) (logior (ash 7 12) 2) #xfffff003)
+   ;; This overlaps a little with uuo-error-reg-not-xtype.  The type
+   ;; error codes used here are from ccl:compiler;arch.lisp.
+   (def uuo-error-object-not-type ((:ruuo :x) (:ruuo2 :x)) (logior (ash 8 12) 2) #xfffff003)
 
    ;; wrong_type UUOs (uuo format #b011)
    ;; reg in 6:2, continuable flag in 7, expected type code in 15:8.

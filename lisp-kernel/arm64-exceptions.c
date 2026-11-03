@@ -139,7 +139,8 @@ void callback_to_lisp(LispObj, ExceptionInformation *, natural, natural,
  *   2 binary: ra in 6:2, rb in 11:7, 4 bits of info in 15:12
  *     (0 vector_bounds, 1 array_bounds, 2 integer_divide_by_zero,
  *     3 eep_unresolved, 4 fpu_exception, 5 array_rank, 6 array_flags,
- *     7 two_registers = extra register pair for the preceding uuo).
+ *     7 two_registers = extra register pair for the preceding uuo,
+ *     8 object_not_type = ra holds a boxed type-error code, rb the object).
  *   3 wrong_type: reg in 6:2, continuable flag in bit 7, expected
  *     xtype code in 15:8.
  */
@@ -187,6 +188,7 @@ void callback_to_lisp(LispObj, ExceptionInformation *, natural, natural,
 #define uuo_binary_array_rank     5
 #define uuo_binary_array_flags    6
 #define uuo_binary_two_registers  7
+#define uuo_binary_object_not_type 8
 
 /* misc infos (arm64-uuo.s uuo_misc macros; 0 is invalid) */
 #define uuo_misc_alloc          1
@@ -1821,11 +1823,13 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
   }
 
   case uuo_format_binary:
-    /* ra = one operand reg, rb = the other; lisp decodes reg pair +
-       info from the raw trap word (PPC's twlge index,limit traps,
-       ppc:1657-1670).  All assigned infos are error reports, so the
-       cmain route covers 0-6; 7 (two_registers) extends a PRECEDING
-       uuo and should never fault on its own. */
+    /*
+     * Two operands in ra, rb.
+     *
+     * Special case: uuo_binary_two_registers carries two extra
+     * register operands for the preceding uuo; it should never fault
+     * on its own.
+     */
     if (UUO_BINARY_INFO(imm16) != uuo_binary_two_registers) {
       if (cmain_is_macptr) {
         callback_for_trap(cmain, xp, where, (natural) the_uuo, 0, 0);

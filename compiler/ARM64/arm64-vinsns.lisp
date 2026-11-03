@@ -4730,22 +4730,9 @@
                                            ((header :lisp)))
   (ldur dest (:@ header (:$ arm64::arrayH.data-vector))))
 
-;;; PPC64 LINE-PORT (ppc64-vinsns.lisp:560 trap-unless-simple-array-2).
-;;; Trap (brk #xf0nn, nn = type-error code, w3b trap-unless-fixnum idiom)
-;;; unless OBJECT is an arrayH of rank 2 whose boxed flags word equals
-;;; boxed EXPECTED-FLAGS (subtag-of-underlying-vector dpb'd over
-;;; $arh_simple_bit -- see the arm642-aref2/aset2 callers).
-;;; PPC64 body mapping (straightened branch schedule, same semantics):
-;;;   clrldi tag obj 60 / cmpdi fulltag-misc  -> and fulltagmask + cmp
-;;;   lbz tag misc-subtag-offset              -> ldurb (:w tag) @ -12
-;;;   ld rank / cmpdi (ash 2 fixnumshift)     -> ldur @ arrayH.rank + cmp 16
-;;;   lis/ori boxed expected-flags halves     -> movz/movk (lri idiom;
-;;;     boxed flags = 16-bit subtag/simple field << 3 = max 19 bits)
-;;;   ld flags arrayH.flags / cmpd            -> ldur + cmp
-;;;   uuo_interr type-error object            -> brk #xf000|type-error
 (define-arm64-vinsn trap-unless-simple-array-2 (()
                                                 ((object :lisp)
-                                                 (expected-flags :u64const)
+                                                 (expected-flags :u16const)
                                                  (type-error :u8const))
                                                 ((tag :u64)
                                                  (flags :u64)))
@@ -4766,14 +4753,13 @@
   (cmp tag flags)
   (b.eq :good)
   :bad
-  (uuo-error-array-flags tag object)
+  (movz tag (:$ 'type-error))
+  (uuo-error-object-not-type tag object)
   :good)
 
-;;; PPC64 LINE-PORT (ppc64-vinsns.lisp:585 trap-unless-simple-array-3).
-;;; Rank-3 sibling; only the rank constant differs.
 (define-arm64-vinsn trap-unless-simple-array-3 (()
                                                 ((object :lisp)
-                                                 (expected-flags :u64const)
+                                                 (expected-flags :u16const)
                                                  (type-error :u8const))
                                                 ((tag :u64)
                                                  (flags :u64)))
@@ -4794,7 +4780,8 @@
   (cmp tag flags)
   (b.eq :good)
   :bad
-  (uuo-error-array-flags tag object)
+  (movz tag (:$ 'type-error))
+  (uuo-error-object-not-type tag object)
   :good)
 
 ;;; ARM32 LINE-PORT (arm-vinsns.lisp:3090 trap-unless-typed-array-2); PPC64
