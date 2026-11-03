@@ -3137,6 +3137,9 @@
 ;;; Parse (:$ value) or (:$ value :lsl amount).  Returns two values: a
 ;;; dumpable descriptor and the literal value, or :UNKNOWN if the value
 ;;; isn't known until expand time (a const-parameter hole or (:apply ...)).
+;;;
+;;; As in LAP, 'n denotes the boxed fixnum n, so 'param is the boxed
+;;; value of a const parameter.
 (defun vinsn-parse-immediate (op name-list)
   (destructuring-bind (value-form &optional lsl (shift-form 0)) (cdr op)
     (when (and lsl (not (eq lsl :lsl)))
@@ -3153,6 +3156,20 @@
          (values (list :imm-opnd (position value-form name-list :test #'eq)
                        shift)
                  :unknown))
+        ((ccl::quoted-form-p value-form)
+         (let* ((quoted (ccl::nx-unquote value-form))
+                (index (and (symbolp quoted)
+                            (position quoted name-list :test #'eq))))
+           (cond (index
+                  (values (list :imm-apply shift 'ash (list :opnd index)
+                                arm64::fixnumshift)
+                          :unknown))
+                 ((integerp quoted)
+                  (let ((value (ash quoted arm64::fixnumshift)))
+                    (values (list :imm value shift) value)))
+                 (t
+                  (error "~s must be an integer or a parameter: ~s"
+                         value-form op)))))
         (t (let ((value (eval-immediate-expression value-form)))
              (values (list :imm value shift) value)))))))
 
