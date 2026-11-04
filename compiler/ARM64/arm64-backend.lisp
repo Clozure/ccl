@@ -223,7 +223,8 @@
                 :p2-compile 'arm642-compile
                 :target-specific-features
                 '(:arm64 :arm64-target :linux-target :linuxarm64-target
-                  :64-bit-target :little-endian-target)
+                  :64-bit-target :little-endian-target
+                  :unix :linux)
                 :target-fasl-pathname (make-pathname :type "la64fsl")
                 :target-platform (logior platform-word-size-64
                                          platform-cpu-arm64
@@ -247,7 +248,8 @@
                 :p2-compile 'arm642-compile
                 :target-specific-features
                 '(:arm64 :arm64-target :darwin-target :darwinarm64-target
-                  :64-bit-target :little-endian-target)
+                  :64-bit-target :little-endian-target
+                  :unix :darwin)
                 :target-fasl-pathname (make-pathname :type "da64fsl")
                 :target-platform (logior platform-word-size-64
                                          platform-cpu-arm64

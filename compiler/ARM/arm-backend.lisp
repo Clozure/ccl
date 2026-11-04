@@ -214,7 +214,8 @@
 		:p2-template-hash-name '*arm-vinsn-templates*
 		:p2-compile 'arm2-compile
 		:target-specific-features
-		'(:arm :arm-target :eabi-target :linux-target :linuxarm-target  :32-bit-target :little-endian-target)
+		'(:arm :arm-target :eabi-target :linux-target :linuxarm-target  :32-bit-target :little-endian-target
+                  :unix :linux)
 		:target-fasl-pathname (make-pathname :type "lafsl")
 		:target-platform (logior platform-word-size-32
                                          platform-cpu-arm
@@ -238,7 +239,8 @@
 		:p2-template-hash-name '*arm-vinsn-templates*
 		:p2-compile 'arm2-compile
 		:target-specific-features
-		'(:arm :arm-target :darwin-target :darwinarm-target :arm-target :32-bit-target :little-endian-target)
+		'(:arm :arm-target :darwin-target :darwinarm-target :arm-target :32-bit-target :little-endian-target
+                  :unix :darwin)
 		:target-fasl-pathname (make-pathname :type "dafsl")
 		:target-platform (logior platform-word-size-32
                                          platform-cpu-arm
@@ -261,7 +263,8 @@
 		:p2-template-hash-name '*arm-vinsn-templates*
 		:p2-compile 'arm2-compile
 		:target-specific-features
-		'(:arm :arm-target :eabi-target :linux-target :linuxarm-target  :32-bit-target :little-endian-target :androidarm-target :android-target)
+		'(:arm :arm-target :eabi-target :linux-target :linuxarm-target  :32-bit-target :little-endian-target :androidarm-target :android-target
+                  :unix :linux :android)
 		:target-fasl-pathname (make-pathname :type "aafsl")
 		:target-platform (logior platform-word-size-32
                                          platform-cpu-arm

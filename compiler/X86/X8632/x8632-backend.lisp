@@ -41,7 +41,8 @@
                 '(:x8632 :x86-target :darwin-target :darwinx86-target :x8632-target
                   :darwinx8632-target
                   :little-endian-target
-                  :32-bit-target)
+                  :32-bit-target
+                  :unix :x86 :darwin)
                 :target-fasl-pathname (make-pathname :type "dx32fsl")
                 :target-platform (logior platform-cpu-x86
                                          platform-os-darwin
@@ -74,7 +75,8 @@
                 '(:x8632 :x86-target :linux-target :linuxx86-target :x8632-target
                   :linuxx8632-target
                   :little-endian-target
-                  :32-bit-target)
+                  :32-bit-target
+                  :unix :x86 :linux)
                 :target-fasl-pathname (make-pathname :type "lx32fsl")
                 :target-platform (logior platform-cpu-x86
                                          platform-os-linux
@@ -106,7 +108,8 @@
                 '(:x8632 :x86-target :windows-target :win32-target :x8632-target
                   :windowsx8632-target
                   :little-endian-target
-                  :32-bit-target)
+                  :32-bit-target
+                  :x86 :windows)
                 :target-fasl-pathname (make-pathname :type "wx32fsl")
                 :target-platform (logior platform-cpu-x86
                                          platform-os-windows
@@ -138,7 +141,8 @@
                 '(:x8632 :x86-target :solaris-target :x8632-target
                   :solarisx8632-target
                   :little-endian-target
-                  :32-bit-target)
+                  :32-bit-target
+                  :unix :x86 :solaris)
                 :target-fasl-pathname (make-pathname :type "sx32fsl")
                 :target-platform (logior platform-cpu-x86
                                          platform-os-solaris
@@ -169,7 +173,8 @@
                 '(:x8632 :x86-target :freebsd-target :x8632-target
                   :freebsdx8632-target
                   :little-endian-target
-                  :32-bit-target)
+                  :32-bit-target
+                  :unix :x86 :freebsd)
                 :target-fasl-pathname (make-pathname :type "fx32fsl")
                 :target-platform (logior platform-cpu-x86
                                          platform-os-freebsd
