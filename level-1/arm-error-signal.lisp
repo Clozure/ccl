@@ -321,6 +321,14 @@
                                     :expected-type `(,(if (logbitp $arh_simple_bit flags) 'simple-array 'array) ,element-type))
                                    nil
                                    frame-ptr)))                        
+                        (8   ;object-not-type: arga = boxed error code
+                         (%err-disp-internal
+                          #.(car (rassoc
+                                  'type-error *kernel-simple-error-classes*))
+                          (list argb
+                                ;; strip bias
+                                (logandc2 arga arch::error-type-error))
+                          frame-ptr))
                         (t
                          (error "Unknown code in binary UUO: ~d" code)))))
                    (5

@@ -102,6 +102,7 @@ define(`uuo_error_eep_unresolved',`binary_errorUUO($1,$2,$3,4)')
 define(`uuo_error_fpu_exception',`binary_errorUUO($1,$2,$3,5)')
 define(`uuo_error_array_rank',`binary_errorUUO($1,$2,$3,6)')
 define(`uuo_error_array_flags',`binary_errorUUO($1,$2,$3,7)')
+define(`uuo_error_object_not_type',`binary_errorUUO($1,$2,$3,8)')
 
 define(`uuo_error_array_axis_bounds',`UUO($1,uuo_format_ternary_error2,($2<<8)|($3<<4)|$4)')
         

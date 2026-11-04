@@ -1865,7 +1865,8 @@
                    (ash (dpb safe target::arrayH.flags-cell-subtag-byte
                              (ash 1 $arh_simple_bit))
                         arm::fixnumshift))
-                (! trap-unless-simple-array-2 src expected))
+                (! trap-unless-simple-array-2 src expected
+                   (nx-error-for-simple-2d-array-type type-keyword)))
               (! trap-unless-typed-array-2 src safe))))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))
@@ -1937,7 +1938,8 @@
                                (ash (dpb safe target::arrayH.flags-cell-subtag-byte
                                          (ash 1 $arh_simple_bit))
                                     arm::fixnumshift))
-                            (! trap-unless-simple-array-2 src expected))
+                            (! trap-unless-simple-array-2 src expected
+                               (nx-error-for-simple-2d-array-type type-keyword)))
                           (! trap-unless-typed-array-2 src safe))))
                     (unless i-known-fixnum
                       (! trap-unless-fixnum unscaled-i))
@@ -2024,7 +2026,8 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                                        arm::fixnumshift))
                   (! trap-unless-simple-array-3
                      src
-                     expected))
+                     expected
+                     (nx-error-for-simple-3d-array-type type-keyword)))
                 (! trap-unless-typed-array-3 src safe)))
             (unless i-known-fixnum
               (! trap-unless-fixnum unscaled-i))
@@ -2085,7 +2088,8 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
                   (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
                                             (ash 1 $arh_simple_bit))
                                        arm::fixnumshift))
-                  (! trap-unless-simple-array-2 src expected))
+                  (! trap-unless-simple-array-2 src expected
+                     (nx-error-for-simple-2d-array-type typekeyword)))
                 (! trap-unless-typed-array-2 src safe)))))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))
@@ -2148,7 +2152,8 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
               (! lri expected (ash (dpb safe target::arrayH.flags-cell-subtag-byte
                                         (ash 1 $arh_simple_bit))
                                    arm::fixnumshift))
-              (! trap-unless-simple-array-3 src expected))
+              (! trap-unless-simple-array-3 src expected
+                 (nx-error-for-simple-3d-array-type typekeyword)))
             (! trap-unless-typed-array-3 src safe)))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))

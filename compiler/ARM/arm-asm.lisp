@@ -303,6 +303,12 @@
      #x07f700ff
      #x0fff00ff
      (:prefer-separate-cond))
+   ;; uuoA holds a boxed type-error code (from ccl:compiler;arch.lisp),
+   ;; uuoB the object.
+   (define-arm-instruction uuo-error-object-not-type (:uuoA :uuoB)
+     #x07f800ff
+     #x0fff00ff
+     (:prefer-separate-cond))
    (define-arm-instruction uuo-error-array-axis-bounds (:uuoC :uuoB :uuoA)
      #x07f000f5
      #x0ff000ff
