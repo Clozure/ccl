@@ -380,6 +380,71 @@
         (ensure-foreign-type-bits ftype)
         (> (foreign-type-bits ftype) 32)))))
 
+;;; Assign each argument of a hard-float EABI foreign call a word in
+;;; an argument area laid out like the C frame that .SPeabi-ff-callhf
+;;; consumes: words 0-15 are d0-d7 (s0-s15), words 16-19 are r0-r3,
+;;; and words from 20 on are the outgoing stack.  ARGSPECS are foreign
+;;; representation type keywords (or a fixnum, for a structure passed
+;;; as that many words).  Following the VFP variant of the AAPCS, a
+;;; float that doesn't fit in the VFP registers goes on the stack,
+;;; never in a core register, and once one has, so do all later
+;;; floats.  Return the list of words and the size of the area in
+;;; words.
+;;;
+;;; This is used by the compiler (ARM2-EABI-FF-CALL), by callbacks,
+;;; and at runtime by the %FF-CALL function in level-0.
+(defun arm::eabi-hard-float-arg-words (argspecs)
+  (let* ((fpr 0)                        ;next single-precision VFP reg
+         (ncrn 0)                       ;next core reg
+         (nsaa 0)                       ;next stack word
+         (words ()))
+    (declare (fixnum fpr ncrn nsaa))
+    (flet ((stack-word (n align)
+             (declare (fixnum n align))
+             (when (and (= align 2) (oddp nsaa))
+               (incf nsaa))
+             (prog1 (+ 20 nsaa)
+               (incf nsaa n))))
+      (dolist (spec argspecs)
+        (push
+         (case spec
+           (:double-float
+            (when (oddp fpr)
+              (incf fpr))
+            (if (<= fpr 14)
+              (prog1 fpr (incf fpr 2))
+              (progn
+                (setq fpr 16)
+                (stack-word 2 2))))
+           (:single-float
+            (if (< fpr 16)
+              (prog1 fpr (incf fpr))
+              (stack-word 1 1)))
+           ((:signed-doubleword :unsigned-doubleword)
+            (when (oddp ncrn)
+              (incf ncrn))
+            (if (<= ncrn 2)
+              (prog1 (+ 16 ncrn) (incf ncrn 2))
+              (progn
+                (setq ncrn 4)
+                (stack-word 2 2))))
+           (t
+            (let* ((n (if (typep spec 'fixnum) spec 1)))
+              (declare (fixnum n))
+              (cond ((<= (+ ncrn n) 4)
+                     (prog1 (+ 16 ncrn) (incf ncrn n)))
+                    ((and (< ncrn 4) (= nsaa 0))
+                     ;; Split between r0-r3 and the stack, which are
+                     ;; contiguous in the frame.
+                     (prog1 (+ 16 ncrn)
+                       (setq nsaa (- (+ ncrn n) 4)
+                             ncrn 4)))
+                    (t
+                     (setq ncrn 4)
+                     (stack-word n 1))))))
+         words))
+      (values (nreverse words) (+ 20 nsaa)))))
+
 (defun arm::eabi-expand-ff-call (callform args &key (arg-coerce #'null-coerce-foreign-arg) (result-coerce #'null-coerce-foreign-result))
   (let* ((result-type-spec (or (car (last args)) :void))
          (enclosing-form nil)
@@ -443,90 +508,77 @@
               (setq argvars (cons struct-result-name argvars)
                     argspecs (cons :address argspecs)
                     rtype *void-foreign-type*))))
-        (let* ((reg-offset 0)
-               (gen-offset 0)
-               (fp-offset -72)
-               (stack-offset 16))
+        (let* ((argtypes (mapcar (lambda (spec)
+                                   (let* ((argtype (parse-foreign-type spec)))
+                                     (if (typep argtype 'foreign-record-type)
+                                       (parse-foreign-type :address)
+                                       argtype)))
+                                 argspecs))
+               ;; Where the hard-float ABI puts each arg: d0-d7 were
+               ;; saved at STACK-PTR-72, r0-r3 at STACK-PTR, and the
+               ;; caller's stack args start at STACK-PTR+16.
+               (hf-offsets
+                (mapcar (lambda (word)
+                          (if (< word 16)
+                            (+ -72 (* 4 word))
+                            (* 4 (- word 16))))
+                        (arm::eabi-hard-float-arg-words
+                         (mapcar (lambda (argtype)
+                                   (typecase argtype
+                                     (foreign-single-float-type :single-float)
+                                     (foreign-double-float-type :double-float)
+                                     (foreign-integer-type
+                                      (if (> (foreign-type-bits argtype) 32)
+                                        :signed-doubleword
+                                        :signed-fullword))
+                                     (t :address)))
+                                 argtypes))))
+               (gen-offset 0))
           (do* ((argvars argvars (cdr argvars))
-                (argspecs argspecs (cdr argspecs)))
+                (argtypes argtypes (cdr argtypes))
+                (hf-offsets hf-offsets (cdr hf-offsets)))
                ((null argvars)
                 (values (rlets) (lets) (dynamic-extent-names) nil rtype nil 0 #|wrong|#))
             (let* ((name (car argvars))
-                   (spec (car argspecs))
-                   (argtype (parse-foreign-type spec))
+                   (argtype (car argtypes))
                    (accessor nil)
-                   (offsetform nil))
-              (if (typep argtype 'foreign-record-type)
-                (setq argtype (parse-foreign-type :address)))
+                   (nbytes 4))
               (typecase argtype
                 (foreign-single-float-type
-                 (setq accessor '%get-single-float
-                       offsetform `(if ,hard-float-p
-                                    ,(if (< fp-offset -8)
-                                         (prog1 fp-offset
-                                           (incf fp-offset 4))
-                                         (prog1 stack-offset
-                                           (incf stack-offset 4)))
-                                    ,(prog1 gen-offset
-                                            (incf gen-offset 4)))))
+                 (setq accessor '%get-single-float))
                 (foreign-double-float-type
-                 (when (logtest 7 fp-offset)
-                   (incf fp-offset 4))
-                 (when (and (>= fp-offset -8)
-                            (logtest 7 stack-offset))
-                   (incf stack-offset 4))
-                 (when (logtest 7 gen-offset)
-                   (incf gen-offset 4))
-                 (setq accessor '%get-double-float
-                       offsetform `(if ,hard-float-p
-                                    ,(if (< fp-offset -8)
-                                         (prog1 fp-offset
-                                           (incf fp-offset 8))
-                                         (prog1 stack-offset
-                                           (incf stack-offset 8)))
-                                    ,(prog1 gen-offset
-                                            (incf gen-offset 8)))))
+                 (setq accessor '%get-double-float nbytes 8))
                 (foreign-pointer-type
-                 (setq accessor '%get-ptr
-                       offsetform `(if ,hard-float-p
-                                    ,(if (< reg-offset 16)
-                                         (prog1 reg-offset
-                                           (incf reg-offset 4))
-                                         (prog1 stack-offset
-                                           (incf stack-offset 4)))
-                                    ,(prog1 gen-offset
-                                            (incf gen-offset 4)))))
+                 (setq accessor '%get-ptr))
                 (foreign-integer-type
                  (let* ((nbits (foreign-type-bits argtype))
-                        (nbytes (cond ((> nbits 32) 8)
+                        (signed (foreign-integer-type-signed argtype)))
+                   (setq nbytes (cond ((> nbits 32) 8)
                                       ((> nbits 16) 4)
                                       ((> nbits 8) 2)
-                                      (t 1)))
-                        (align (if (= nbytes 8) 8 4))
-                        (signed (foreign-integer-type-signed argtype)))
-                   (when (= align 8)
-                     (when (logtest 7 reg-offset)
-                       (incf reg-offset 4))
-                     (when (and (>= reg-offset 16)
-                                (logtest 7 stack-offset))
-                       (incf stack-offset 4))
-                     (when (logtest 7 gen-offset)
-                       (incf gen-offset 4)))
-                   (setq accessor
-                         (case nbytes
-                           (8 (if signed '%%get-signed-longlong '%%get-unsigned-longlong))
-                           (4 (if signed '%get-signed-long '%get-unsigned-long))
-                           (2 (if signed '%get-signed-word '%get-unsigned-word))
-                           (1 (if signed '%get-signed-byte '%get-unsigned-byte)))
-                         offsetform `(if ,hard-float-p
-                                      ,(if (<= (+ reg-offset nbytes) 16)
-                                           (prog1 reg-offset
-                                             (incf reg-offset nbytes))
-                                           (prog1 stack-offset
-                                             (incf stack-offset nbytes)))
-                                      ,(prog1 gen-offset
-                                              (incf gen-offset nbytes)))))))
-              (when name (lets `(,name (,accessor ,stack-ptr ,offsetform)))))))))))
+                                      (t 1))
+                         accessor (case nbytes
+                                    (8 (if signed
+                                         '%%get-signed-longlong
+                                         '%%get-unsigned-longlong))
+                                    (4 (if signed
+                                         '%get-signed-long
+                                         '%get-unsigned-long))
+                                    (2 (if signed
+                                         '%get-signed-word
+                                         '%get-unsigned-word))
+                                    (1 (if signed
+                                         '%get-signed-byte
+                                         '%get-unsigned-byte)))))))
+              ;; Soft-float args are laid out like a memory block that
+              ;; begins with r0-r3.
+              (when (and (= nbytes 8) (logtest 7 gen-offset))
+                (incf gen-offset 4))
+              (let* ((offsetform `(if ,hard-float-p
+                                    ,(car hf-offsets)
+                                    ,gen-offset)))
+                (incf gen-offset (max nbytes 4))
+                (when name (lets `(,name (,accessor ,stack-ptr ,offsetform))))))))))))
 
 (defun arm::eabi-generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name)
   (declare (ignore fp-args-ptr))
