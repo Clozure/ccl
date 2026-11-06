@@ -3546,8 +3546,14 @@ local_label(pushloop_mvcall):
 	__(jmp *%ra0)		
 _endsubp(recover_values_for_mvcall)
 
+/* Throw to the toplevel catch with XSTKOVER.  The kernel resumes a
+   thread here after a hard stack overflow. */
 _spentry(reset)
-	__(hlt)
+	__(ref_nrs_value(toplcatch,%temp0))
+	__(push %temp0)
+	__(push $XSTKOVER)
+	__(set_nargs(1))
+	__(jmp _SPthrow)
 _endsubp(reset)
 
 /* temp0 = element-count, arg_y = subtag, arg_z = initval */
