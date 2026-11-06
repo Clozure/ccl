@@ -592,6 +592,11 @@ create_reserved_area(natural totalsize)
     fatal = true;
   }
 
+  if (getenv("CCL_FORCE_HEAP_RELOC")) {
+    /* Testing: reserve the heap where the OS puts it, not at
+       IMAGE_BASE_ADDRESS, so the image loads with a nonzero bias. */
+    want = NULL;
+  }
   start = ReserveMemoryForHeap(want, totalsize);
 
   if (start == NULL) {
