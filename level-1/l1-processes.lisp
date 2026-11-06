@@ -661,8 +661,25 @@ some point in the near future, and then return to what it was doing."
 (defmethod process-kill ((process process))
   "Cause a specified process to cleanly exit from any ongoing
 computation, and then exit."
-  (and (process-interrupt process #'%process-reset :kill)
-       (setf (process-kill-issued process) t)))
+  (let* ((thread (process-thread process)))
+    (if (and thread
+             (not (eq process *current-process*))
+             (eq (thread-state thread) :reset))
+      ;; The process is not running, so an interrupt would wait until
+      ;; something enables it.  Make the kill its initial function and
+      ;; enable it now.  If something else is already enabling it, that
+      ;; enable runs the kill instead.
+      (progn
+        (process-preset process #'%process-reset :kill)
+        (when (thread-enable thread
+                             (process-termination-semaphore process)
+                             (1- (integer-length
+                                  (process-allocation-quantum process)))
+                             0)
+          (process-tcr-enable process (lisp-thread.tcr thread)))
+        (setf (process-kill-issued process) t))
+      (and (process-interrupt process #'%process-reset :kill)
+           (setf (process-kill-issued process) t)))))
 
 (defun process-abort (process &optional condition)
   "Cause a specified process to process an abort condition, as if it
