@@ -99,7 +99,7 @@ probes.h: probes.d
 
 thread_manager.o: thread_manager.c 
 
-mach_exc_server.o: mach_exc_server.c mach_exc.h
+mach_exc_server.o: mach_exc_server.c mach_exc.h probes.h
 
 mach_exc.h mach_exc_server.c: mach_exc.defs
 	mig -arch i386 -header /dev/null -user /dev/null \
