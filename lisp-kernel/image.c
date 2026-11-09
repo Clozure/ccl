@@ -584,6 +584,10 @@ load_openmcl_image(int fd, openmcl_image_file_header *h)
 #ifndef ARM64
 	    lisp_global(STATIC_CONSES) += bias;
 #endif
+	  }
+	  /* Static conses in use hold heap pointers whether or not the
+	     freelist is empty. */
+	  if (a->active > a->low) {
 	    relocate_area_contents(a, bias);
 	  }
 	} else if (static_space_bias && (a->active > a->low)) {
