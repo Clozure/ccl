@@ -483,6 +483,16 @@
     (:lt (values arm64::cond-lt t))
     (:ge (values arm64::cond-lt nil))))
 
+;;; A float compare with a NaN operand is unordered, and fcmp then sets
+;;; NZCV to 0011.  LT and "not GT" are both true for those flags, so <
+;;; and <= would answer T.  MI and LS are false for them and agree with
+;;; LT and LE on ordered operands.
+(defun acode-condition-to-arm64-float-cr-bit (cond)
+  (case (car (acode-operands cond))
+    (:lt (values arm64::cond-mi t))
+    (:le (values arm64::cond-ls t))
+    (t (acode-condition-to-arm64-cr-bit cond))))
+
 (defun arm64-cr-bit-to-arm64-unsigned-cr-bit (cr-bit)
   (case cr-bit
     (#.arm64::cond-eq arm64::cond-eq)
@@ -7843,14 +7853,14 @@
     (arm642-natural-compare seg vreg xfer form1 form2 cr-bit true-p)))
 
 (defarm642 arm642-double-float-compare double-float-compare (seg vreg xfer cc form1 form2)
-  (multiple-value-bind (cr-bit true-p) (acode-condition-to-arm64-cr-bit cc)
+  (multiple-value-bind (cr-bit true-p) (acode-condition-to-arm64-float-cr-bit cc)
     (with-fp-target () (r1 :double-float)
       (with-fp-target (r1) (r2 :double-float)
         (multiple-value-bind (r1 r2) (arm642-two-untargeted-reg-forms seg form1 r1 form2 r2)
           (arm642-compare-double-float-registers seg vreg xfer r1 r2 cr-bit true-p))))))
 
 (defarm642 arm642-single-float-compare short-float-compare (seg vreg xfer cc form1 form2)
-  (multiple-value-bind (cr-bit true-p) (acode-condition-to-arm64-cr-bit cc)
+  (multiple-value-bind (cr-bit true-p) (acode-condition-to-arm64-float-cr-bit cc)
     (with-fp-target () (r1 :single-float)
       (with-fp-target (r1) (r2 :single-float)
         (multiple-value-bind (r1 r2) (arm642-two-untargeted-reg-forms seg form1 r1 form2 r2)
@@ -9913,7 +9923,7 @@
   (^))
 
 (defarm642 arm642-short-float-compare short-float-compare (seg vreg xfer cc form1 form2)
-  (multiple-value-bind (cr-bit true-p) (acode-condition-to-arm64-cond-bit cc)
+  (multiple-value-bind (cr-bit true-p) (acode-condition-to-arm64-float-cr-bit cc)
     (with-fp-target () (r1 :single-float)
       (with-fp-target (r1) (r2 :single-float)
         (multiple-value-bind (r1 r2) (arm642-two-untargeted-reg-forms seg form1 r1 form2 r2)
