@@ -1328,13 +1328,14 @@ before doing so.")
 
 
 
-(defun %hash-probe (hash key for-put-p)
+(defun %hash-probe (hash key for-put-p &aux (vector (nhash.vector hash)))
   (declare (optimize (speed 3) (space 0)))
+  ;; Size the index from the vector that is probed.  A lock-free rehash
+  ;; can install a smaller vector at any time.
   (multiple-value-bind (hash-code index entries)
-                       (compute-hash-code hash key for-put-p)
+                       (compute-hash-code hash key for-put-p vector)
     (locally (declare (fixnum hash-code index entries))
       (let* ((compareF (nhash.compareF hash))
-             (vector (nhash.vector hash))
              (vector-index 0)
              table-key
              (first-deleted-index nil))
