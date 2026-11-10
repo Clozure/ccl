@@ -450,13 +450,13 @@
     bogus                               ; 18
     simple-short-float-vector           ; 19
     simple-unsigned-long-vector         ; 20
-    simple-signed-long-vector           ; 21
+    simple-long-vector                  ; 21
     simple-fixnum-vector                ; 22
     simple-base-string                  ; 23
     simple-unsigned-byte-vector         ; 24
-    simple-signed-byte-vector           ; 25
+    simple-byte-vector                  ; 25
     simple-unsigned-word-vector         ; 26
-    simple-signed-word-vector           ; 27
+    simple-word-vector                  ; 27
     simple-double-float-vector          ; 28
     simple-complex-single-float-vector  ; 29
     simple-complex-double-float-vector  ; 30
@@ -548,10 +548,10 @@
     bogus
     bogus
     bogus
-    simple-signed-byte-vector
-    simple-signed-word-vector
-    simple-signed-long-vector
-    simple-signed-doubleword-vector
+    simple-byte-vector
+    simple-word-vector
+    simple-long-vector
+    simple-doubleword-vector
     simple-unsigned-byte-vector
     simple-unsigned-word-vector
     simple-unsigned-long-vector
@@ -748,13 +748,13 @@
     bogus                               ; 18
     simple-short-float-vector           ; 19
     simple-unsigned-long-vector         ; 20
-    simple-signed-long-vector           ; 21
+    simple-long-vector                  ; 21
     simple-fixnum-vector                ; 22
     simple-base-string                  ; 23
     simple-unsigned-byte-vector         ; 24
-    simple-signed-byte-vector           ; 25
+    simple-byte-vector                  ; 25
     simple-unsigned-word-vector         ; 26
-    simple-signed-word-vector           ; 27
+    simple-word-vector                  ; 27
     simple-double-float-vector          ; 28
     simple-complex-single-float-vector  ; 29
     simple-complex-double-float-vector  ; 30
@@ -860,12 +860,12 @@
     bogus
     bogus
     simple-complex-double-float-vector
-    simple-signed-word-vector
+    simple-word-vector
     simple-unsigned-word-vector
     bogus
-    simple-signed-byte-vector
+    simple-byte-vector
     simple-unsigned-byte-vector
-    bit-vector))
+    simple-bit-vector))
 
 (defparameter *immheader-1-types*
   #(bogus
@@ -881,9 +881,9 @@
     bogus
     bogus
     simple-base-string
-    simple-signed-long-vector
+    simple-long-vector
     simple-unsigned-long-vector
-    single-float-vector))
+    simple-short-float-vector))
 
 (defparameter *immheader-2-types*
   #(bogus
@@ -899,9 +899,9 @@
     bogus
     simple-complex-single-float-vector
     simple-fixnum-vector
-    simple-signed-doubleword-vector
+    simple-doubleword-vector
     simple-unsigned-doubleword-vector
-    double-float-vector))
+    simple-double-float-vector))
 
 
 (defparameter *x8664-%type-of-functions* nil)
@@ -1027,12 +1027,12 @@
     bogus
     bogus
     simple-complex-double-float-vector
-    simple-signed-word-vector
+    simple-word-vector
     simple-unsigned-word-vector
     bogus
-    simple-signed-byte-vector
+    simple-byte-vector
     simple-unsigned-byte-vector
-    bit-vector))
+    simple-bit-vector))
 
 (defparameter *immheader-1-types*
   #(bogus
@@ -1048,9 +1048,9 @@
     bogus
     bogus
     simple-base-string
-    simple-signed-long-vector
+    simple-long-vector
     simple-unsigned-long-vector
-    single-float-vector))
+    simple-short-float-vector))
 
 (defparameter *immheader-2-types*
   #(bogus
@@ -1066,9 +1066,9 @@
     bogus
     simple-complex-single-float-vector
     simple-fixnum-vector
-    simple-signed-doubleword-vector
+    simple-doubleword-vector
     simple-unsigned-doubleword-vector
-    double-float-vector))
+    simple-double-float-vector))
 
 (defparameter *arm64-%type-of-functions* nil)
 
