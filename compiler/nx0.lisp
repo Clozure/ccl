@@ -437,7 +437,7 @@ function to the indicated name is true.")
         (%nx1-operator mul2)
         (%nx1-operator div2)))
 
-(defparameter *acode-operator-types* (make-array (1+ operator-id-mask) :initial-element t)) ; initialized by next-nx-defops
+(defvar *acode-operator-types* (make-array (1+ operator-id-mask) :initial-element t)) ; initialized by next-nx-defops
 
 
 (defparameter *acode-simple-type-inferrers* (make-array (1+ operator-id-mask) :initial-element nil))
