@@ -1261,13 +1261,14 @@
       ;; Need to make %ALL-PACKAGES-LOCK% early, so that we can casually
       ;; do SET-PACKAGE in cold load functions.
       (setq %all-packages-lock% (make-read-write-lock))
+      ;; Rehash the package tables before anything looks up a symbol
+      (dolist (p %all-packages%)
+        (%resize-htab (pkg.itab p))
+        (%resize-htab (pkg.etab p)))
       (dolist (f (prog1 *xload-cold-load-functions* (setq *xload-cold-load-functions* nil)))
         (funcall f))
       (dolist (pair (prog1 *early-class-cells* (setq *early-class-cells* nil)))
         (setf (gethash (car pair) %find-classes%) (cdr pair)))
-      (dolist (p %all-packages%)
-        (%resize-htab (pkg.itab p))
-        (%resize-htab (pkg.etab p)))
       (dolist (f (prog1 *xload-cold-load-documentation* (setq *xload-cold-load-documentation* nil)))
         (apply 'set-documentation f))
       ;; Can't bind any specials until this happens
