@@ -509,7 +509,6 @@ terminate the list"
     new))
 
 
-; appears to be unused
 (defun upgraded-array-element-type (type &optional env)
   "Return the element type that will actually be used to implement an array
    with the specifier :ELEMENT-TYPE Spec."
@@ -533,7 +532,7 @@ terminate the list"
       (unsigned-byte 32)
       (signed-byte 32)
       fixnum
-      base-char                         ;ucs4
+      character                         ;ucs4
       (unsigned-byte 8)
       (signed-byte 8)
       (unsigned-byte 16)
@@ -558,7 +557,7 @@ terminate the list"
       (unsigned-byte 32)
       (signed-byte 32)
       fixnum
-      base-char                         ;ucs4
+      character                         ;ucs4
       (unsigned-byte 8)
       (signed-byte 8)
       (unsigned-byte 16)
@@ -602,7 +601,7 @@ terminate the list"
     double-float
     bogus
     bogus
-    base-char
+    character
     (complex single-float)
     bogus
     bogus
@@ -659,7 +658,7 @@ terminate the list"
       bogus
       bogus
       bogus
-      base-char
+      character
       (signed-byte 32)
       (unsigned-byte 32)
       single-float))
@@ -736,7 +735,7 @@ terminate the list"
       bogus
       bogus
       bogus
-      base-char
+      character
       (signed-byte 32)
       (unsigned-byte 32)
       single-float))
@@ -784,7 +783,7 @@ terminate the list"
       (unsigned-byte 32)
       (signed-byte 32)
       fixnum
-      base-char                         ;ucs4
+      character                         ;ucs4
       (unsigned-byte 8)
       (signed-byte 8)
       (unsigned-byte 16)

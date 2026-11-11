@@ -44,7 +44,7 @@
   
 #+ppc32-target
 (defconstant ppc32::*immheader-array-types*
-  '#(short-float
+  '#(single-float
      (unsigned-byte 32)
      (signed-byte 32)
      fixnum
@@ -74,7 +74,7 @@
      (unsigned-byte 64)
      unused
      (complex double-float)
-     short-float
+     single-float
      fixnum
      unused
      unused
@@ -95,7 +95,7 @@
 
 #+x8632-target
 (defconstant x8632::*immheader-array-types*
-  '#(short-float
+  '#(single-float
      (unsigned-byte 32)
      (signed-byte 32)
      fixnum
@@ -236,7 +236,7 @@
 
 #+arm-target
 (defconstant arm::*immheader-array-types*
-  '#(short-float
+  '#(single-float
      (unsigned-byte 32)
      (signed-byte 32)
      fixnum
