@@ -13,6 +13,7 @@ permissions:
 jobs:
   linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -57,3 +58,52 @@ jobs:
         run: |
           cd ccl-tests
           make CCL=../ccl/lx86cl64
+
+  linux32:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install 32-bit toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib
+
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          path: ccl
+
+      - name: Fetch bootstrapping binaries
+        run: |
+          # be silent, still report errors,
+          # return a non-zero exit code on failure,
+          # follow redirections
+          curl -sSfL -O ${{ env.URL }}
+
+      - name: Install bootstrapping binaries
+        run: |
+          cd ccl
+          tar xf ../linuxx86.tar.gz
+
+      - name: Compile lisp kernel
+        run: |
+          cd ccl/lisp-kernel/linuxx8632
+          make
+
+      - name: Rebuild CCL
+        run: |
+          cd ccl
+          ./lx86cl --batch --quiet -n -e '(rebuild-ccl :clean t)' </dev/null
+          # See the comment in the linux job about the welcome banner.
+          ./lx86cl --batch -n </dev/null
+
+      - name: Check out tests
+        uses: actions/checkout@v7
+        with:
+          repository: Clozure/ccl-tests
+          path: ccl-tests
+
+      - name: Run tests
+        run: |
+          cd ccl-tests
+          make CCL=../ccl/lx86cl
