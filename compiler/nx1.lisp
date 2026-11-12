@@ -861,11 +861,50 @@
 (defnx1 nx1-uvref ((uvref)) context (&environment env arr dim0)
   (nx1-1d-vref context env arr dim0 t))
 
+;;; The x8632 backend doesn't have enough registers to open-code
+;;; access to 2d and 3d arrays, so it always calls out.  When the array
+;;; is declared to be a SIMPLE-ARRAY of known element type, wrap the
+;;; array argument in a typechecking TYPED-FORM, so that the backend
+;;; checks the declared type (as the other backends do inline) before
+;;; making the call.
+(defun nx1-x8632-array-access-call (context whole env rank)
+  (let* ((fn (car whole))
+         (args (cdr whole))
+         (ctype (specifier-type (nx-form-type (car args) env)))
+         (dims (make-list rank :initial-element '*))
+         (typespec (and (not (nx-inhibit-safety-checking env))
+                        (array-ctype-p ctype)
+                        (csubtypep ctype
+                                   (specifier-type `(simple-array * ,dims)))
+                        (funcall
+                         (arch::target-array-type-name-from-ctype-function
+                          (backend-target-arch *target-backend*))
+                         ctype)
+                        `(simple-array
+                          ,(type-specifier (array-ctype-element-type ctype))
+                          ,dims))))
+    (if (null typespec)
+      (nx1-treat-as-call context whole)
+      (let* ((arglist (nx1-arglist args)))
+        ;; The array is the first of the stack args.
+        (setf (caar arglist) (make-acode (%nx1-operator typed-form)
+                                         typespec (caar arglist) t))
+        (unless (eq context :return)
+          (nx-note-bound-vars-live-across-call))
+        (nx-record-xref-info :direct-calls fn)
+        (make-acode (%nx1-operator call)
+                    (nx1-immediate context (if context
+                                             (nx1-note-fcell-ref fn)
+                                             fn))
+                    arglist
+                    nil)))))
+
 (defnx1 nx1-%aref2 ((%aref2)) context (&whole whole &environment env arr i j)
   ;; Bleah.  Breaks modularity.  Specialize later.
   (target-arch-case
    (:x8632
-    (return-from nx1-%aref2 (nx1-treat-as-call context whole))))
+    (return-from nx1-%aref2
+      (nx1-x8632-array-access-call context whole env 2))))
 
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
@@ -897,7 +936,8 @@
   ;; Bleah.  Breaks modularity.  Specialize later.
   (target-arch-case
    (:x8632
-    (return-from nx1-%aref3 (nx1-treat-as-call context whole))))
+    (return-from nx1-%aref3
+      (nx1-x8632-array-access-call context whole env 3))))
 
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
@@ -973,7 +1013,8 @@
   ;; Bleah.  Breaks modularity.  Specialize later.
   (target-arch-case
    (:x8632
-    (return-from nx1-%aset2 (nx1-treat-as-call context whole))))
+    (return-from nx1-%aset2
+      (nx1-x8632-array-access-call context whole env 2))))
 
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
@@ -1008,7 +1049,8 @@
   ;; Bleah.  Breaks modularity.  Specialize later.
   (target-arch-case
    (:x8632
-    (return-from nx1-%aset3 (nx1-treat-as-call context whole))))
+    (return-from nx1-%aset3
+      (nx1-x8632-array-access-call context whole env 3))))
 
   (let* ((arch (backend-target-arch *target-backend*))
          (ctype (specifier-type (nx-form-type arr env)))
