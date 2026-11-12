@@ -8213,17 +8213,16 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
         (with-arm-p2-declarations p2decls
           (dolist (var real-vars)
             (arm2-seq-bind-var seg var (nx1-afunc-ref (pop real-funcs))))
+          ;; A GC can have happened between the allocation of a
+          ;; closure and that of a sibling it refers to, so these
+          ;; stores have to be memoized (see x862-labels).
           (dolist (ref fwd-refs)
             (let ((ea (var-ea (pop ref))))
-              (arm2-addrspec-to-reg seg ea arm::temp0)
               (dolist (r ref)
-                (let* ((v-ea (var-ea (cdr r))))
-                  (let* ((val-reg (if (eq v-ea ea)
-                                    arm::temp0
-                                    (progn
-                                      (arm2-addrspec-to-reg seg v-ea arm::temp1)
-                                      arm::temp1))))
-                    (! misc-set-c-node val-reg arm::temp0 (car r)))))))
+                (arm2-addrspec-to-reg seg (var-ea (cdr r)) arm::arg_z)
+                (arm2-addrspec-to-reg seg ea arm::arg_x)
+                (arm2-lri seg arm::arg_y (ash (car r) *arm2-target-fixnum-shift*))
+                (! call-subprim-3 arm::arg_z (arm::arm-subprimitive-offset '.SPgvset) arm::arg_x arm::arg_y arm::arg_z))))
           (arm2-undo-body seg vreg xfer body old-stack)
           (dolist (var real-vars)
             (arm2-close-var seg var)))))))
