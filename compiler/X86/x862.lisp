@@ -2482,17 +2482,17 @@
                    src
                    (dpb safe target::arrayH.flags-cell-subtag-byte
                         (ash 1 $arh_simple_bit))
-                   (nx-error-for-simple-3d-array-type type-keyword)))
-              (with-crf-target () crf
-                (! set-z-if-typed-array crf src safe 3)
-                (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
-                (x862-copy-register seg ($ x8664::arg_y) src)
-                (! ref-constant ($ x8664::arg_z) (x86-immediate-label
-                                                  `(array ,(element-subtype-type safe) (* * *))))
-                (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
-                (! set-nargs 3)
-                (! call-subprim-no-return (subprim-name->offset '.SPksignalerr))
-                (@ continue-label)))
+                   (nx-error-for-simple-3d-array-type type-keyword))
+                (with-crf-target () crf
+                  (! set-z-if-typed-array crf src safe 3)
+                  (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
+                  (x862-copy-register seg ($ x8664::arg_y) src)
+                  (! ref-constant ($ x8664::arg_z) (x86-immediate-label
+                                                    `(array ,(element-subtype-type safe) (* * *))))
+                  (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
+                  (! set-nargs 3)
+                  (! call-subprim-no-return (subprim-name->offset '.SPksignalerr))
+                  (@ continue-label))))
             (unless i-known-fixnum
               (! trap-unless-fixnum unscaled-i))
             (unless j-known-fixnum
@@ -2551,17 +2551,17 @@
                src
                (dpb safe target::arrayH.flags-cell-subtag-byte
                     (ash 1 $arh_simple_bit))
-               (nx-error-for-simple-2d-array-type typekeyword)))
-          (with-crf-target () crf
-            (! set-z-if-typed-array crf src safe 2)
-            (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
-            (x862-copy-register seg ($ x8664::arg_y) src)
-            (! ref-constant ($ x8664::arg_z) (x86-immediate-label
-                                              `(array ,(element-subtype-type safe) (* *))))
-            (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
-            (! set-nargs 3)
-            (! call-subprim-no-return (subprim-name->offset '.SPksignalerr))
-            (@ continue-label)))
+               (nx-error-for-simple-2d-array-type typekeyword))
+            (with-crf-target () crf
+              (! set-z-if-typed-array crf src safe 2)
+              (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
+              (x862-copy-register seg ($ x8664::arg_y) src)
+              (! ref-constant ($ x8664::arg_z) (x86-immediate-label
+                                                `(array ,(element-subtype-type safe) (* *))))
+              (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
+              (! set-nargs 3)
+              (! call-subprim-no-return (subprim-name->offset '.SPksignalerr))
+              (@ continue-label))))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))
         (unless j-known-fixnum
