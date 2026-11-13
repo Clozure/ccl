@@ -771,21 +771,32 @@ restore_soft_stack_limit(unsigned stkreg)
   }
 }
 
-/* Maybe this'll work someday.  We may have to do something to
-   make the thread look like it's not handling an exception */
+/* Throw to the toplevel after a hard stack overflow.  Do not throw
+   from here: the signal handler holds the exception lock, and only its
+   normal return releases the lock and restores the signal mask.  So
+   make the context resume at _SPreset, with the value and temp stacks
+   of the innermost catch, and let the handler return. */
+extern opcode reset_entry[] __asm__("_SPreset");
+
 void
 reset_lisp_process(ExceptionInformation *xp)
-{                                 /* ppc-exceptions.c:618-633 */
+{
   TCR *tcr = TCR_FROM_TSD(xpGPR(xp, Rrcontext));
   catch_frame *last_catch = (catch_frame *) ptr_from_lispobj(untag(tcr->catch_top));
 
-  tcr->save_allocptr = (void *) ptr_from_lispobj(xpGPR(xp, Rallocptr));
-  tcr->save_allocbase = (void *) ptr_from_lispobj(xpGPR(xp, Rallocbase));
+  LispObj vsp = ((lisp_frame *)ptr_from_lispobj(last_catch->csp))->savevsp,
+    db = ptr_to_lispobj(tcr->db_link);
 
-  tcr->save_vsp = (LispObj *) ptr_from_lispobj(((lisp_frame *)ptr_from_lispobj(last_catch->csp))->savevsp);
-  tcr->save_tsp = (LispObj *) ptr_from_lispobj((LispObj) ptr_to_lispobj(last_catch)) - (2*node_size); /* account for TSP header */
-
-  start_lisp(tcr, 1);
+  /* _SPreset pushes two words.  A binding made after the catch sits just
+     below its vsp, and the throw still has to undo it, so push below that
+     binding too. */
+  if (db && (db < vsp)) {
+    vsp = db;
+  }
+  xpGPR(xp, Rvsp) = vsp;
+  /* The catch frame follows a 16-byte tsp frame header. */
+  xpGPR(xp, Rtsp) = ptr_to_lispobj(last_catch) - (2*node_size);
+  xpPC(xp) = reset_entry;
 }
 
 
@@ -1326,7 +1337,7 @@ do_hard_stack_overflow(ExceptionInformation *xp, protected_area_ptr area, BytePt
 #pragma unused(area,addr)
 #endif
   reset_lisp_process(xp);
-  return -1;
+  return 0;
 }
 
 extern area*
@@ -1974,12 +1985,12 @@ handle_uuo(ExceptionInformation *xp, opcode the_uuo, pc where, siginfo_t *info)
         current_VSP = xpGPR(xp, Rvsp);
 
       if (current_SP  < (natural) (CS_area->hardlimit)) { /* ppc:1602 */
-        /* If we are not in soft overflow mode yet, assume that the
-           user has set the soft overflow size very small and try to
-           continue on another thread before throwing to toplevel */
-        if (tcr->cs_limit == CS_OVERFLOW_FORCE_LIMIT) {
-          reset_lisp_process(xp);
-        }
+        /* Past the hard limit.  Nothing protects the stack below it,
+           so returning to the probe would recurse until the signal
+           frame no longer fits.  Resume at the reset instead; the pc
+           now points at its entry, so do not step past the probe. */
+        reset_lisp_process(xp);
+        bump = 0;
       } else {
         if (tcr->cs_limit == CS_OVERFLOW_FORCE_LIMIT) { /* ppc:1610 */
           /* If the control stack pointer is at least 4K away from its
