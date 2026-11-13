@@ -685,6 +685,7 @@ callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
   natural  callback_ptr;
   int delta;
   unsigned old_mxcsr = get_mxcsr();
+  LispObj *old_save_vsp = tcr->save_vsp, *old_save_fp = tcr->save_fp;
 #ifdef X8632
   natural saved_node_regs_mask = tcr->node_regs_mask;
   natural saved_unboxed0 = tcr->unboxed0;
@@ -731,6 +732,11 @@ callback_to_lisp (TCR * tcr, LispObj callback_macptr, ExceptionInformation *xp,
   tcr->unboxed0 = saved_unboxed0;
   tcr->unboxed1 = saved_unboxed1;
 #endif
+  /* The ff-call, syscall and callback subprims load the lisp stack
+     and frame pointers from these fields.  Give them back the values
+     they had on entry. */
+  tcr->save_vsp = old_save_vsp;
+  tcr->save_fp = old_save_fp;
   set_mxcsr(old_mxcsr);
   return delta;
 }
