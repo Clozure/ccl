@@ -4884,6 +4884,15 @@
            (! cr-bit->boolean target cr-bit))
          (^))))))
 
+;;; comisd and comiss set ZF, PF and CF when an operand is a NaN.  B and
+;;; BE are then true and A and AE are false, so test < and <= as > and >=
+;;; with the registers swapped.  The forms are still evaluated in order.
+(defun x862-float-compare-cr-bit (cc)
+  (case (car (acode-operands cc))
+    (:lt (multiple-value-call #'values (condition-to-x86-cr-bit :gt) t))
+    (:le (multiple-value-call #'values (condition-to-x86-cr-bit :ge) t))
+    (t (acode-condition-to-x86-cr-bit cc))))
+
 (defun x862-cr-bit-for-unsigned-comparison (cr-bit)
   (ecase cr-bit
     (#.x86::x86-e-bits #.x86::x86-e-bits)
@@ -9461,17 +9470,19 @@
     (x862-natural-compare seg vreg xfer form1 form2 cr-bit true-p)))
 
 (defx862 x862-double-float-compare double-float-compare (seg vreg xfer cc form1 form2)
-  (multiple-value-bind (cr-bit true-p) (acode-condition-to-x86-cr-bit cc)
+  (multiple-value-bind (cr-bit true-p swap) (x862-float-compare-cr-bit cc)
     (with-fp-target () (r1 :double-float)
       (with-fp-target (r1) (r2 :double-float)
         (multiple-value-bind (r1 r2) (x862-two-untargeted-reg-forms seg form1 r1 form2 r2)
+          (when swap (rotatef r1 r2))
           (x862-compare-double-float-registers seg vreg xfer r1 r2 cr-bit true-p))))))
 
 (defx862 x862-short-float-compare short-float-compare (seg vreg xfer cc form1 form2)
-  (multiple-value-bind (cr-bit true-p) (acode-condition-to-x86-cr-bit cc)
+  (multiple-value-bind (cr-bit true-p swap) (x862-float-compare-cr-bit cc)
     (with-fp-target () (r1 :single-float)
       (with-fp-target (r1) (r2 :single-float)
         (multiple-value-bind (r1 r2) (x862-two-untargeted-reg-forms seg form1 r1 form2 r2)
+          (when swap (rotatef r1 r2))
           (x862-compare-single-float-registers seg vreg xfer r1 r2 cr-bit true-p))))))
  
 (eval-when (:compile-toplevel :execute)
