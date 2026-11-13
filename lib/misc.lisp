@@ -1476,7 +1476,11 @@ are running on, or NIL if we can't find any useful information."
   ;; (target-nil-value) is wrong when the loader relocated the static
   ;; section.  Use the live nil address.
   #+arm64-target (+ (%address-of nil) (target::%kernel-global global))
-  #-arm64-target (+ (target-nil-value) (target::%kernel-global global)))
+  ;; ARM32's %kernel-global is relative to untagged nil.
+  #+arm-target (+ (- (target-nil-value) target::fulltag-nil)
+                  (target::%kernel-global global))
+  #-(or arm64-target arm-target)
+  (+ (target-nil-value) (target::%kernel-global global)))
 
 (defloadvar *static-cons-address* (%int-to-ptr (kernel-global-address 'static-conses)))
 
