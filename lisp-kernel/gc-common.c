@@ -1516,6 +1516,19 @@ mark_memoized_area(area *a, natural num_memo_dnodes, bitvector refidx)
              we process them weakly here, nothing will delete the unreferenced
              elements. */
           if (!(hp->flags & nhash_weak_value_mask)) {
+            /* Lisp sets the weak flags after it allocates the vector,
+               so a GC in between can tenure it while it is not weak.
+               Then no GC puts it on GCweakvll.  Its keys and values
+               are not marked below, so add it here.  Its link word
+               can be stale, so walk the list. */
+            LispObj v = GCweakvll;
+            while (v && (v != ptr_to_lispobj(hp))) {
+              v = deref(v,1);
+            }
+            if (v == 0) {
+              hp->link = GCweakvll;
+              GCweakvll = ptr_to_lispobj(hp);
+            }
             /* If header_count is odd, this cuts off the last header field */
             /* That case is handled specially above */
             hash_dnode_limit = memo_dnode + ((hash_table_vector_header_count) >>1);
