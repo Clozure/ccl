@@ -2711,14 +2711,51 @@ report_paging_info_delta(FILE *out, paging_info *start, paging_info *stop)
 
 #endif
 
-void
+/*
+ * The static cons area grows down from the start of the dynamic heap
+ * into the gap above pure space.  On x86, the managed static area
+ * grows up from pure_space_limit and may use up to
+ * MANAGED_STATIC_SIZE bytes, so stop above that.
+ */
+static BytePtr
+static_cons_floor()
+{
+#ifdef X86
+  return pure_space_limit + MANAGED_STATIC_SIZE;
+#else
+  return pure_space_limit;
+#endif
+}
+
+/*
+ * Static cons growth must be a multiple of this many conses, so that
+ * lower_heap_start() commits whole pages of new mark bits (one bit
+ * per cons) and the corresponding refidx bits (one per 256 dnodes)
+ * stay word-aligned.
+ */
+#define STATIC_CONS_GRANULE ((natural)1 << (log2_page_size+3))
+
+/* Returns the number of conses actually added to the free list. */
+natural
 allocate_static_conses(natural n)
 {
-  BytePtr old_low = static_cons_area->low,
-    new_low = old_low - (n<<dnode_shift);
+  BytePtr old_low = static_cons_area->low;
+  BytePtr new_low;
+  BytePtr floor = static_cons_floor();
+  natural avail = (old_low > floor) ? area_dnode(old_low, floor) : 0;
   cons *c;
   natural i;
   LispObj prev;
+
+  n = (n + STATIC_CONS_GRANULE-1) & ~(STATIC_CONS_GRANULE-1);
+  avail &= ~(STATIC_CONS_GRANULE-1);
+  if (n > avail) {
+    n = avail;
+  }
+  if (n == 0) {
+    return 0;
+  }
+  new_low = old_low - (n<<dnode_shift);
 
   CommitMemory(new_low,old_low-new_low);
 
@@ -2752,6 +2789,7 @@ allocate_static_conses(natural n)
   }
   lisp_global(STATIC_CONSES)=prev;
   lisp_global(FREE_STATIC_CONSES)+=(n<<fixnumshift);
+  return n;
 }
 
 #ifdef X86
@@ -2763,10 +2801,9 @@ allocate_static_conses(natural n)
 void
 ensure_static_conses(ExceptionInformation *xp, TCR *tcr, natural nconses)
 {
-  natural nbytes = nconses<<dnode_shift;
-  allocate_static_conses(nconses);
-  TCR_AUX(tcr)->bytes_allocated += nbytes;
+  natural n = allocate_static_conses(nconses);
 
+  TCR_AUX(tcr)->bytes_allocated += n<<dnode_shift;
 }
       
 #ifdef ANDROID
