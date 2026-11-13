@@ -2268,16 +2268,27 @@ Boolean mach_suspend_tcr(TCR *tcr)
 
     
 
-Boolean
-suspend_tcr(TCR *tcr)
+/*
+  Returns true if TCR is now suspended (or being suspended) by us, and
+  sets *SIGNALLED when that took a signal, which the target acknowledges
+  on its suspend semaphore (tcr_suspend_ack).  The caller keeps that
+  bit of bookkeeping itself.  It used to be SUSPEND_ACK_PENDING in the
+  target's tcr->flags; but the target writes other bits of that word
+  without a lock (the ffcall return clears FOREIGN_FPE on every foreign
+  call), so the bit could be lost, the suspender would not wait, and
+  the GC would run with the target loose.
+*/
+static Boolean
+suspend_tcr_noting_signal(TCR *tcr, Boolean *signalled)
 {
   int suspend_count = atomic_incf(&(tcr->suspend_count)), kill_return;
   pthread_t thread;
+  *signalled = false;
   if (suspend_count == 1) {
     thread = (pthread_t)(tcr->osid);
     if ((thread != (pthread_t) 0) &&
         (kill_return = pthread_kill(thread, thread_suspend_signal) == 0)) {
-      SET_TCR_FLAG(tcr,TCR_FLAG_BIT_SUSPEND_ACK_PENDING);
+      *signalled = true;
     } else {
 #ifdef DARWIN
       if (kill_return != ESRCH) {
@@ -2291,6 +2302,14 @@ suspend_tcr(TCR *tcr)
   }
   return false;
 }
+
+Boolean
+suspend_tcr(TCR *tcr)
+{
+  Boolean signalled;
+
+  return suspend_tcr_noting_signal(tcr, &signalled);
+}
 #endif
 
 #ifdef WINDOWS
@@ -2300,14 +2319,21 @@ tcr_suspend_ack(TCR *tcr)
   return true;
 }
 #else
+/* Only for a TCR that suspend_tcr_noting_signal signalled. */
 Boolean
 tcr_suspend_ack(TCR *tcr)
 {
-  if (tcr->flags & (1<<TCR_FLAG_BIT_SUSPEND_ACK_PENDING)) {
-    SEM_WAIT_FOREVER(tcr->suspend);
-    tcr->flags &= ~(1<<TCR_FLAG_BIT_SUSPEND_ACK_PENDING);
-  }
+  SEM_WAIT_FOREVER(tcr->suspend);
   return true;
+}
+#endif
+
+#ifdef WINDOWS
+static Boolean
+suspend_tcr_noting_signal(TCR *tcr, Boolean *signalled)
+{
+  *signalled = false;
+  return suspend_tcr(tcr);
 }
 #endif
       
@@ -2351,12 +2377,12 @@ kill_tcr(TCR *tcr)
 Boolean
 lisp_suspend_tcr(TCR *tcr)
 {
-  Boolean suspended;
+  Boolean suspended, signalled;
   TCR *current = get_tcr(true);
   
   LOCK(lisp_global(TCR_AREA_LOCK),current);
-  suspended = suspend_tcr(tcr);
-  if (suspended) {
+  suspended = suspend_tcr_noting_signal(tcr, &signalled);
+  if (signalled) {
     while (!tcr_suspend_ack(tcr));
   }
   UNLOCK(lisp_global(TCR_AREA_LOCK),current);
@@ -2579,31 +2605,40 @@ void
 suspend_other_threads(Boolean for_gc)
 {
   TCR *current = get_tcr(true), *other, *next;
-  int dead_tcr_count = 0;
-  Boolean all_acked;
+  int dead_tcr_count = 0, ntcrs = 0, nsignalled = 0, i;
+  Boolean signalled;
 
   LOCK(lisp_global(TCR_AREA_LOCK), current);
+  /* The ring cannot change while we hold TCR_AREA_LOCK, so the threads
+     we signal can be kept on our own stack (not in malloc'ed memory: a
+     thread we have stopped may hold malloc's lock). */
   for (other = TCR_AUX(current)->next; other != current; other = TCR_AUX(other)->next) {
-    if ((TCR_AUX(other)->osid != 0)) {
-      suspend_tcr(other);
-      if (TCR_AUX(other)->osid == 0) {
-	dead_tcr_count++;
-      }
-    } else {
-      dead_tcr_count++;
-    }
+    ntcrs++;
   }
+  {
+    TCR *signalled_tcrs[ntcrs + 1];
 
-  do {
-    all_acked = true;
     for (other = TCR_AUX(current)->next; other != current; other = TCR_AUX(other)->next) {
       if ((TCR_AUX(other)->osid != 0)) {
-        if (!tcr_suspend_ack(other)) {
-          all_acked = false;
+        suspend_tcr_noting_signal(other, &signalled);
+        if (signalled) {
+          signalled_tcrs[nsignalled++] = other;
         }
+        if (TCR_AUX(other)->osid == 0) {
+          dead_tcr_count++;
+        }
+      } else {
+        dead_tcr_count++;
       }
     }
-  } while(! all_acked);
+
+    for (i = 0; i < nsignalled; i++) {
+      other = signalled_tcrs[i];
+      if ((TCR_AUX(other)->osid != 0)) {
+        tcr_suspend_ack(other);
+      }
+    }
+  }
 
       
 
