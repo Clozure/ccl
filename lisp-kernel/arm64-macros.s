@@ -46,12 +46,23 @@ _SP\name:
         bic allocptr, allocptr, #fulltagmask
 .endm
 
+/*
+ * In a number of macros we need to use macro-local labels.  The \@
+ * macro variable (which is an integer that increments each time a
+ * macro is expanded) is only available on sufficiently recent
+ * versions of the LLVM integrated assembler.  (It has been in GNU as
+ * for a long time.)  On the Mac, this means Xcode 16.4 or later,
+ * which requires macOS Sequoia.
+ *
+ * As a portable substitute, we say that by convention all numeric
+ * local labels from 9990-9999 are reserved for use by macros.
+ */
 .macro Cons dest, car, cdr
         sub allocptr, allocptr, #(cons.size - fulltag_cons)
         cmp allocptr, allocbase
-        b.hi .Linit\@
+        b.hi 9999f
         uuo_alloc
-.Linit\@:
+9999:
         stur \cdr, [allocptr, #cons.cdr]
         stur \car, [allocptr, #cons.car]
         mov \dest, allocptr
@@ -65,9 +76,9 @@ _SP\name:
         sub \size, \size, #fulltag_misc
         sub allocptr, allocptr, \size
         cmp allocptr, allocbase
-        b.hi .Linit\@
+        b.hi 9999f
         uuo_alloc
-.Linit\@:
+9999:
         stur \header, [allocptr, #misc_header_offset]
         mov \dest, allocptr
         clear_allocptr_tag
@@ -76,9 +87,9 @@ _SP\name:
 .macro Misc_Alloc_Fixed dest, header, sizeconst
         sub allocptr, allocptr, #(\sizeconst - fulltag_misc)
         cmp allocptr, allocbase
-        b.hi .Linit\@
+        b.hi 9999f
         uuo_alloc
-.Linit\@:
+9999:
         stur \header, [allocptr, #misc_header_offset]
         mov \dest, allocptr
         clear_allocptr_tag
@@ -234,12 +245,12 @@ _SP\name:
         // size is now a cursor
         add \size, tsp, #tsp_frame.fixed_overhead  // first data word
         cmp \size, \scratch     // empty? (size == fixed_overhead)
-        b.hs .Ldone\@
-.Lloop\@:
+        b.hs 9999f
+9998:
         str xzr, [\size], #node_size
         cmp \size, \scratch
-        b.lo .Lloop\@
-.Ldone\@:
+        b.lo 9998b
+9999:
         Set_TSP_Frame_Boxed
 .endm
 
@@ -259,13 +270,13 @@ _SP\name:
         ldr nargs, [rcontext, #tcr.tlb_pointer]
         ldr nargs, [nargs, #INTERRUPT_LEVEL_BINDING_INDEX]
         cmp nargs, #0
-        b.lt .Ldone\@           // interrupts are disabled
-        b.gt .Ltrap\@           // a deferred interrupt is waiting: take it
+        b.lt 9999f           // interrupts are disabled
+        b.gt 9998f           // a deferred interrupt is waiting: take it
         ldr nargs, [rcontext, #tcr.interrupt_pending]
-        cbz nargs, .Ldone\@     // skip if no interrupt pending
-.Ltrap\@:
+        cbz nargs, 9999f     // skip if no interrupt pending
+9998:
         uuo_interrupt_now
-.Ldone\@:
+9999:
 .endm
 
 /* value stack push/pop  */
