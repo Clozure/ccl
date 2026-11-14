@@ -23,8 +23,6 @@
 
 typedef CONTEXT ExceptionInformation;
 
-/* Supposedly, the high-end version of Vista allow 128GB of pageable memory */
-#define MAXIMUM_MAPPABLE_MEMORY (512LL<<30LL)
 #define IMAGE_BASE_ADDRESS 0x100000000LL
 
 #include "lisptypes.h"

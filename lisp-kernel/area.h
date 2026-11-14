@@ -173,6 +173,27 @@ typedef struct area_list {
 #define STATIC_RESERVE (2<<12)
 #define MANAGED_STATIC_SIZE ((natural) ((PURESPACE_RESERVE-PURESPACE_SIZE)/2))
 
+/*
+ * Address space reserved for the heap at startup.  Reserving it doesn't
+ * cost much: GC data structures are committed only as the heap grows.
+ * DEFAULT_RESERVED_MEMORY is what we reserve unless -R/--heap-reserve
+ * asks for something else; MAXIMUM_MAPPABLE_MEMORY caps what -R can
+ * ask for.  32-bit platforms define MAXIMUM_MAPPABLE_MEMORY in their
+ * platform-*.h files and use it as the default.
+ */
+#if (WORD_SIZE==64)
+#ifndef MAXIMUM_MAPPABLE_MEMORY
+#define MAXIMUM_MAPPABLE_MEMORY ((natural)16<<40) /* 16 TB */
+#endif
+#ifndef DEFAULT_RESERVED_MEMORY
+#define DEFAULT_RESERVED_MEMORY ((natural)512<<30) /* 512 GB */
+#endif
+#endif
+
+#ifndef DEFAULT_RESERVED_MEMORY
+#define DEFAULT_RESERVED_MEMORY MAXIMUM_MAPPABLE_MEMORY
+#endif
+
 
 #define SPJUMP_TARGET_ADDRESS (STATIC_BASE_ADDRESS+0x3000)
 

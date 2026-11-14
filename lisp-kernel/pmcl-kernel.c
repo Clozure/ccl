@@ -420,8 +420,10 @@ unsigned unsigned_max(unsigned x, unsigned y)
   }
 }
 
-natural
-reserved_area_size = MAXIMUM_MAPPABLE_MEMORY;
+natural reserved_area_size = DEFAULT_RESERVED_MEMORY;
+
+/* What -R/--heap-reserve asked for, or 0 if it wasn't given. */
+static natural requested_reserved_area_size = 0;
 
 BytePtr reserved_region_end = NULL;
 
@@ -1256,6 +1258,88 @@ ensure_real_path(wchar_t *path)
 }
 #endif
 
+natural
+parse_numeric_option(char *arg, char *argname, natural default_val)
+{
+  char *tail;
+  natural val = 0;
+
+  val = strtoull(arg, &tail, 0);
+  switch(*tail) {
+  case '\0':
+    break;
+#if (WORD_SIZE==64)
+  case 'T': case 't':
+    val = val << 40;
+    break;
+#endif
+  case 'M': case 'm':
+    val = val << 20;
+    break;
+  case 'K': case 'k':
+    val = val << 10;
+    break;
+  case 'G': case 'g':
+    val = val << 30;
+    break;
+  default:
+    fprintf(dbgout, "couldn't parse %s argument %s\n", argname, arg);
+    val = default_val;
+    break;
+  }
+  return val;
+}
+
+/* Format n the way parse_numeric_option() reads it: the largest
+   K/M/G/T suffix that divides n exactly, else plain bytes. */
+static char *
+format_numeric_option(char *buf, size_t len, natural n)
+{
+#if (WORD_SIZE==64)
+  static const char suffixes[] = "KMGT";
+#else
+  static const char suffixes[] = "KMG";
+#endif
+  int i = 0;
+
+  while (suffixes[i] && n != 0 && (n & 1023) == 0) {
+    n >>= 10;
+    i++;
+  }
+  if (i == 0)
+    snprintf(buf, len, "%llu", (unsigned long long)n);
+  else
+    snprintf(buf, len, "%llu%c", (unsigned long long)n, suffixes[i-1]);
+  return buf;
+}
+
+/*
+  Reserve as much of reserved_area_size as the OS will give us,
+  shrinking the request by 10% each time it fails.  If -R/--heap-reserve
+  asked for more than we got, say so.
+*/
+void
+reserve_heap_address_space()
+{
+  while (!create_reserved_area(reserved_area_size)) {
+    reserved_area_size = reserved_area_size * .9;
+  }
+  if (requested_reserved_area_size > reserved_area_size) {
+    char gotbuf[32], reqbuf[32];
+    /* The shrunk size is arbitrary; round it down to a whole G (or M)
+       so that it prints with a suffix. */
+    natural unit = (reserved_area_size >= ((natural)1<<30)) ?
+      ((natural)1<<30) : ((natural)1<<20);
+    natural got = reserved_area_size & ~(unit-1);
+
+    fprintf(dbgout, "note: reserved about %s for the heap; "
+            "-R/--heap-reserve asked for %s\n",
+            format_numeric_option(gotbuf, sizeof gotbuf, got),
+            format_numeric_option(reqbuf, sizeof reqbuf,
+                                  requested_reserved_area_size));
+  }
+}
+
 void
 usage_exit(char *herald, int exit_status, char* other_args)
 {
@@ -1270,8 +1354,11 @@ usage_exit(char *herald, int exit_status, char* other_args)
   if (other_args && *other_args) {
     fputs(other_args, dbgout);
   }
-  fprintf(dbgout, "\t-R, --heap-reserve <n>: reserve <n> (default: %lld)\n",
-	  (long long)reserved_area_size);
+  char dbuf[32], mbuf[32];
+  fprintf(dbgout, "\t-R, --heap-reserve <n>: reserve <n> (default: %s, "
+          "maximum: %s)\n",
+          format_numeric_option(dbuf, sizeof dbuf, DEFAULT_RESERVED_MEMORY),
+          format_numeric_option(mbuf, sizeof mbuf, MAXIMUM_MAPPABLE_MEMORY));
   fprintf(dbgout, "\t\t bytes for heap expansion\n");
   fprintf(dbgout, "\t-S, --stack-size <n>: set  size of initial thread's control stack to <n>\n");
   fprintf(dbgout, "\t-Z, --thread-stack-size <n>: set default size of first (listener)  thread's stacks based on <n>\n");
@@ -1304,42 +1391,6 @@ wchar_t *image_name = NULL;
 char *image_name = NULL;
 #endif
 int batch_flag = 0;
-
-
-natural
-parse_numeric_option(char *arg, char *argname, natural default_val)
-{
-  char *tail;
-  natural val = 0;
-
-  val = strtoul(arg, &tail, 0);
-  switch(*tail) {
-  case '\0':
-    break;
-    
-  case 'M':
-  case 'm':
-    val = val << 20;
-    break;
-    
-  case 'K':
-  case 'k':
-    val = val << 10;
-    break;
-    
-  case 'G':
-  case 'g':
-    val = val << 30;
-    break;
-    
-  default:
-    fprintf(dbgout, "couldn't parse %s argument %s", argname, arg);
-    val = default_val;
-    break;
-  }
-  return val;
-}
-  
 
 
 /* 
@@ -1419,9 +1470,17 @@ process_options(int argc, char *argv[], wchar_t *shadow[])
 					       reserved_area_size);
 	}
 
-	if (reserved_size <= MAXIMUM_MAPPABLE_MEMORY) {
-	  reserved_area_size = reserved_size;
+	if (reserved_size > MAXIMUM_MAPPABLE_MEMORY) {
+          char reqbuf[32], maxbuf[32];
+	  fprintf(dbgout, "note: -R/--heap-reserve %s exceeds maximum "
+                  "of %s; using the maximum\n",
+		  format_numeric_option(reqbuf, sizeof reqbuf, reserved_size),
+                  format_numeric_option(maxbuf, sizeof maxbuf,
+                                        MAXIMUM_MAPPABLE_MEMORY));
+	  reserved_size = MAXIMUM_MAPPABLE_MEMORY;
 	}
+	reserved_area_size = reserved_size;
+	requested_reserved_area_size = reserved_size;
 
       } else if ((flag = (strncmp(arg, "-S", 2) == 0)) ||
 		 (strcmp(arg, "--stack-size") == 0)) {
@@ -2174,12 +2233,7 @@ main
     }
   }
 
-  while (1) {
-    if (create_reserved_area(reserved_area_size)) {
-      break;
-    }
-    reserved_area_size = reserved_area_size *.9;
-  }
+  reserve_heap_address_space();
 
   gc_init();
 #if defined(DARWIN) && defined(ARM64)
@@ -2855,12 +2909,7 @@ init_ccl_for_android(ANativeActivity *activity)
   main_thread_pid = getpid();
   tcr_area_lock = (void *)new_recursive_lock();
   image_name = "/data/local/ccl/android.image"; /* need something better. */
-  while (1) {
-    if (create_reserved_area(reserved_area_size)) {
-      break;
-    }
-    reserved_area_size = reserved_area_size *.9;
-  }
+  reserve_heap_address_space();
 
   gc_init();
 
