@@ -425,6 +425,37 @@
                 (setf (label-operand-target op) target
                       (label-operand-name op) (ensure-label di target))))))))))
 
+(defun resolve-subprim-calls (di-vector)
+  ;; A subprim call or jump is
+  ;;   (movz Rt (:$ offset)) (ldr Rt (:@ rcontext Rt)) (blr Rt) or (br Rt)
+  ;; Name the subprim in the movz, as other targets' disassemblers do.
+  (let ((rcontext-register (svref *registers* rcontext)))
+    (dotimes (i (- (length di-vector) 2) di-vector)
+      (let* ((mov (svref di-vector i))
+             (ldr (svref di-vector (+ i 1)))
+             (branch (svref di-vector (+ i 2)))
+             (rt (first (di-operands mov)))
+             (imm (second (di-operands mov)))
+             (mem (second (di-operands ldr))))
+        (when (and (member (di-mnemonic mov) '("mov" "movz") :test #'string=)
+                   (immediate-operand-p imm)
+                   (integerp (immediate-operand-value imm))
+                   (member (immediate-operand-shift imm) '(nil 0))
+                   (string= (di-mnemonic ldr) "ldr")
+                   (same-register-p rt (first (di-operands ldr)))
+                   (memory-operand-p mem)
+                   (not (memory-operand-pre-indexed mem))
+                   (not (memory-operand-post-indexed mem))
+                   (eq (register-operand-register (memory-operand-base mem)) rcontext-register)
+                   (same-register-p rt (memory-operand-offset mem))
+                   (member (di-mnemonic branch) '("blr" "br") :test #'string=)
+                   (same-register-p rt (first (di-operands branch))))
+          (let ((info (find (immediate-operand-value imm) *subprims*
+                            :key #'ccl::subprimitive-info-offset)))
+            (when info
+              (setf (immediate-operand-value imm)
+                    (ccl::subprimitive-info-name info)))))))))
+
 (defun ensure-label (di index)
   ;; The name of the label defined at DI, defining one (named by its byte
   ;; offset from the start of the code vector, like L0, L4, L8 ...) if this
@@ -499,9 +530,11 @@
   (format stream "(:$ ")
   (let ((shift (immediate-operand-shift operand))
         (value (immediate-operand-value operand)))
-    (if (> (abs value) *disassemble-print-hex-threshold*)
-      (format stream "#x~x" value)
-      (format stream "~d" value))
+    (cond ((not (numberp value))        ;a subprim name
+           (format stream "~a" value))
+          ((> (abs value) *disassemble-print-hex-threshold*)
+           (format stream "#x~x" value))
+          (t (format stream "~d" value)))
     (when (and shift (/= shift 0))
       (format stream " :lsl ~d" shift))
     (format stream ")")))
@@ -529,6 +562,7 @@
                                               (stream *debug-io*))
   (let ((di-vector (make-di-vector code-vector)))
     (resolve-labels di-vector)
+    (resolve-subprim-calls di-vector)
     (print-di-vector di-vector stream)))
 
 (defun ccl::arm64-disassemble-xfunction (xfunction &optional
@@ -552,6 +586,7 @@
                         ";;; ~A" (ccl::string-sans-most-whitespace source-text
                                                                    100))))))))
     (resolve-labels di-vector)
+    (resolve-subprim-calls di-vector)
     (dotimes (i (length di-vector))
       (when functionp
         (let ((source-note (find-source-note-at-pc xfunction (* i 4))))
@@ -630,6 +665,7 @@
       (when source-note
         (ccl::ensure-source-note-text source-note)))
     (resolve-labels di-vector)
+    (resolve-subprim-calls di-vector)
     (dotimes (i (length di-vector))
       (let ((di (svref di-vector i))
             (pc (* 4 i)))
