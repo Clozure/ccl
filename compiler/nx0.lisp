@@ -328,7 +328,7 @@ function to the indicated name is true.")
 (defun nx-float-safety (env)
   (or (eql (safety-optimize-quantity env) 3)
       (let* ((hook (getf (policy.misc *nx-current-compiler-policy*)
-			 :detect-floating-point-exception)))
+			 :detect-floating-point-exceptions)))
         (when hook
           (if (functionp hook)
             (funcall hook env)
@@ -437,7 +437,7 @@ function to the indicated name is true.")
         (%nx1-operator mul2)
         (%nx1-operator div2)))
 
-(defparameter *acode-operator-types* (make-array (1+ operator-id-mask) :initial-element t)) ; initialized by next-nx-defops
+(defvar *acode-operator-types* (make-array (1+ operator-id-mask) :initial-element t)) ; initialized by next-nx-defops
 
 
 (defparameter *acode-simple-type-inferrers* (make-array (1+ operator-id-mask) :initial-element nil))

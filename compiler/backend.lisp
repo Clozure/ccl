@@ -111,6 +111,14 @@
     (:u64 . 8)
     (:s64 . 9)))
 
+;; xxx-HOST for each xxx-TARGET
+(defun backend-target-host-features (backend)
+  (loop for f in (backend-target-specific-features backend)
+        for name = (symbol-name f)
+        for n = (- (length name) (length "-TARGET"))
+        when (and (> n 0) (string= name "-TARGET" :start1 n))
+        collect (make-keyword (%str-cat (%substr name 0 n) "-HOST"))))
+
 (defun gpr-mode-name-value (name)
   (if (eq name :natural)
     (setq name

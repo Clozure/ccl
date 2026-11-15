@@ -2972,13 +2972,13 @@ endsp throw
         .macro unbind_to_imm0
         ldr imm1, [rcontext, #tcr.db_link]
         ldr imm2, [rcontext, #tcr.tlb_pointer]
-.Lu2i\@:
+9999:
         ldr arg_x, [imm1, #binding.sym]
         ldr arg_y, [imm1, #binding.val]
         ldr imm1, [imm1, #binding.link]
         cmp imm0, imm1
         str arg_y, [imm2, arg_x]
-        b.ne .Lu2i\@
+        b.ne 9999b
         str imm1, [rcontext, #tcr.db_link]
         .endm
 
@@ -3782,10 +3782,6 @@ spentry stack_cons_rest_arg
         /* ppc:2035-2063.  imm0 = required args already consumed; nargs = total.
            Cons the rest args into a list on the temp stack (heap-cons if the
            block would be too large).  arg_z accumulates the list. */
-        /* Labels 8/9 for the ble/bge targets (not 2/3), matching the
-           throw/nthrowvalues high-label convention.  (The TSP_Alloc_* macros
-           now use \@-unique local labels, so a forward `2f' here would no
-           longer be captured by the macro -- but the convention is kept.) */
         sub imm1, nargs, imm0           /* ppc:2036 imm1 = rest count (bytes)   */
         mov arg_z, rnil                 /* ppc:2039 li arg_z,nil_value          */
         cmp imm1, #0                    /* ppc:2037 cmpri(cr0,imm1,0), signed   */

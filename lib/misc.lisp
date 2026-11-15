@@ -1476,7 +1476,11 @@ are running on, or NIL if we can't find any useful information."
   ;; (target-nil-value) is wrong when the loader relocated the static
   ;; section.  Use the live nil address.
   #+arm64-target (+ (%address-of nil) (target::%kernel-global global))
-  #-arm64-target (+ (target-nil-value) (target::%kernel-global global)))
+  ;; ARM32's %kernel-global is relative to untagged nil.
+  #+arm-target (+ (- (target-nil-value) target::fulltag-nil)
+                  (target::%kernel-global global))
+  #-(or arm64-target arm-target)
+  (+ (target-nil-value) (target::%kernel-global global)))
 
 (defloadvar *static-cons-address* (%int-to-ptr (kernel-global-address 'static-conses)))
 
@@ -1488,19 +1492,28 @@ are running on, or NIL if we can't find any useful information."
    table.  Usage is equivalent to regular CONS."
   (let* ((addr *static-cons-address*)
          (freeaddr  *free-static-cons-address*))
-    (loop
-      (with-exception-lock
-          (without-interrupts      
-           (let ((cell (%get-object addr 0)))
-             (if cell
-               (progn
-                 (%set-object addr 0 (cdr cell))
-                 (%set-object freeaddr 0 (1- (%get-object freeaddr 0)))
-                 (setf (car cell) car-value)
-                 (setf (cdr cell) cdr-value)
-                 (return cell))
-               (progn
-                 (%ensure-static-conses)))))))))
+    (flet ((try-static-cons ()
+             (with-exception-lock
+               (without-interrupts
+                (let ((cell (%get-object addr 0)))
+                  (unless cell
+                    (%ensure-static-conses)
+                    (setq cell (%get-object addr 0)))
+                  (when cell
+                    (%set-object addr 0 (cdr cell))
+                    (%set-object freeaddr 0 (1- (%get-object freeaddr 0)))
+                    (setf (car cell) car-value)
+                    (setf (cdr cell) cdr-value))
+                  cell)))))
+      (or (try-static-cons)
+          ;; The static cons area can't grow any further.  Try a full
+          ;; GC, which will return unreferenced static conses to the
+          ;; free list.
+          (progn
+            (gc)
+            (try-static-cons))
+          (error 'simple-storage-condition
+                 :format-control "Static cons space exhausted.")))))
 
 (defun free-static-conses ()
   (%get-kernel-global free-static-conses))

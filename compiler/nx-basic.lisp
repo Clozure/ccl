@@ -195,6 +195,7 @@
                #'(lambda (var val env)       ; allow-constant-substitution
                    (declare (ignore var val env))
                    t)
+               ;; plist for extensions
                `(:strict-structure-typechecking
                  ,(lambda (env)
                    (let* ((debug (debug-optimize-quantity env))
@@ -204,10 +205,11 @@
                      (or (>= debug 2)
                          (>= safety 2)
                          (> debug speed)
-                         (> safety speed)))))
-               :detect-floating-point-exceptions
-               (lambda (env) (> (safety-optimize-quantity env) 1)) ; extensions
+                         (> safety speed))))
+                 :detect-floating-point-exceptions
+                 ,(lambda (env) (> (safety-optimize-quantity env) 1)))
                )))
+
   (defun new-compiler-policy (&key (allow-tail-recursion-elimination nil atr-p)
                                    (inhibit-register-allocation nil ira-p)
                                    (trust-declarations nil td-p)
@@ -221,6 +223,7 @@
                                    (strict-structure-typechecking nil sst-p)
                                    (detect-floating-point-exceptions nil fpx-p))
     (let ((p (copy-uvector policy)))
+      (setf (policy.misc p) (copy-list (policy.misc p)))
       (if atr-p (setf (policy.allow-tail-recursion-elimination p) allow-tail-recursion-elimination))
       (if ira-p (setf (policy.inhibit-register-allocation p) inhibit-register-allocation))
       (if td-p (setf (policy.trust-declarations p) trust-declarations))

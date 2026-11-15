@@ -25,7 +25,7 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require "X86-ARCH")
-  (require "X86-LAP")
+  (require "X86-ASM")
 
 (defparameter *x8632-symbolic-register-names*
   (make-hash-table :test #'equal)

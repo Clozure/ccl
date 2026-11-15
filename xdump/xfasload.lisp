@@ -945,29 +945,34 @@
 
 
 (defun xload-save-htab (htab)
+  ;; The target rehashes every package table at boot before it looks up any symbols, so
+  ;; don't need to preserve the layout, just save all the symbols.
   (let* ((htvec (car htab))
          (len (length htvec))
-         (xvec (xload-make-gvector :simple-vector len))
-         (deleted-marker *xload-target-unbound-marker*))
+         (symbols ()))
     (dotimes (i len)
-      (let* ((s (%svref htvec i)))
-        (setf (xload-%svref xvec i)
-              (if s
-                (if (symbolp s)
-                  (or (xload-lookup-symbol s) deleted-marker)
-                  0)
-                (if (= (logand *xload-target-nil* *xload-target-fulltagmask*)
-                       *xload-target-fulltag-for-symbols*)
-                  *xload-target-nil*
-                  (+ *xload-target-nil*
-                     (let* ((arch (backend-target-arch *target-backend*)))
-                       (+ (arch::target-t-offset arch)
-                          (ash 8 (arch::target-word-shift arch))))))))))
-    (xload-make-cons  
-     xvec 
-     (xload-make-cons
-      (xload-integer (cadr htab))
-      (xload-integer (cddr htab))))))
+      (let* ((s (%svref htvec i))
+             (addr (if s
+                     (and (symbolp s) (xload-lookup-symbol s))
+                     ;; The symbol NIL.
+                     (if (= (logand *xload-target-nil* *xload-target-fulltagmask*)
+                            *xload-target-fulltag-for-symbols*)
+                       *xload-target-nil*
+                       (+ *xload-target-nil*
+                          (let* ((arch (backend-target-arch *target-backend*)))
+                            (+ (arch::target-t-offset arch)
+                               (ash 8 (arch::target-word-shift arch)))))))))
+        (when addr (push addr symbols))))
+    (let* ((count (length symbols))
+           (xvec (xload-make-gvector :simple-vector count)))
+      (loop for addr in (nreverse symbols)
+            for i from 0
+            do (setf (xload-%svref xvec i) addr))
+      (xload-make-cons
+       xvec
+       (xload-make-cons
+        (xload-integer count)
+        (xload-integer count))))))
 
 (defun xload-finalize-packages ()
   (dolist (pair *xload-aliased-package-addresses*)

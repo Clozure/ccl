@@ -404,7 +404,8 @@
   (or (eq x y)                          ; Redefinition of constants to themselves.
       (if (and (stringp x) (stringp y)) ;The most obvious case where equalp & s-a-c-p need to differ...
         (string= x y)
-        (equalp x y))))
+        ;; If EQUALP can't compare them (e.g. it traps comparing NaNs), they're not similar.
+        (ignore-errors (equalp x y)))))
 
 (defun undefine-constant (var)
   (%set-sym-global-value var (%unbound-marker-8)))

@@ -332,51 +332,37 @@
   (sploadlr .SPthrow)
   (blx lr))
 
+;;; The compiler expands calls to %FF-CALL inline, so this function runs
+;;; only when user code calls it through FUNCALL, APPLY or EVAL, well
+;;; after the backend (and ARM::EABI-HARD-FLOAT-ARG-WORDS) has loaded.
 (defun %ff-call (entry &rest specs-and-vals)
   (declare (dynamic-extent specs-and-vals))
   (let* ((len (length specs-and-vals))
-         (total-words 0)
-         (fp-words 16))
-    (declare (fixnum len total-words fp-words))
-    (let* ((result-spec (or (car (last specs-and-vals)) :void))
-           (nargs (ash (the fixnum (1- len)) -1)))
-      (declare (fixnum nargs))
-      (ecase result-spec
-        ((:address :unsigned-doubleword :signed-doubleword
-                   :single-float :double-float
-                   :signed-fullword :unsigned-fullword
-                   :signed-halfword :unsigned-halfword
-                   :signed-byte :unsigned-byte
-                   :void)
-         (do* ((i 0 (1+ i))
-               (specs specs-and-vals (cddr specs))
-               (spec (car specs) (car specs)))
-              ((= i nargs))
-           (declare (fixnum i))
-           (case spec
-             ((:address :signed-fullword :unsigned-fullword
-                        :signed-halfword :unsigned-halfword
-                        :signed-byte :unsigned-byte)
-              (incf total-words))
-             (:single-float
-              (if (> fp-words 0)
-                (decf fp-words)
-                (incf total-words)))
-             (:double-float
-              (if (>= fp-words 2)
-                (if (oddp fp-words)
-                  (decf fp-words 3)
-                  (decf fp-words 2))
-                (if (oddp total-words)
-                  (incf total-words 3)
-                  (incf total-words 2))))
-             ((:unsigned-doubleword :signed-doubleword)
-              (setq total-words (+ total-words (logand total-words 1)))
-              (incf total-words 2))
-
-             (t (if (typep spec 'unsigned-byte)
-                  (incf total-words spec)
-                  (error "unknown arg spec ~s" spec)))))
+         (result-spec (or (car (last specs-and-vals)) :void))
+         (nargs (ash (the fixnum (1- len)) -1))
+         (specs (make-list nargs)))
+    (declare (fixnum len nargs) (dynamic-extent specs))
+    (do* ((tail specs (cdr tail))
+          (pairs specs-and-vals (cddr pairs)))
+         ((null tail))
+      (let* ((spec (car pairs)))
+        (unless (or (typep spec 'unsigned-byte)
+                    (member spec '(:address :single-float :double-float
+                                   :signed-doubleword :unsigned-doubleword
+                                   :signed-fullword :unsigned-fullword
+                                   :signed-halfword :unsigned-halfword
+                                   :signed-byte :unsigned-byte)))
+          (error "unknown arg spec ~s" spec))
+        (setf (car tail) spec)))
+    (ecase result-spec
+      ((:address :unsigned-doubleword :signed-doubleword
+                 :single-float :double-float
+                 :signed-fullword :unsigned-fullword
+                 :signed-halfword :unsigned-halfword
+                 :signed-byte :unsigned-byte
+                 :void)
+       (multiple-value-bind (words frame-words)
+           (arm::eabi-hard-float-arg-words specs)
          ;; It's necessary to ensure that the C frame is the youngest thing on
          ;; the foreign stack here.
          (let* ((tag (cons nil nil)))
@@ -385,63 +371,37 @@
              (catch tag
                (with-macptrs ((argptr))
                  (with-variable-c-frame
-                     (+ total-words 16) frame
+                     frame-words frame
                      (%setf-macptr-to-object argptr frame)
-                     (let* ((fp-arg-offset 8)
-                            (arg-offset 72))
-                       (declare (fixnum arg-offset fp-arg-offset))
-                       (do* ((i 0 (1+ i))
-                             (specs specs-and-vals (cddr specs))
-                             (spec (car specs) (car specs))
-                             (val (cadr specs) (cadr specs)))
-                            ((= i nargs))
-                         (declare (fixnum i))
+                     ;; Word W of the argument area is at byte offset
+                     ;; 8+4W in the frame.
+                     (do* ((pairs specs-and-vals (cddr pairs))
+                           (words words (cdr words)))
+                          ((null words))
+                       (let* ((spec (car pairs))
+                              (val (cadr pairs))
+                              (offset (+ 8 (* 4 (the fixnum (car words))))))
+                         (declare (fixnum offset))
                          (case spec
                            (:address
-                            (setf (%get-ptr argptr arg-offset) val)
-                            (incf arg-offset 4))
+                            (setf (%get-ptr argptr offset) val))
                            (:signed-doubleword
-                            (when (logtest 7 arg-offset)
-                              (incf arg-offset 4))
-                            (setf (%%get-signed-longlong argptr arg-offset) val)
-                            (incf arg-offset 8))
+                            (setf (%%get-signed-longlong argptr offset) val))
                            ((:signed-fullword :signed-halfword :signed-byte)
-                            (setf (%get-signed-long argptr arg-offset) val)
-                            (incf arg-offset 4))
+                            (setf (%get-signed-long argptr offset) val))
                            (:unsigned-doubleword
-                             (when (logtest 7 arg-offset)
-                               (incf arg-offset 4))
-                             (setf (%%get-unsigned-longlong argptr arg-offset) val)
-                             (incf arg-offset 8))
+                            (setf (%%get-unsigned-longlong argptr offset) val))
                            ((:unsigned-fullword :unsigned-halfword :unsigned-byte)
-                            (setf (%get-unsigned-long argptr arg-offset) val)
-                            (incf arg-offset 4))
+                            (setf (%get-unsigned-long argptr offset) val))
                            (:double-float
-                            (cond ((<= fp-arg-offset 64)
-                                   (when (logtest 7 fp-arg-offset)
-                                     (incf fp-arg-offset 4))
-                                   (setf (%get-double-float argptr fp-arg-offset) val)
-                                   (incf fp-arg-offset 8))
-                                  (t
-                                   (when (logtest 7 arg-offset)
-                                     (incf arg-offset 4))
-                                   (setf (%get-double-float argptr arg-offset) val)
-                                   (incf arg-offset 8))))
+                            (setf (%get-double-float argptr offset) val))
                            (:single-float
-                            (cond ((< fp-arg-offset 72)
-                                   (setf (%get-single-float argptr fp-arg-offset) val)
-                                   (incf fp-arg-offset 4))
-                                  (t
-                                   (setf (%get-single-float argptr arg-offset) val)
-                                   (incf arg-offset 4))))
+                            (setf (%get-single-float argptr offset) val))
                            (t
-                              (let* ((p 0))
-                                (declare (fixnum p))
-                                (dotimes (i (the fixnum spec))
-                                  (setf (%get-ptr argptr arg-offset) (%get-ptr val p))
-                                  (incf p 4)
-                                  (incf arg-offset 4)))))))
-                         (%do-ff-call tag result entry))))
+                            (dotimes (j (the fixnum spec))
+                              (setf (%get-ptr argptr (+ offset (* 4 j)))
+                                    (%get-ptr val (* 4 j))))))))
+                     (%do-ff-call tag result entry))))
              (ecase result-spec
                (:void nil)
                (:address (%get-ptr result 0))

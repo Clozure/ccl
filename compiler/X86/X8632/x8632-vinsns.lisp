@@ -2973,6 +2973,48 @@
 ;;; check-2d-bound
 ;;; check-3d-bound
 
+(define-x8632-vinsn trap-unless-simple-array-2 (()
+                                                ((object :lisp)
+                                                 (expected-flags :u32const)
+                                                 (type-error :u8const))
+                                                ((tag :u8)))
+  :resume
+  (movl (:%l object) (:%l tag))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
+  (jne :bad)
+  (cmpb (:$b x8632::subtag-arrayH) (:@ x8632::misc-subtag-offset (:%l object)))
+  (jne :bad)
+  (cmpl (:$b (ash 2 x8632::fixnumshift)) (:@ x8632::arrayH.rank (:%l object)))
+  (jne :bad)
+  (cmpl (:$l (:apply ash expected-flags x8632::fixnumshift)) (:@ x8632::arrayH.flags (:%l object)))
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub type-error))))
+
+(define-x8632-vinsn trap-unless-simple-array-3 (()
+                                                ((object :lisp)
+                                                 (expected-flags :u32const)
+                                                 (type-error :u8const))
+                                                ((tag :u8)))
+  :resume
+  (movl (:%l object) (:%l tag))
+  (andl (:$b x8632::tagmask) (:%l tag))
+  (cmpl (:$b x8632::tag-misc) (:%l tag))
+  (jne :bad)
+  (cmpb (:$b x8632::subtag-arrayH) (:@ x8632::misc-subtag-offset (:%l object)))
+  (jne :bad)
+  (cmpl (:$b (ash 3 x8632::fixnumshift)) (:@ x8632::arrayH.rank (:%l object)))
+  (jne :bad)
+  (cmpl (:$l (:apply ash expected-flags x8632::fixnumshift)) (:@ x8632::arrayH.flags (:%l object)))
+  (jne :bad)
+
+  (:anchored-uuo-section :resume)
+  :bad
+  (:anchored-uuo (uuo-error-reg-not-type (:%l object) (:$ub type-error))))
+
 (define-x8632-vinsn 2d-dim1 (((dest :u32))
 			     ((header :lisp)))
   (movl (:@ (+ x8632::misc-data-offset (* 4 (1+ x8632::arrayH.dim0-cell)))

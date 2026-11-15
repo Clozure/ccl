@@ -82,38 +82,10 @@ cclean:
 
 .PHONY: clean
 clean: cclean
-	$(RM) -f $(SPOBJ) .asmcheck
+	$(RM) -f $(SPOBJ)
 
 arm64-imports.o: ../arm64-imports.s ../arm64-asm.h
 
 # GNU Make: delete any target file if its recipe fails after starting
 # to write it.
 .DELETE_ON_ERROR:
-
-# Preflight check to ensure developer tools are new enough.  We use
-# the GNU-as-style \@ macro-invocation counter to implement
-# per-expansion unique labels in assembler macros.  Complain here
-# instead of leaving the user to figure out what "unexpected token in
-# argument list" means.  Xcode 16.4 or later is known to support \@.
-define ASM_ATSIGN_PROBE
-.macro t\n.Lx\\@:\n b .Lx\\@\n.endm\nt\nt\n
-endef
-
-.PHONY: check-asm
-check-asm:
-	@printf '$(ASM_ATSIGN_PROBE)' \
-	  | $(CC) -x assembler-with-cpp -c -o /dev/null - 2>/dev/null \
-	  || { echo "$(CC) does not support the \\@ macro counter,"; \
-	       echo "which is necessary to build the lisp kernel."; \
-	       echo "Xcode 16.4 or later is known to work."; \
-	       exit 1; }
-
-# Stamp so the check-asm probe only runs once.
-.asmcheck: Makefile
-	@$(MAKE) --no-print-directory check-asm
-	@touch $@
-
-# Prerequisites after '|' are order-only prerequisites.  It means
-# "make sure this is built first, but don't force the targets to be
-# updated."
-$(SPOBJ) $(ASMOBJ): | .asmcheck

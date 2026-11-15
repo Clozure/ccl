@@ -46,7 +46,8 @@
 		:p2-template-hash-name '*ppc32-vinsn-templates*
 		:p2-compile 'ppc2-compile
 		:target-specific-features
-		'(:powerpc :ppc-target :eabi-target :linux-target :linuxppc-target :ppc32-target :32-bit-target :big-endian-target)
+		'(:powerpc :ppc-target :eabi-target :linux-target :linuxppc-target :ppc32-target :32-bit-target :big-endian-target
+                  :unix :ppc-clos :linux)
 		:target-fasl-pathname (make-pathname :type "pfsl")
 		:target-platform (logior platform-word-size-32
                                          platform-cpu-ppc
@@ -70,7 +71,8 @@
 		:p2-template-hash-name '*ppc32-vinsn-templates*
 		:p2-compile 'ppc2-compile
 		:target-specific-features
-		'(:powerpc :ppc-target :darwin-target :darwinppc-target :ppc32-target :32-bit-target :big-endian-target)
+		'(:powerpc :ppc-target :darwin-target :darwinppc-target :ppc32-target :32-bit-target :big-endian-target
+                  :unix :ppc-clos :darwin)
 		:target-fasl-pathname (make-pathname :type "dfsl")
 		:target-platform (logior platform-word-size-32
                                          platform-cpu-ppc

@@ -1449,12 +1449,8 @@ unsigned IP address."
   ((host :initarg :host :reader host :reader socket-address-host)
    (port :initarg :port :reader port :reader socket-address-port)))
 
-(defconstant +host-address-string-len+
-  #-windows-target #$INET6_ADDRSTRLEN
-  #+windows-target 64)
-
 (defun host-address-as-string (ip-socket-address)
-  (%stack-block ((namep +host-address-string-len+)
+  (%stack-block ((namep #-windows-target #$INET6_ADDRSTRLEN #+windows-target 64)
 		 #+windows-target
 		 (namelenp (record-length :int)))
     #-windows-target
@@ -1464,17 +1460,20 @@ unsigned IP address."
         ;; #___inet_ntop
         (ccl:external-call "inet_ntop"
                            :int (af ip-socket-address)
-                           :address (ecase (af ip-socket-address)
-                                      (#.#$AF_INET (pref (sockaddr ip-socket-address) :sockaddr_in.sin_addr))
-                                      (#.#$AF_INET6 (pref (sockaddr ip-socket-address) :sockaddr_in6.sin6_addr)))
+                           :address (let ((addr (af ip-socket-address)))
+                                      (cond ((eq addr #$AF_INET)
+                                             (pref (sockaddr ip-socket-address) :sockaddr_in.sin_addr))
+                                            ((eq addr #$AF_INET6)
+                                             (pref (sockaddr ip-socket-address) :sockaddr_in6.sin6_addr))
+                                            (t (error "~s is not one of ~s" addr (list #$AF_INET #$AF_INET6)))))
                            :address namep
-                           :socklen_t +host-address-string-len+
+                           :socklen_t #$INET6_ADDRSTRLEN
                            :address)
       (if (%null-ptr-p result)
 	  (error "could not convert address to string, error ~S" errno)
 	  (%get-cstring namep)))
     #+windows-target
-    (setf (pref namelenp :int) +host-address-string-len+)
+    (setf (pref namelenp :int) 64)
     #+windows-target
     (if (zerop (#_WSAAddressToStringA (sockaddr ip-socket-address)
                                       (sockaddr-length ip-socket-address)
@@ -1649,18 +1648,11 @@ unsigned IP address."
   (format nil "~S" (socket-address-path socket-address)))
 
 #-windows-target
-(defconstant +socketaddr_un-sock-path-lan+ (/ (ensure-foreign-type-bits
-                                               (foreign-record-field-type 
-                                                (%find-foreign-record-type-field
-                                                 (parse-foreign-type '(:struct :sockaddr_un)) :sun_path)))
-                                              8))
-
-#-windows-target
 (defun copy-string-to-sockaddr_un (name sockaddr)
   "Copy a pathname to a sockaddr_un object, returning the length of
 the resulting sockaddr."
   (let* ((namelen (length name))
-         (copylen (min (1- +socketaddr_un-sock-path-lan+) namelen))
+         (copylen (min (1- (record-length :sockaddr_un.sun_path)) namelen))
          (sun-path (pref sockaddr :sockaddr_un.sun_path)))
     (dotimes (i copylen)
       (setf (%get-unsigned-byte sun-path i)
@@ -1669,7 +1661,7 @@ the resulting sockaddr."
                   (char-code #\Sub)
                   code))))
     (setf (%get-unsigned-byte sun-path copylen) 0)
-    (+ (record-length :sockaddr_un) (- +socketaddr_un-sock-path-lan+) 1 copylen)))
+    (+ (record-length :sockaddr_un) (- (record-length :sockaddr_un.sun_path)) 1 copylen)))
 
 #-windows-target
 (defmethod upgrade-socket-address-from-sockaddr ((address-family (eql #$AF_UNIX)) socket-address)
@@ -1680,7 +1672,7 @@ the resulting sockaddr."
                           #+darwin-target
                           (%str-from-ptr (pref sockaddr :sockaddr_un.sun_path)
                                          (- (pref sockaddr :sockaddr_un.sun_len)
-                                            (- (record-length :sockaddr_un) +socketaddr_un-sock-path-lan+)
+                                            (- (record-length :sockaddr_un) (record-length :sockaddr_un.sun_path))
                                             1))
                           #-darwin-target
                           (%get-cstring (pref sockaddr :sockaddr_un.sun_path))))))

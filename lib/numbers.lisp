@@ -26,34 +26,18 @@
                  %single-float-asinh %single-float-tanh
                  %single-float-cosh %single-float-sinh)))
 
-
-
 (defconstant double-float-positive-infinity
-  #.(let* ((division-by-zero (get-fpu-mode  :division-by-zero)))
-      (declare (notinline /))
-      (unwind-protect
-           (progn
-             (ccl:set-fpu-mode :division-by-zero nil)
-             (/ 0d0))
-	(ccl:set-fpu-mode :division-by-zero division-by-zero))))
+  #.(double-float-from-bits #x7ff00000 0))
 
 (defconstant double-float-negative-infinity
-  #.(let* ((division-by-zero (get-fpu-mode  :division-by-zero)))
-      (declare (notinline /))
-      (unwind-protect
-           (progn
-             (ccl:set-fpu-mode :division-by-zero nil)
-             (/ -0d0))
-	(ccl:set-fpu-mode :division-by-zero division-by-zero))))
+  #.(double-float-from-bits #xfff00000 0))
 
-(defconstant double-float-nan
-  #.(let ((invalid (get-fpu-mode :invalid)))
-      (declare (notinline +))
-      (unwind-protect
-	   (progn
-	     (set-fpu-mode :invalid nil)
-	     (+ double-float-positive-infinity double-float-negative-infinity))
-	(set-fpu-mode :invalid invalid))))
+;;; Below is a different definition of double-float-nan than in 1.14.
+;;; The redefinition triggers a bug in define-constant when it's looking at NaN's.
+#-bootstrapped (undefine-constant 'double-float-nan) ;;  Can remove this once the release image has define-constant fixed.
+
+;;; sign clear, quiet bit set, zero payload
+(defconstant double-float-nan  #.(double-float-from-bits #x7ff80000 0))
 
 (defun parse-float (str len off)  
   ; we cant assume this really is a float but dont call with eg s1 or e1

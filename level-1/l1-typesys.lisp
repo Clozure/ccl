@@ -3972,17 +3972,6 @@
 (deftype simple-unsigned-long-vector (&optional size)
   `(simple-array (unsigned-byte 32) (,size)))
 
-(deftype simple-signed-word-vector (&optional size)
-  `(simple-array (signed-byte 16) (,size)))
-
-(deftype simple-signed-byte-vector (&optional size)
-  `(simple-array (signed-byte 8) (,size)))
-
-(deftype simple-signed-long-vector (&optional size)
-  `(simple-array (signed-byte 32) (,size)))
-
-
-
 (deftype simple-short-float-vector (&optional size)
   `(simple-array short-float (,size)))
 

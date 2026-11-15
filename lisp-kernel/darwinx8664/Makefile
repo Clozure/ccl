@@ -80,7 +80,7 @@ probes.h: probes.d
 
 thread_manager.o: thread_manager.c 
 
-mach_exc_server.o: mach_exc_server.c mach_exc.h
+mach_exc_server.o: mach_exc_server.c mach_exc.h probes.h
 
 # What we want here is a grouped target, but we need
 # GNU make version 4.3 for that.

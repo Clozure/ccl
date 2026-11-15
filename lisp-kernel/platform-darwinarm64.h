@@ -18,7 +18,6 @@ typedef mcontext_t MCONTEXT_T;
 typedef ucontext_t ExceptionInformation;
 #define UC_MCONTEXT(UC) UC->uc_mcontext
 
-#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
 /* Preferred image base; ASLR may relocate. Same provisional value as linuxarm64. */
 #define IMAGE_BASE_ADDRESS 0x300000000000L
 

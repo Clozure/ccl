@@ -43,7 +43,6 @@
     :clozure-common-lisp
     :ansi-cl
     :ieee-floating-point
-    #-windows-target :unix
     :openmcl-unicode-strings
     :ipv6
     ;; Threads and MOP stuff is pretty redundant.
@@ -57,99 +56,11 @@
     ;; and managing statically allocated CONS cells) will be
     ;; added in 1.1
     ;; Was dropped in 1.2
-    #+(and x86-target 64-bit-target)
-    :static-conses-should-work-with-egc-in-ccl 
     ;; :openmcl-hash-consing
     ;; 1.12 introduces package-local-nicknames
     :package-local-nicknames
-    #+eabi-target :eabi-target
-    #+ppc-target :powerpc
-    #+ppc-target :ppc-target
-    #+ppc-target :ppc-clos              ; used in encapsulate
-    #+ppc32-target :ppc32-target
-    #+ppc32-target :ppc32-host
-    #+ppc64-target :ppc64-target
-    #+ppc64-target :ppc64-host
-    #+x8632-target :x8632-target
-    #+x8632-target :x8632-host
-    #+x8664-target :x86-64
-    #+x8664-target :x86_64
-    #+x8632-target :x86
-    #+x86-target :x86-target
-    #+x86-target :x86-host
-    #+x8664-target :x8664-target
-    #+x8664-target :x8664-host
-    #+arm-target :arm
-    #+arm-target :arm-target
-    #+arm64-target :arm64
-    #+arm64-target :arm64-target
-    #+arm64-target :arm64-host
-    #+linux-target :linux-host
-    #+linux-target :linux-target
-    #+linuxppc-target :linuxppc-target
-    #+linuxppc-target :linuxppc-host
-    #+linuxx86-target :linuxx86-target
-    #+linuxx8664-target :linuxx8664-target
-    #+linuxx8664-target :linuxx8664-host
-    #+linuxx8632-target :linuxx8632-target
-    #+linuxx8632-target :linuxx8632-host
-    #+linuxarm-target :linuxarm-target
-    #+linuxarm-target :linuxarm-host
-    #+linuxarm64-target :linuxarm64-target
-    #+linuxarm64-target :linuxarm64-host
-    #+darwinarm-target :darwinarm-target
-    #+darwinarm-target :darwinarm-host
-    #+darwinarm64-target :darwinarm64-target
-    #+darwinarm64-target :darwinarm64-host
-    #+darwinppc-target :darwinppc-target
-    #+darwinppc-target :darwinppc-host
-    #+darwinppc-target :darwin-target
-    #+freebsd-target :freebsd-host
-    #+freebsd-target :freebsd-target
-    #+freebsdx86-target :freebsdx86-target
-    #+freebsdx8664-target :freebsdx8664-target
-    #+freebsdx8664-target :freebsdx8664-host
-    #+freebsdx8632-target :freebsdx8632-target
-    #+freebsdx8632-target :freebsdx8632-host
-    #+darwin-target :darwin-host
-    #+darwin-target :darwin-target
-    #+darwinx86-target :darwinx86-target
-    #+darwinx8632-target :darwinx8632-target
-    #+darwinx8632-target :darwinx8632-host
-    #+darwinx8664-target :darwinx8664-target
-    #+darwinx8664-target :darwinx8664-host
-    #+windows-target :windows-host
-    #+windows-target :windows-target
-    #+win64-target :win64-target
-    #+win64-target :win64-host
-    #+win32-target :win32-target
-    #+win32-target :win32-host
-    #+solaris-target :solaris-host
-    #+solaris-target :solaris-target
-    #+solarisx86-target :solarisx86-target
-    #+solarisx8664-target :solarisx8664-target
-    #+solarisx8664-target :solarisx8664-host
-    #+solarisx8632-target :solarisx8632-target
-    #+solarisx8632-target :solarisx8632-host
-    #+android-target :android-host
-    #+android-target :android-target
-    #+androidarm-target :androidarm-target
-    #+androidarm-target :androidarm-host
-    #+(and ppc-target poweropen-target) :poweropen-target
-    #+64-bit-target :64-bit-target
-    #+64-bit-target :64-bit-host
-    #+32-bit-target :32-bit-target
-    #+32-bit-target :32-bit-host
-    #+darwin-target :darwin
-    #+linux-target :linux
-    #+freebsd-target :freebsd
-    #+solaris-target :solaris
-    #+windows-target :windows
-    #+android-target :android
-    #+little-endian-target :little-endian-target
-    #+little-endian-target :little-endian-host
-    #+big-endian-target :big-endian-target
-    #+big-endian-target :big-endian-host
+    ;; The target-dependent features (:darwin-target, :x86-64, :unix, ...) are added
+    ;; from the backend when level-1/l1-boot-2.lisp has loaded it.
     )
   "a list of symbols that describe features provided by the
    implementation")

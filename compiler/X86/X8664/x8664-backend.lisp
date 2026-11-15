@@ -45,7 +45,8 @@
 		'(:x8664 :x86-target :linux-target :linuxx86-target :x8664-target
                   :linuxx8664-target
                   :little-endian-target
-                  :64-bit-target)
+                  :64-bit-target
+                  :unix :static-conses-should-work-with-egc-in-ccl :x86-64 :x86_64 :linux)
 		:target-fasl-pathname (make-pathname :type "lx64fsl")
 		:target-platform (logior platform-cpu-x86
                                          platform-os-linux
@@ -61,7 +62,7 @@
                 ))
 
 
-#+darwinx86-target
+#+(or darwinx86-target (not x86-target))
 (defvar *darwinx8664-backend*
   (make-backend :lookup-opcode 'lookup-x86-opcode
 		:lookup-macro #'false
@@ -76,7 +77,8 @@
 		'(:x8664 :x86-target :darwin-target :darwinx86-target :x8664-target
                   :darwinx8664-target
                   :little-endian-target
-                  :64-bit-target)
+                  :64-bit-target
+                  :unix :static-conses-should-work-with-egc-in-ccl :x86-64 :x86_64 :darwin)
 		:target-fasl-pathname (make-pathname :type "dx64fsl")
 		:target-platform (logior platform-cpu-x86
                                          platform-os-darwin
@@ -105,7 +107,8 @@
 		'(:x8664 :x86-target :freebsd-target :freebsdx86-target :x8664-target
                   :freebsdx8664-target                  
                   :little-endian-target
-                  :64-bit-target)
+                  :64-bit-target
+                  :unix :static-conses-should-work-with-egc-in-ccl :x86-64 :x86_64 :freebsd)
 		:target-fasl-pathname (make-pathname :type "fx64fsl")
 		:target-platform (logior platform-cpu-x86
                                          platform-os-freebsd
@@ -134,7 +137,8 @@
                   :solarisx8664-target
                   :solarisx64-target
                   :little-endian-target
-                  :64-bit-target)
+                  :64-bit-target
+                  :unix :static-conses-should-work-with-egc-in-ccl :x86-64 :x86_64 :solaris)
 		:target-fasl-pathname (make-pathname :type "sx64fsl")
 		:target-platform (logior platform-cpu-x86
                                          platform-os-solaris
@@ -162,7 +166,8 @@
 		'(:x8664 :x86-target :win64-target :windows-target :x8664-target
                   :winx64-target                  
                   :little-endian-target
-                  :64-bit-target)
+                  :64-bit-target
+                  :static-conses-should-work-with-egc-in-ccl :x86-64 :x86_64 :windows)
 		:target-fasl-pathname (make-pathname :type "wx64fsl")
 		:target-platform (logior platform-cpu-x86
                                          platform-os-windows
@@ -180,7 +185,7 @@
 (pushnew *linuxx8664-backend* *known-x8664-backends* :key #'backend-name)
 
 
-#+darwinx86-target
+#+(or darwinx86-target (not x86-target))
 (pushnew *darwinx8664-backend* *known-x8664-backends* :key #'backend-name)
 
 #+freebsdx86-target
@@ -310,6 +315,10 @@
 (setup-x8664-ftd *x8664-backend*)
 
 (pushnew *x8664-backend* *known-backends* :key #'backend-name)
+#-x86-target
+(progn
+  (pushnew *darwinx8664-backend* *known-backends* :key #'backend-name)
+  (pushnew *linuxx8664-backend* *known-backends* :key #'backend-name))
 
 ;;; FFI stuff.  Seems to be shared by Darwin/Linux/FreeBSD.
 

@@ -798,9 +798,11 @@
           (with-dll-node-freelist ((uuo-frag-list make-frag-list) *frag-freelist*)
             (let* ((*x86-lap-labels* nil)
                    (instruction (x86::make-x86-instruction))
-                   (end-code-tag (gensym))
-                   (start-tag (gensym))
-                   (srt-tag (gensym))
+                   ;; Labels only the assembler sees: MAKE-SYMBOL, not GENSYM, so that
+                   ;; compiling doesn't use up *GENSYM-COUNTER*.
+                   (end-code-tag (make-symbol "END-CODE"))
+                   (start-tag (make-symbol "START"))
+                   (srt-tag (make-symbol "SRT"))
                    debug-info)
               (make-x86-lap-label end-code-tag)
               (target-arch-case
@@ -2480,17 +2482,17 @@
                    src
                    (dpb safe target::arrayH.flags-cell-subtag-byte
                         (ash 1 $arh_simple_bit))
-                   (nx-error-for-simple-3d-array-type type-keyword)))
-              (with-crf-target () crf
-                (! set-z-if-typed-array crf src safe 3)
-                (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
-                (x862-copy-register seg ($ x8664::arg_y) src)
-                (! ref-constant ($ x8664::arg_z) (x86-immediate-label
-                                                  `(array ,(element-subtype-type safe) (* * *))))
-                (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
-                (! set-nargs 3)
-                (! call-subprim-no-return (subprim-name->offset '.SPksignalerr))
-                (@ continue-label)))
+                   (nx-error-for-simple-3d-array-type type-keyword))
+                (with-crf-target () crf
+                  (! set-z-if-typed-array crf src safe 3)
+                  (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
+                  (x862-copy-register seg ($ x8664::arg_y) src)
+                  (! ref-constant ($ x8664::arg_z) (x86-immediate-label
+                                                    `(array ,(element-subtype-type safe) (* * *))))
+                  (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
+                  (! set-nargs 3)
+                  (! call-subprim-no-return (subprim-name->offset '.SPksignalerr))
+                  (@ continue-label))))
             (unless i-known-fixnum
               (! trap-unless-fixnum unscaled-i))
             (unless j-known-fixnum
@@ -2549,17 +2551,17 @@
                src
                (dpb safe target::arrayH.flags-cell-subtag-byte
                     (ash 1 $arh_simple_bit))
-               (nx-error-for-simple-2d-array-type typekeyword)))
-          (with-crf-target () crf
-            (! set-z-if-typed-array crf src safe 2)
-            (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
-            (x862-copy-register seg ($ x8664::arg_y) src)
-            (! ref-constant ($ x8664::arg_z) (x86-immediate-label
-                                              `(array ,(element-subtype-type safe) (* *))))
-            (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
-            (! set-nargs 3)
-            (! call-subprim-no-return (subprim-name->offset '.SPksignalerr))
-            (@ continue-label)))
+               (nx-error-for-simple-2d-array-type typekeyword))
+            (with-crf-target () crf
+              (! set-z-if-typed-array crf src safe 2)
+              (x862-branch seg (x862-make-compound-cd continue-label 0)  x86::x86-e-bits t)
+              (x862-copy-register seg ($ x8664::arg_y) src)
+              (! ref-constant ($ x8664::arg_z) (x86-immediate-label
+                                                `(array ,(element-subtype-type safe) (* *))))
+              (x862-absolute-natural seg($ x8664::arg_x) nil (ash $xwrongtype x8664::fixnumshift))
+              (! set-nargs 3)
+              (! call-subprim-no-return (subprim-name->offset '.SPksignalerr))
+              (@ continue-label))))
         (unless i-known-fixnum
           (! trap-unless-fixnum unscaled-i))
         (unless j-known-fixnum
@@ -10648,84 +10650,126 @@
   (def-x862-require x862-require-s64 require-s64)
   (def-x862-require x862-require-u64 require-u64))
 
+;;; If TYPESPEC denotes a SIMPLE-ARRAY of rank 2 or 3 with unspecified
+;;; dimensions and a specified element type, return the rank and the
+;;; target's array type keyword for it.
+(defun x862-simple-array-typecheck-keyword (typespec)
+  (when (consp typespec)
+    (let* ((ctype (specifier-type typespec)))
+      (when (and (array-ctype-p ctype)
+                 (null (array-ctype-complexp ctype)))
+        (let* ((dims (array-ctype-dimensions ctype))
+               (rank (and (consp dims)
+                          (every (lambda (d) (eq d '*)) dims)
+                          (length dims))))
+          (when (member rank '(2 3))
+            (let* ((keyword (funcall
+                             (arch::target-array-type-name-from-ctype-function
+                              (backend-target-arch *target-backend*))
+                             ctype)))
+              (when keyword
+                (values rank keyword)))))))))
+
+(defun x862-simple-array-typechecked-form (seg vreg xfer form rank keyword)
+  (with-x86-local-vinsn-macros (seg vreg xfer)
+    (let* ((reg (x862-one-untargeted-reg-form
+                 seg
+                 form
+                 (if (eq vreg *x862-arg-z*) *x862-arg-y* *x862-arg-z*)))
+           (flags (dpb (nx-lookup-target-uvector-subtag keyword)
+                       target::arrayH.flags-cell-subtag-byte
+                       (ash 1 $arh_simple_bit))))
+      (if (eql rank 2)
+        (! trap-unless-simple-array-2 reg flags
+           (nx-error-for-simple-2d-array-type keyword))
+        (! trap-unless-simple-array-3 reg flags
+           (nx-error-for-simple-3d-array-type keyword)))
+      (when vreg (<- reg))
+      (^))))
+
 (defun x862-typechecked-form (seg vreg xfer typespec form)
   (with-x86-local-vinsn-macros (seg vreg xfer)
     (multiple-value-bind (val win)
         (acode-constant-p form)
       (if (and win (ignore-errors (typep val typespec)))
         (x862-form seg vreg xfer form)
-        (let* ((op
-                (cond ((eq typespec 'fixnum) (%nx1-operator require-fixnum))
-                      ((eq typespec 'integer) (%nx1-operator require-integer))
-                      ((memq typespec '(base-char character))
-                       (%nx1-operator require-character))
-                      ((eq typespec 'symbol) (%nx1-operator require-symbol))
-                      ((eq typespec 'list) (%nx1-operator require-list))
-                      ((eq typespec 'real) (%nx1-operator require-real))
-                      ((memq typespec '(simple-base-string simple-string))
-                       (%nx1-operator require-simple-string))
-                      ((eq typespec 'number) (%nx1-operator require-number))
-                      ((eq typespec 'simple-vector) (%nx1-operator require-simple-vector))
-                      (t
-                       (let* ((ctype (specifier-type typespec)))
-                         (cond ((type= ctype (load-time-value (specifier-type '(signed-byte 8))))
-                                (%nx1-operator require-s8))
-                               ((type= ctype (load-time-value (specifier-type '(unsigned-byte 8))))
-                                (%nx1-operator require-u8))
-                               ((type= ctype (load-time-value (specifier-type '(signed-byte 16))))
-                                (%nx1-operator require-s16))
-                               ((type= ctype (load-time-value (specifier-type '(unsigned-byte 16))))
-                                (%nx1-operator require-u16))
-                               ((type= ctype (load-time-value (specifier-type '(signed-byte 32))))                            
-                                (%nx1-operator require-s32))
-                               ((type= ctype (load-time-value (specifier-type '(unsigned-byte 32))))
-                                (%nx1-operator require-u32))
-                               ((type= ctype (load-time-value (specifier-type '(signed-byte 64))))
-                                (%nx1-operator require-s64))
-                               ((type= ctype (load-time-value (specifier-type '(unsigned-byte 64))))
-                                (%nx1-operator require-u64))))))))
-          (if op
-            (x862-use-operator op seg vreg xfer form)
-            (if (or (eq typespec t)
-                    (eq typespec '*))
-              (x862-form seg vreg xfer form)
-              (x86-with-note (form seg)
-                (let* ((ok (backend-get-next-label)))
-                  (if (and (symbolp typespec) (non-nil-symbolp (type-predicate typespec)))
-                    ;; Do this so can compile the lisp with typechecking even though typep
-                    ;; doesn't get defined til fairly late.
-                    (progn
-                      (x862-one-targeted-reg-form seg form ($ *x862-arg-z*))
-                      (x862-store-immediate seg (type-predicate typespec) ($ *x862-fname*))
-                      (x862-set-nargs seg 1)
-                      (x862-vpush-register seg ($ *x862-arg-z*)))
-                    (progn
-                      (x862-one-targeted-reg-form seg form ($ *x862-arg-y*))
-                      (x862-store-immediate seg typespec ($ *x862-arg-z*))
-                      (x862-store-immediate seg 'typep ($ *x862-fname*))
-                      (x862-set-nargs seg 2)
-                      (x862-vpush-register seg ($ *x862-arg-y*))))
-                  (! call-known-symbol ($ *x862-arg-z*))
-                  (! compare-to-nil ($ *x862-arg-z*))
-                  (x862-vpop-register seg ($ *x862-arg-y*))
-                  (! cbranch-false (aref *backend-labels* ok) x86::x86-e-bits)
-                  (target-arch-case
-                   (:x8632
-                    (let* ((*x862-vstack* *x862-vstack*))
-                      (! reserve-outgoing-frame)
-                      (incf *x862-vstack* (* 2 *x862-target-node-size*))
-                      (! vpush-fixnum (ash $XWRONGTYPE *x862-target-fixnum-shift*))
-                      (x862-store-immediate seg typespec ($ *x862-arg-z*))
-                      (x862-set-nargs seg 3)
-                      (! ksignalerr)))
-                   (:x8664
-                    (x862-lri seg ($ x8664::arg_x) (ash $XWRONGTYPE *x862-target-fixnum-shift*))
-                    (x862-store-immediate seg typespec ($ *x862-arg-z*))
-                    (x862-set-nargs seg 3)
-                    (! ksignalerr)))
-                  (@ ok)
-                  (<- ($ *x862-arg-y*))
-                  (^))))))))))
+        (multiple-value-bind (rank keyword)
+            (x862-simple-array-typecheck-keyword typespec)
+          (if rank
+            (x862-simple-array-typechecked-form seg vreg xfer form
+                                                rank keyword)
+            (let* ((op
+                    (cond ((eq typespec 'fixnum) (%nx1-operator require-fixnum))
+                          ((eq typespec 'integer) (%nx1-operator require-integer))
+                          ((memq typespec '(base-char character))
+                           (%nx1-operator require-character))
+                          ((eq typespec 'symbol) (%nx1-operator require-symbol))
+                          ((eq typespec 'list) (%nx1-operator require-list))
+                          ((eq typespec 'real) (%nx1-operator require-real))
+                          ((memq typespec '(simple-base-string simple-string))
+                           (%nx1-operator require-simple-string))
+                          ((eq typespec 'number) (%nx1-operator require-number))
+                          ((eq typespec 'simple-vector) (%nx1-operator require-simple-vector))
+                          (t
+                           (let* ((ctype (specifier-type typespec)))
+                             (cond ((type= ctype (load-time-value (specifier-type '(signed-byte 8))))
+                                    (%nx1-operator require-s8))
+                                   ((type= ctype (load-time-value (specifier-type '(unsigned-byte 8))))
+                                    (%nx1-operator require-u8))
+                                   ((type= ctype (load-time-value (specifier-type '(signed-byte 16))))
+                                    (%nx1-operator require-s16))
+                                   ((type= ctype (load-time-value (specifier-type '(unsigned-byte 16))))
+                                    (%nx1-operator require-u16))
+                                   ((type= ctype (load-time-value (specifier-type '(signed-byte 32))))                            
+                                    (%nx1-operator require-s32))
+                                   ((type= ctype (load-time-value (specifier-type '(unsigned-byte 32))))
+                                    (%nx1-operator require-u32))
+                                   ((type= ctype (load-time-value (specifier-type '(signed-byte 64))))
+                                    (%nx1-operator require-s64))
+                                   ((type= ctype (load-time-value (specifier-type '(unsigned-byte 64))))
+                                    (%nx1-operator require-u64))))))))
+              (if op
+                (x862-use-operator op seg vreg xfer form)
+                (if (or (eq typespec t)
+                        (eq typespec '*))
+                  (x862-form seg vreg xfer form)
+                  (x86-with-note (form seg)
+                    (let* ((ok (backend-get-next-label)))
+                      (if (and (symbolp typespec) (non-nil-symbolp (type-predicate typespec)))
+                        ;; Do this so can compile the lisp with typechecking even though typep
+                        ;; doesn't get defined til fairly late.
+                        (progn
+                          (x862-one-targeted-reg-form seg form ($ *x862-arg-z*))
+                          (x862-store-immediate seg (type-predicate typespec) ($ *x862-fname*))
+                          (x862-set-nargs seg 1)
+                          (x862-vpush-register seg ($ *x862-arg-z*)))
+                        (progn
+                          (x862-one-targeted-reg-form seg form ($ *x862-arg-y*))
+                          (x862-store-immediate seg typespec ($ *x862-arg-z*))
+                          (x862-store-immediate seg 'typep ($ *x862-fname*))
+                          (x862-set-nargs seg 2)
+                          (x862-vpush-register seg ($ *x862-arg-y*))))
+                      (! call-known-symbol ($ *x862-arg-z*))
+                      (! compare-to-nil ($ *x862-arg-z*))
+                      (x862-vpop-register seg ($ *x862-arg-y*))
+                      (! cbranch-false (aref *backend-labels* ok) x86::x86-e-bits)
+                      (target-arch-case
+                       (:x8632
+                        (let* ((*x862-vstack* *x862-vstack*))
+                          (! reserve-outgoing-frame)
+                          (incf *x862-vstack* (* 2 *x862-target-node-size*))
+                          (! vpush-fixnum (ash $XWRONGTYPE *x862-target-fixnum-shift*))
+                          (x862-store-immediate seg typespec ($ *x862-arg-z*))
+                          (x862-set-nargs seg 3)
+                          (! ksignalerr)))
+                       (:x8664
+                        (x862-lri seg ($ x8664::arg_x) (ash $XWRONGTYPE *x862-target-fixnum-shift*))
+                        (x862-store-immediate seg typespec ($ *x862-arg-z*))
+                        (x862-set-nargs seg 3)
+                        (! ksignalerr)))
+                      (@ ok)
+                      (<- ($ *x862-arg-y*))
+                      (^))))))))))))
           
           
                   

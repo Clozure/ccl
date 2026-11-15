@@ -80,6 +80,14 @@
     (setf (encoded-gpr-lisp xp target::arg_z) values
           (encoded-gpr-lisp xp target::fn) f)))
 
+;;; Return a type specifier for subtag, which must be for an array
+;;; ivector.  This function exists because %type-of name tables use
+;;; CCL-internal class names.
+(defun %array-type-for-ivector-subtag (subtag)
+  (cond ((= subtag target::subtag-simple-base-string) 'simple-base-string)
+        ((= subtag target::subtag-bit-vector) 'simple-bit-vector)
+        (t `(simple-array ,(element-subtype-type subtag) (*)))))
+
 #+x8664-target
 (defcallback %xerr-disp (:address xp :address xcf :int)
   (with-error-reentry-detection
@@ -227,6 +235,8 @@
                                                (svref *nodeheader-0-types* high4))
                                               ((= class x8664::fulltag-nodeheader-1)
                                                (svref *nodeheader-1-types* high4))
+                                              ((neq (element-subtype-type op2) 'bogus)
+                                               (%array-type-for-ivector-subtag op2))
                                               ((= class x8664::fulltag-immheader-0)
                                                (svref *immheader-0-types* high4))
                                               ((= class x8664::fulltag-immheader-1)
@@ -410,7 +420,9 @@
                                         (cond ((= class x8632::fulltag-nodeheader)
                                                (svref *nodeheader-types* high5))
                                               ((= class x8632::fulltag-immheader)
-                                               (svref *immheader-types* high5))
+                                               (if (>= op2 x8632::min-cl-ivector-subtag)
+                                                 (%array-type-for-ivector-subtag op2)
+                                                 (svref *immheader-types* high5)))
                                               (t (list 'bogus op2))))))))
                        (%error (make-condition 'type-error
                                                :datum (encoded-gpr-lisp

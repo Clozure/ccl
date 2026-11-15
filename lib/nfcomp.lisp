@@ -150,12 +150,12 @@ Will differ from *compiling-file* during an INCLUDE")
     (when (and target-p (not (setq backend (find-backend target))))
       (warn "Unknown :TARGET : ~S.  Reverting to ~s ..." target *fasl-target*)
       (setq target *fasl-target*  backend *target-backend*))
-    (if (eq *target-backend* *host-backend*)
+    (if (eq backend *host-backend*)
       (when features-p
         (setq symbols '(*features*)
               values (list (append (if (listp features) features (list features)) *features*))))
       (setq symbols '(*features*)
-            values (list (setup-target-features *target-backend* *features*))
+            values (list (setup-target-features backend *features*))
             save-source-locations nil))
     (multiple-value-bind (output-file truename warnings-p serious-p)
         (loop
@@ -210,7 +210,7 @@ Will differ from *compiling-file* during an INCLUDE")
               "Compile destination ~S is not a ~A file!"
               output-file (pathname-type
                            (backend-target-fasl-pathname
-                            *target-backend*))))
+                            target-backend))))
     (let* ((*fasl-deferred-warnings* nil) ; !!! WITH-COMPILATION-UNIT ...
            (*fasl-save-local-symbols* save-local-symbols)
            (*save-source-locations* save-source-locations)
@@ -753,7 +753,7 @@ Will differ from *compiling-file* during an INCLUDE")
 (defun fcomp-include (form env processing-mode &aux file)
   (fcomp-compile-toplevel-forms env)
   (verify-arg-count form 1 1)
-  (setq file (nx-transform (%cadr form) env))
+  (setq file (fcomp-transform (%cadr form) env))
   (unless (constantp file) (report-bad-arg file '(or string pathname)))
   (let ((actual (merge-pathnames (eval-constant file)
                                  (directory-namestring *compiling-file*))))
@@ -1003,7 +1003,8 @@ Will differ from *compiling-file* during an INCLUDE")
                                                   :format-arguments (simple-condition-format-arguments c))))
                                       (nx1-whine :program-error c)))
                                   (return-from fcomp-macroexpand-1 (values nil t)))))
-    (let* ((*nx-source-note-map* *fcomp-source-note-map*))
+    (let* ((*nx-source-note-map* *fcomp-source-note-map*)
+           (*target-backend* (find-backend *fasl-target*)))
       (multiple-value-bind (new win)
           (macroexpand-1 form env)
         (when win
@@ -1011,7 +1012,8 @@ Will differ from *compiling-file* during an INCLUDE")
         (values new win)))))
 
 (defun fcomp-transform (form env)
-  (let* ((*nx-source-note-map* *fcomp-source-note-map*))
+  (let* ((*nx-source-note-map* *fcomp-source-note-map*)
+         (*target-backend* (find-backend *fasl-target*)))
     (nx-transform form env)))
 
 

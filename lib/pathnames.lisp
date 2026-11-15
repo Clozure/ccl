@@ -298,7 +298,7 @@
 	    (declare (fixnum result))
 	    (cond ((zerop result)
 		   (setq created-p t))
-		  ((and (= result #.(- #$EEXIST))
+		  ((and (= result (- #$EEXIST))
 			(null parent-kind))
 		   (return (ensure-no-trailing-slash parent-name)))
 		  (t (signal-file-error result parent-name)))))))))

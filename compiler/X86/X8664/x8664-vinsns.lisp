@@ -636,7 +636,7 @@
 
 (define-x8664-vinsn compare-to-nil (()
                                     ((arg0 t)))
-  (cmpq (:$l (target-nil-value)) (:%q arg0)))
+  (cmpq (:$l (:apply target-nil-value)) (:%q arg0)))
 
 (define-x8664-vinsn compare-to-t (()
                                     ((arg0 t)))

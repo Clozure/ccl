@@ -54,9 +54,10 @@ uuo_format_binary = 2
   binary_info_array_rank = 5
   binary_info_array_flags = 6
   binary_info_two_registers = 7  // extra register pair for preceding uuo
+  binary_info_object_not_type = 8
 
 /*
- * All type errors: "this register doesn't hold the expected type"
+ * Most type errors: "this register doesn't hold the expected type"
  * reg in 6:2, continuable flag in 7, expected type code in 15:8
  *
  * The continuable flag means that the handler should attempt to make

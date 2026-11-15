@@ -12,8 +12,8 @@
  *    arm64-backend.lisp:229; our linuxarm64-backend-additions.lisp:36
  *    matches).  Kernel must agree or image.c rejects the image
  *    ("Heap image was saved for another platform", 16j).
- *  - MAXIMUM_MAPPABLE_MEMORY / IMAGE_BASE_ADDRESS: PROPOSED values taken
- *    from platform-linuxx8664.h:26-27 (the other 64-bit low-tag Linux
+ *  - IMAGE_BASE_ADDRESS: PROPOSED value taken
+ *    from platform-linuxx8664.h (the other 64-bit low-tag Linux
  *    port; aarch64-linux user VA space is 48-bit like x86-64, and Matt's
  *    low-tag scheme puts no constraint on the top byte).  Ratify.
  *  - xp accessor field layout: aarch64-linux
@@ -32,8 +32,7 @@
 
 typedef ucontext_t ExceptionInformation;   /* platform-linuxarm.h:31 */
 
-/* PROPOSED (platform-linuxx8664.h:26-27) — ratify */
-#define MAXIMUM_MAPPABLE_MEMORY (512L<<30L)
+/* PROPOSED (platform-linuxx8664.h) — ratify */
 #define IMAGE_BASE_ADDRESS 0x300000000000L
 
 #include "lisptypes.h"
