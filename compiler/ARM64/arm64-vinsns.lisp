@@ -6360,8 +6360,8 @@
                                          (offset :lisp))
                                         ((bitnum :u64)
                                          (addr :u64)))
-  (lsr bitnum offset (:$ arm64::fixnumshift))
-  (lsr addr bitnum (:$ 3))
+  (asr bitnum offset (:$ arm64::fixnumshift))
+  (asr addr bitnum (:$ 3))
   (add addr src addr)
   (ldrb (:w addr) (:@ addr (:$ 0)))
   (and bitnum bitnum (:$ 7))
@@ -6403,8 +6403,8 @@
                                   (offset :lisp))
                                  ((bitnum :u64)
                                   (addr :u64)))
-  (lsr bitnum offset (:$ arm64::fixnumshift))   ;bit index          X,X,imm
-  (lsr addr bitnum (:$ 3))                      ;byte index         X,X,imm
+  (asr bitnum offset (:$ arm64::fixnumshift))   ;bit index          X,X,imm
+  (asr addr bitnum (:$ 3))                      ;byte index         X,X,imm
   (add addr src addr)                           ;byte address       X,X,X
   (ldrb (:w addr) (:@ addr (:$ 0)))             ;the byte, zero-ext W,[X]
   (and bitnum bitnum (:$ 7))                    ;bit within byte    X,X,limm-x
@@ -6492,8 +6492,8 @@
                                     (addr :u64)
                                     (temp :u64)
                                     (mask :u64)))
-  (lsr bitnum offset (:$ arm64::fixnumshift))
-  (lsr addr bitnum (:$ 3))
+  (asr bitnum offset (:$ arm64::fixnumshift))
+  (asr addr bitnum (:$ 3))
   (add addr src addr)
   (and bitnum bitnum (:$ 7))
   (movz mask (:$ 1))
@@ -6509,8 +6509,8 @@
                                     (addr :u64)
                                     (temp :u64)
                                     (mask :u64)))
-  (lsr bitnum offset (:$ arm64::fixnumshift))
-  (lsr addr bitnum (:$ 3))
+  (asr bitnum offset (:$ arm64::fixnumshift))
+  (asr addr bitnum (:$ 3))
   (add addr src addr)
   (and bitnum bitnum (:$ 7))
   (movz mask (:$ 1))
@@ -6527,8 +6527,8 @@
                                                  (addr :u64)
                                                  (temp :u64)
                                                  (mask :u64)))
-  (lsr bitnum offset (:$ arm64::fixnumshift))
-  (lsr addr bitnum (:$ 3))
+  (asr bitnum offset (:$ arm64::fixnumshift))
+  (asr addr bitnum (:$ 3))
   (add addr src addr)
   (and bitnum bitnum (:$ 7))
   (movz mask (:$ 1))
