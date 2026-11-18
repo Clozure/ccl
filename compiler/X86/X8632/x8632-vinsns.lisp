@@ -1977,13 +1977,6 @@
   `(define-x8632-vinsn (,name :jumpLR ,@other-attrs) (() ())
     (jmp (:@ ,spno))))
 
-;;; xxx don't know if this is right
-(define-x8632-vinsn set-closure-forward-reference (()
-                                                   ((val :lisp)
-                                                    (closure :lisp)
-                                                    (idx :s32const)))
-  (movl (:%l val) (:@ (:apply + x8632::misc-data-offset (:apply ash idx x8632::word-shift)) (:%l closure))))
-
 (define-x8632-vinsn (nthrowvalues :call :subprim) (()
                                                         ())
   (jmp (:@ .SPnthrowvalues)))

@@ -1501,17 +1501,6 @@
   (stur val (:@ v (:$ (:apply + arm64::misc-data-offset
                               (:apply ash idx 3))))))
 
-;;; ============ set-closure-forward-reference ============
-;;; Store val into cell idx of a closure that LABELS is still
-;;; initializing.  No write barrier: it's an initializing store.
-(define-arm64-vinsn set-closure-forward-reference (()
-                                                   ((val :lisp)
-                                                    (closure :lisp)
-                                                    (idx :s16const))
-                                                   ())
-  (stur val (:@ closure (:$ (:apply + arm64::misc-function-offset
-                                    (:apply ash idx 3))))))
-
 ;;; ============ nvalret ============
 ;;; Donor: vinsn-retrofit-queue.lisp:478; PPC64 macro
 ;;; ppc64-vinsns.lisp:3931: (ba .SPnvalret) -- a JUMP, not a call.

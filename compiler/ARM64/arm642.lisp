@@ -8369,17 +8369,19 @@
         (with-arm64-p2-declarations p2decls
           (dolist (var real-vars)
             (arm642-seq-bind-var seg var (nx1-afunc-ref (pop real-funcs))))
+          ;; Initialize references to other labels functions with
+          ;; gvset.  We can't use plain stores because a GC might
+          ;; happen between the allocation of a function and some
+          ;; sibling it references.
           (dolist (ref fwd-refs)
             (let ((ea (var-ea (pop ref))))
-              (arm642-addrspec-to-reg seg ea arm64::temp0)
               (dolist (r ref)
-                (let* ((v-ea (var-ea (cdr r))))
-                  (let* ((val-reg (if (eq v-ea ea)
-                                    arm64::temp0
-                                    (progn
-                                      (arm642-addrspec-to-reg seg v-ea arm64::temp1)
-                                      arm64::temp1))))
-                    (! set-closure-forward-reference val-reg arm64::temp0 (car r)))))))
+                (arm642-addrspec-to-reg seg ea arm64::arg_x)
+                (arm642-lri seg arm64::arg_y
+                            (ash (car r) *arm642-target-fixnum-shift*))
+                (arm642-addrspec-to-reg seg (var-ea (cdr r)) arm64::arg_z)
+                (! call-subprim-3 arm64::arg_z (subprim-name->offset '.SPgvset)
+                   arm64::arg_x arm64::arg_y arm64::arg_z))))
           (arm642-undo-body seg vreg xfer body old-stack)
           (dolist (var real-vars)
             (arm642-close-var seg var)))))))
