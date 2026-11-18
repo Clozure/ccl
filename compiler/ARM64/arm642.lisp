@@ -8369,18 +8369,17 @@
         (with-arm64-p2-declarations p2decls
           (dolist (var real-vars)
             (arm642-seq-bind-var seg var (nx1-afunc-ref (pop real-funcs))))
-          ;; A GC can have happened between the allocation of a
-          ;; closure and that of a sibling it refers to, so these
-          ;; stores have to be memoized (see x862-labels).  A function
-          ;; is an ordinary miscobj here (misc-function-offset =
-          ;; misc-data-offset), so .SPgvset can take the closure as is.
-          ;; It clobbers temp0, so reload the closure for each store.
+          ;; Initialize references to other labels functions with
+          ;; gvset.  We can't use plain stores because a GC might
+          ;; happen between the allocation of a function and some
+          ;; sibling it references.
           (dolist (ref fwd-refs)
             (let ((ea (var-ea (pop ref))))
               (dolist (r ref)
-                (arm642-addrspec-to-reg seg (var-ea (cdr r)) arm64::arg_z)
                 (arm642-addrspec-to-reg seg ea arm64::arg_x)
-                (arm642-lri seg arm64::arg_y (ash (car r) *arm642-target-fixnum-shift*))
+                (arm642-lri seg arm64::arg_y
+                            (ash (car r) *arm642-target-fixnum-shift*))
+                (arm642-addrspec-to-reg seg (var-ea (cdr r)) arm64::arg_z)
                 (! call-subprim-3 arm64::arg_z (subprim-name->offset '.SPgvset)
                    arm64::arg_x arm64::arg_y arm64::arg_z))))
           (arm642-undo-body seg vreg xfer body old-stack)

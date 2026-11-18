@@ -10061,30 +10061,23 @@
         (with-x86-p2-declarations p2decls
           (dolist (var real-vars)
             (x862-seq-bind-var seg var (nx1-afunc-ref (pop real-funcs))))
-          ;; The closures were allocated one at a time, so a GC (this
-          ;; thread's, or another thread's) can have happened between
-          ;; the allocation of a closure and that of a sibling it
-          ;; refers to.  The closure may then be older than the
-          ;; sibling, and storing the sibling into it is not an
-          ;; initializing store: it has to be memoized like any other
-          ;; store of a node into a heap object, or the EGC will
-          ;; neither retain nor relocate what the closure points to.
-          ;; So use .SPgvset: vector in arg_x (x8664) or temp0 (x8632),
-          ;; byte index (a fixnum) in arg_y, value in arg_z.  It
-          ;; clobbers temp0, so reload the closure for each store.
+          ;; Initialize references to other labels functions with gvset.
+          ;; We can't use plain stores because a GC might happen between
+          ;; the allocation of a function and some sibling it references.
           (dolist (ref fwd-refs)
             (let ((ea (var-ea (pop ref)))
                   (gvector (target-arch-case
                             (:x8632 x8632::temp0)
                             (:x8664 x8664::arg_x))))
               (dolist (r ref)
-                (x862-addrspec-to-reg seg (var-ea (cdr r)) *x862-arg-z*)
                 (x862-addrspec-to-reg seg ea gvector)
                 (target-arch-case
                  (:x8632)
                  ;; .SPgvset wants a fulltag-misc pointer.
                  (:x8664 (! function-to-function-vector gvector)))
-                (x862-lri seg *x862-arg-y* (ash (car r) *x862-target-fixnum-shift*))
+                (x862-lri seg *x862-arg-y*
+                          (ash (car r) *x862-target-fixnum-shift*))
+                (x862-addrspec-to-reg seg (var-ea (cdr r)) *x862-arg-z*)
                 (! call-subprim (subprim-name->offset '.SPgvset)))))
           (x862-undo-body seg vreg xfer body old-stack)
           (dolist (var real-vars)

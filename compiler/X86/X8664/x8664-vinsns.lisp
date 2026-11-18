@@ -298,13 +298,6 @@
                                                 (idx :s32const)))
   (movq (:$l val) (:@ (:apply + x8664::misc-data-offset (:apply ash idx 3)) (:%q v))))
 
-;;; The inverse of FINALIZE-CLOSURE: a pointer to the function vector
-;;; of a function, for .SPgvset, which addresses a gvector by its
-;;; fulltag-misc pointer.
-(define-x8664-vinsn function-to-function-vector (((f :lisp))
-                                                  ((f :lisp)))
-  (subq (:$b (- x8664::fulltag-function x8664::fulltag-misc)) (:%q f)))
-
 
 (define-x8664-vinsn misc-set-c-double-float (()
 				    ((val :double-float)
@@ -2425,6 +2418,9 @@
                                       ((closure :lisp)))
   (addq (:$b (- x8664::fulltag-function x8664::fulltag-misc)) (:%q closure)))
 
+(define-x8664-vinsn function-to-function-vector (((f :lisp))
+                                                 ((f :lisp)))
+  (subq (:$b (- x8664::fulltag-function x8664::fulltag-misc)) (:%q f)))
 
 (define-x8664-vinsn (ref-symbol-value :call :subprim)
     (((val :lisp))
