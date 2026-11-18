@@ -246,16 +246,48 @@
   (not (= x y)))
 
 
-; true iff (< x y) is false.
+;;; A NaN is unordered with every number, so < and > are both false
+;;; when either argument is one.  >= and <= are the negations of < and >
+;;; only when neither argument is a NaN.  Test the bits: = on a NaN is
+;;; not reliable on every target.
+(defun %float-nan-p (x)
+  (typecase x
+    (double-float
+     (multiple-value-bind (hi lo) (double-float-bits x)
+       (declare (type (unsigned-byte 32) hi lo))
+       (and (eql (ldb (byte IEEE-double-float-exponent-width
+                            (- IEEE-double-float-exponent-offset 32))
+                      hi)
+                 (1- (ash 1 IEEE-double-float-exponent-width)))
+            (not (and (eql 0 (ldb (byte (- IEEE-double-float-mantissa-width 32)
+                                        IEEE-double-float-mantissa-offset)
+                                  hi))
+                      (eql 0 lo))))))
+    (short-float
+     (let* ((bits (single-float-bits x)))
+       (declare (type (unsigned-byte 32) bits))
+       (and (eql (ldb (byte IEEE-single-float-exponent-width
+                            IEEE-single-float-exponent-offset)
+                      bits)
+                 (1- (ash 1 IEEE-single-float-exponent-width)))
+            (not (eql 0 (ldb (byte IEEE-single-float-mantissa-width
+                                   IEEE-single-float-mantissa-offset)
+                             bits))))))))
+
+; true iff (< x y) is false and neither is a NaN.
 (defun >=-2 (x y)
   (declare (notinline <-2))
-  (not (< x y)))
+  (and (not (%float-nan-p x))
+       (not (%float-nan-p y))
+       (not (< x y))))
 
 
 
 (defun <=-2 (x y)
   (declare (notinline >-2))
-  (not (> x y)))
+  (and (not (%float-nan-p x))
+       (not (%float-nan-p y))
+       (not (> x y))))
 
 (defun <-2 (x y)
   (number-case x
