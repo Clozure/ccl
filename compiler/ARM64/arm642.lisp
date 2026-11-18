@@ -3066,6 +3066,20 @@
         (when (neq 0 (afunc-fn-refcount (setq func (pop copy))))
           (arm642-close-var seg var))))))
 
+;;; Basically do (setf (uvref v index) val), where index is a
+;;; constant.  This is a plain store, so use it only for initializing
+;;; stores (i.e., when val is known to be older than the vector v).
+(defun arm642-misc-set-c-node (seg v index val)
+  (declare (fixnum index))
+  (with-arm64-local-vinsn-macros (seg)
+    (if (<= index arm64::max-64-bit-constant-index)
+      (! misc-set-c-node val v index)
+      (with-imm-target () scaled-idx
+        (arm642-absolute-natural seg scaled-idx nil
+                                 (+ arm64::misc-data-offset
+                                    (ash index arm64::word-shift)))
+        (! misc-set-node val v scaled-idx)))))
+
 (defun arm642-make-closure (seg afunc downward-p)
   (with-arm64-local-vinsn-macros (seg)
     (flet ((var-to-reg (var target)
@@ -3076,16 +3090,16 @@
                target))
            (set-some-cells (dest cellno c0 c1 c2 c3)
              (declare (fixnum cellno))
-             (! misc-set-c-node c0 dest cellno)
+             (arm642-misc-set-c-node seg dest cellno c0)
              (incf cellno)
              (when c1
-               (! misc-set-c-node c1 dest cellno)
+               (arm642-misc-set-c-node seg dest cellno c1)
                (incf cellno)
                (when c2
-                 (! misc-set-c-node c2 dest cellno)
+                 (arm642-misc-set-c-node seg dest cellno c2)
                  (incf cellno)
                  (when c3
-                   (! misc-set-c-node c3 dest cellno)
+                   (arm642-misc-set-c-node seg dest cellno c3)
                    (incf cellno))))
              cellno))
       (let* ((inherited-vars (afunc-inherited-vars afunc))
@@ -3136,8 +3150,8 @@
                   (setq cell (set-some-cells dest cell t0r t1r t2r t3r)))))
             (arm642-lri seg arm64::arg_y (ash (ash 1 $lfbits-trampoline-bit) *arm642-target-fixnum-shift*))
             (! load-nil arm64::arg_x)
-            (! misc-set-c-node arm64::arg_x dest cell)
-            (! misc-set-c-node arm64::arg_y dest (1+ cell))))
+            (arm642-misc-set-c-node seg dest cell arm64::arg_x)
+            (arm642-misc-set-c-node seg dest (1+ cell) arm64::arg_y)))
         dest))))
 
 (defun arm642-symbol-entry-locative (sym)
@@ -5181,28 +5195,7 @@
                            (progn
                              (decf pushed-cell *arm642-target-node-size*)
                              (arm642-stack-to-register seg (arm642-vloc-ea pushed-cell) nodetemp)))
-                         ;; ARM64-DEVIATION: the donor stores every element with
-                         ;; a CONSTANT-index misc-set-c-node (ppc2.lisp:4484),
-                         ;; safe on PPC64 because its `std' displacement is
-                         ;; simm16.  ARM64's misc-set-c-node is a STUR, whose
-                         ;; simm9 reaches misc-data-offset + 8*32 only, so a
-                         ;; literal with more than max-64-bit-constant-index
-                         ;; elements made the ASSEMBLER refuse the vinsn:
-                         ;;   vinsn immediate 444 (shift 0) out of range for
-                         ;;   operand class :SIMM9      (index 56, compiling
-                         ;;   arm64-asm.lisp)
-                         ;; Gate it and fall back to the register-index setter,
-                         ;; exactly as arm642-vset1's own node leg does.
-                         ;; Upstream's 1db0ab68 fixed this class in vref1/vset1
-                         ;; but not here.
-                         (if (<= index (arch::target-max-64-bit-constant-index arch))
-                           (! misc-set-c-node reg target index)
-                           (with-imm-target () scaled-idx
-                             (arm642-absolute-natural
-                              seg scaled-idx nil
-                              (+ (arch::target-misc-data-offset arch)
-                                 (ash index *arm642-target-node-shift*)))
-                             (! misc-set-node reg target scaled-idx)))))))
+                         (arm642-misc-set-c-node seg target index reg)))))
                  (! vstack-discard nntriv))))))
     (^)))
 
