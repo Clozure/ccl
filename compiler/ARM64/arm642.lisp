@@ -8151,7 +8151,7 @@
            (byte-index (if offval (ash offval -3)))
            (bit (if offval (logand offval 7))))
       ;; ldrb-scaled guard for the C form
-      (if (typep byte-index '(integer 0 4095))
+      (if (typep byte-index '(unsigned-byte 12))
         (with-imm-target () (src-reg :address)
           (arm642-one-targeted-reg-form seg ptr src-reg)
           (if (node-reg-p vreg)
@@ -9123,7 +9123,7 @@
          (bit (if offval (logand offval 7)))
          (constval (acode-fixnum-form-p newval)))
     ;; ldrb/strb-scaled guard for the C forms
-    (if (typep byte-index '(integer 0 4095))
+    (if (typep byte-index '(unsigned-byte 12))
       (with-imm-target () (src :address)
         (if constval
           (progn

@@ -6369,47 +6369,18 @@
   (and addr addr (:$ 1))
   (lsl dest addr (:$ arm64::fixnumshift)))
 
-;;; 16m48: this was the ONLY member of the macptr bit family that reused its
-;;; own `dest' as a 64-bit address accumulator and shift operand.  `dest' is
-;;; declared :u8, which parses W, while `src' (:address) and `bitnum' (:u64)
-;;; parse X -- and AArch64 has no mixed-width shift, add or address base, so
-;;; the assembler had no template for four of the seven lines and
-;;; VINSN-SIMPLIFY-INSTRUCTION warned on each:
-;;;   (LSR DEST BITNUM (:$ 3))          W,X,imm  vs arm64-asm.lisp:824/825 W,W/X,X
-;;;   (ADD DEST SRC DEST)               W,X,W    vs :462/463 all-W or all-X
-;;;   (LDRB (:W DEST) (:@ DEST (:$ 0))) base W   vs :733 (:base :x/sp)
-;;;   (LSR DEST DEST BITNUM)            W,W,X    vs :822/823
-;;; NOT missing templates -- every one of those instructions has both a W and
-;;; an X template and neither can be widened, because the ISA has no such
-;;; encoding.  It is an operand-CLASS error in this vinsn alone.
-;;;
-;;; Every sibling here already gets this right by carrying a dedicated
-;;; (addr :u64): mem-ref-bit-fixnum, mem-set-bit-0/-1 and
-;;; mem-set-bit-variable-value are all warning-free, and mem-ref-c-bit is
-;;; clean the other way -- wholly W, because its bit number is a constant.
-;;; This now matches mem-ref-bit-fixnum line for line except for the last
-;;; instruction, which narrows to the :u8 result instead of boxing a fixnum.
-;;;
-;;; !! REVIEW POINT: the final (:w addr) is the one construct in this patch
-;;; with no exact precedent -- the corpus uses (:x reg) to WIDEN a :u32
-;;; operand (w3b's extract-variable-bit-fixnum, which is live and measured
-;;; working) but never (:w reg) to narrow a :u64 one.  Same operand parser,
-;;; mirror direction.  If a "no template matched (AND DEST (:W ADDR) (:$ 1))"
-;;; warning survives this, the parser does not narrow, and the fallback is to
-;;; keep the byte in `dest' from the ldrb and give the shift amount its own
-;;; :u32 temp.
 (define-arm64-vinsn mem-ref-bit (((dest :u8))
                                  ((src :address)
                                   (offset :lisp))
                                  ((bitnum :u64)
                                   (addr :u64)))
-  (asr bitnum offset (:$ arm64::fixnumshift))   ;bit index          X,X,imm
-  (asr addr bitnum (:$ 3))                      ;byte index         X,X,imm
-  (add addr src addr)                           ;byte address       X,X,X
-  (ldrb (:w addr) (:@ addr (:$ 0)))             ;the byte, zero-ext W,[X]
-  (and bitnum bitnum (:$ 7))                    ;bit within byte    X,X,limm-x
-  (lsr addr addr bitnum)                        ;                   X,X,X
-  (and dest (:w addr) (:$ 1)))                  ;narrow to :u8      W,W,limm-w
+  (asr bitnum offset (:$ arm64::fixnumshift)) ;signed bit index
+  (asr addr bitnum (:$ 3))                    ;signed byte index
+  (add addr src addr)
+  (ldrb (:w addr) (:@ addr (:$ 0)))
+  (and bitnum bitnum (:$ 7))
+  (lsr addr addr bitnum)
+  (and dest (:w addr) (:$ 1)))
 
 ;;; ============ macptr float/bit writers (set side) ============
 ;;; Demanded one cycle after the readers: %set-bit (lib/level-2.lisp) and
