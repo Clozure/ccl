@@ -6776,8 +6776,8 @@ C(start_lisp):
         stp     d12, d13, [sp, #-16]!
         stp     d14, d15, [sp, #-16]!
         mov     rcontext, x0            /* ppc:126 mr rcontext,r3         */
-        mov     w9, w1                  /* stash resetp (volatile scratch;
-                                           no call before the test)       */
+        mov     w4, w1                  /* stash resetp in imm4: arg_x is
+                                           x9, and is zeroed below        */
         /* Zero the node registers (ppc:144-159). */
         mov     fn, xzr
         mov     arg_w, xzr
@@ -6812,7 +6812,7 @@ C(start_lisp):
         cover_foreign_stack_region imm0, imm1
         mov     imm0, #TCR_STATE_LISP   /* ppc:166-167                    */
         str     imm0, [rcontext, #tcr.valence]
-        cbnz    w9, 1f                  /* ppc:168 bne cr0,1f             */
+        cbnz    w4, 1f                  /* resetp                         */
         bl      C(toplevel_loop)        /* ppc:169                        */
         b       2f                      /* ppc:170                        */
 1:      bl      _SPreset                /* ppc:172                        */
