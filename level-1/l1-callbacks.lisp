@@ -20,6 +20,33 @@
 
 (defstatic *callback-lock* (make-lock))
 
+;;; The writers hold *callback-lock* with interrupts deferred.  An
+;;; interrupt function that ran while a thread held the lock could wait
+;;; for a lock whose owner is itself waiting for *callback-lock*.
+(defmacro with-callback-lock (&body body)
+  `(without-interrupts
+    (with-lock-grabbed (*callback-lock*)
+      ,@body)))
+
+;;; %lookup-pascal-function runs on every callback and every
+;;; process-interrupt delivery.  Where the hardware keeps a thread's
+;;; stores in order, or %publish below adds a barrier, it reads the
+;;; table with no lock; a reader never blocks, so an interrupt function
+;;; can never run while the lookup holds the lock.
+(defmacro with-callback-table-read (&body body)
+  #+(or x86-target arm64-target) `(progn ,@body)
+  #-(or x86-target arm64-target) `(with-callback-lock ,@body))
+
+;;; Store VALUE into PLACE only after every earlier store is visible to
+;;; other threads.  A reader that sees the new table or the new entry
+;;; then also sees its contents.  VALUE is evaluated first, so the stores
+;;; that build it come before the barrier.
+(defmacro %publish (place value)
+  (let ((v (gensym)))
+    `(let ((,v ,value))
+       (%store-store-barrier)
+       (setf ,place ,v))))
+
 
 ;;; (defcallback ...) expands into a call to this function.
 (defun define-callback-function (lisp-function  &optional doc-string (without-interrupts t) info &aux name trampoline)
@@ -29,7 +56,7 @@
                ;;Might as well err out now before do any _Newptr's...
                (not (constant-symbol-p name)))
     (report-bad-arg name '(and symbol (not (satisfies constantp)))))
-  (with-lock-grabbed (*callback-lock*)
+  (with-callback-lock
     (let ((len (length %pascal-functions%)))
       (declare (fixnum len))
       (when (and name (boundp name))
@@ -40,7 +67,7 @@
                          (eql old-tramp (pfe.routine-descriptor pfe)))
                 
                 (setf (pfe.without-interrupts pfe) without-interrupts)
-                (setf (pfe.lisp-function pfe) lisp-function)
+                (%publish (pfe.lisp-function pfe) lisp-function)
                 (setq trampoline old-tramp))))))
       (unless trampoline
         (let ((index (dotimes (i (length %pascal-functions%)
@@ -53,13 +80,13 @@
                                      ((>= i new-len))
                                    (declare (fixnum i))
                                    (setf (%svref new-pf i) nil))
-                                 (setq %pascal-functions% new-pf)
+                                 (%publish %pascal-functions% new-pf)
                                  len))
                        (unless (%svref %pascal-functions% i)
                          (return i)))))
           (setq trampoline (make-callback-trampoline index info))
-          (setf (%svref %pascal-functions% index)
-                (%cons-pfe trampoline info lisp-function name without-interrupts))))))
+          (%publish (%svref %pascal-functions% index)
+                    (%cons-pfe trampoline info lisp-function name without-interrupts))))))
   ;;(%proclaim-special name)          ;
   ;; already done by defpascal expansion
   (when name (set name trampoline))
@@ -71,17 +98,17 @@
 
 (defun %lookup-pascal-function (index)
   (declare (optimize (speed 3) (safety 0)))
-  (with-lock-grabbed (*callback-lock*)
+  (with-callback-table-read
     (let* ((pfe (svref %pascal-functions% index)))
       (values (pfe.lisp-function pfe)
               (pfe.without-interrupts pfe)
-	      (pfe.trace-p pfe)))))
+              (pfe.trace-p pfe)))))
 
 
 (defun %callback-function (pointer)
   (if (typep pointer 'symbol)
     (setq pointer (symbol-value pointer)))
-  (with-lock-grabbed (*callback-lock*)
+  (with-callback-lock
     (let* ((index (dotimes (i (length %pascal-functions%))
                     (when (eql (pfe.routine-descriptor (svref %pascal-functions% i)) pointer)
                       (return i)))))
@@ -91,7 +118,7 @@
 
   
 (defun %delete-pascal-function (pointer)
-  (with-lock-grabbed (*callback-lock*)
+  (with-callback-lock
     (let* ((index (dotimes (i (length %pascal-functions%))
                     (when (eql (pfe.routine-descriptor (svref %pascal-functions% i)) pointer)
                       (return i)))))
