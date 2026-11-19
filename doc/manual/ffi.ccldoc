@@ -571,16 +571,21 @@ Consider a code fragment like the following:"
         {code setf}.")
 
       (definition (:function "%get-bit") "%get-bit ptr bit-offset" nil
-	"References and returns the {param bit-offset}th bit at the address
-        encapsulated by {param ptr}. (Bit 0 at a given address is the most
-        significant bit of the byte at that address.)  Can be used with
-        SETF.")
+	"References and returns the {param bit-offset}th bit from the address
+        encapsulated by {param ptr}.  Bits are numbered from the least
+        significant bit of each byte: bit 0 is the least significant bit of
+        the byte at that address, bit 7 is its most significant bit, and
+        bit 8 is the least significant bit of the next byte.
+        {param bit-offset} may be negative.  (On big-endian PowerPC, bit 0
+        is instead the most significant bit of the byte at that address.)
+        Can be used with {code setf}.")
 
       (definition (:function "%get-bitfield") "%get-bitfield ptr bit-offset width" nil
 	"References and returns an unsigned integer composed from the
         {param width} bits found {param bit-offset} bits from the address encapsulated by
         {param ptr}. The least significant bit of the result is the value of
-        {code (%get-bit ptr (1- (+ bit-offset width)))}. Can be used with {code setf}.")
+        {code (%get-bit ptr bit-offset)}.  (On big-endian PowerPC, it is
+        {code (%get-bit ptr (1- (+ bit-offset width)))}.)  Can be used with {code setf}.")
 
       (definition (:function "%int-to-ptr") "%int-to-ptr int" nil
 	"Creates and returns a macptr whose address is {param int}.")
