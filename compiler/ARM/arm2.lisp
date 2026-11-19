@@ -7983,21 +7983,20 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
   (if (null vreg)
     (progn
       (arm2-form seg nil nil ptr)
-      (arm2-form seg nil ptr nil))
+      (arm2-form seg nil nil offset))
     (let* ((offval (acode-fixnum-form-p offset))
-           (byte-index (if offval (ash offval -3)))
-           (bit-shift (if (and byte-index (< byte-index #x8000))
-                        (logand 31 (+ 25 (logand offval 7))))))
-      (if bit-shift
-        (with-imm-target () (src-reg :address)
-          (arm2-one-targeted-reg-form seg ptr src-reg)
-          (if (node-reg-p vreg)
-            (! mem-ref-c-bit-fixnum vreg src-reg byte-index (logand 31 (+ bit-shift
-                                                                           *arm2-target-fixnum-shift*)))
-            (with-imm-target ()           ;OK if src-reg & dest overlap
-              (dest :u8)
-              (! mem-ref-c-bit dest src-reg  byte-index bit-shift)
-              (<- dest))))
+           (byte-index (if offval (ash offval -3))))
+      ;; ldrb's immediate offset is a 12-bit magnitude and a sign.
+      (if (typep byte-index '(integer -4095 4095))
+        (let* ((mask (ash 1 (logand offval 7))))
+          (with-imm-target () (src-reg :address)
+            (arm2-one-targeted-reg-form seg ptr src-reg)
+            (if (node-reg-p vreg)
+              (! mem-ref-c-bit-fixnum vreg src-reg byte-index mask)
+              (with-imm-target ()       ;OK if src-reg & dest overlap
+                (dest :u8)
+                (! mem-ref-c-bit dest src-reg byte-index mask)
+                (<- dest)))))
         (let* ((triv-p (arm2-trivial-p offset))
                (offset-reg nil)
                (*arm2-nfp-depth* *arm2-nfp-depth*))
@@ -8990,7 +8989,8 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
 (defarm2 arm2-set-bit %set-bit (seg vreg xfer ptr offset newval)
   (let* ((offval (acode-fixnum-form-p offset))
          (byte-index (if offval (ash offval -3)))
-         (bit-index (if (and byte-index (< byte-index #x8000))
+         ;; ldrb/strb's immediate offset is a 12-bit magnitude and a sign.
+         (bit-index (if (typep byte-index '(integer -4095 4095))
                       (logand offval #x7)))
          (triv-offset (arm2-trivial-p offset))
          (triv-val (arm2-trivial-p newval)))
@@ -8998,14 +8998,12 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
       (src :address)
       (arm2-one-targeted-reg-form seg ptr src)
       (if bit-index
-        (let* ((mask-start (logand 31 (+ bit-index 25)))
-               (mask-end (logand 31 (+ bit-index 23)))
-               (mask (ash #x80 (- bit-index)))
+        (let* ((mask (ash 1 bit-index))
                (constval (acode-fixnum-form-p newval)))
           (if constval
             (progn
               (if (eql constval 0)
-                (! mem-set-c-bit-0 src byte-index mask-start mask-end)
+                (! mem-set-c-bit-0 src byte-index mask)
                 (! mem-set-c-bit-1 src byte-index mask))
               (when vreg
                 (arm2-form seg vreg nil newval)))
@@ -9015,7 +9013,7 @@ v idx-reg constidx val-reg (arm2-unboxed-reg-for-aset seg type-keyword val-reg s
               (let* ((target (arm2-one-untargeted-reg-form seg newval arm::arg_z)))
                 (unless triv-val
                   (arm2-pop-register seg src))
-                (! mem-set-c-bit src byte-index (+ 24 bit-index) target)
+                (! mem-set-c-bit src byte-index mask target)
                 (<- target)))))
         (let* ((*arm2-nfp-depth* *arm2-nfp-depth*))
           (unless (and triv-val triv-offset)
