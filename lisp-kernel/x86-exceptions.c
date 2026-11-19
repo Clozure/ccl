@@ -839,19 +839,43 @@ protection_handler
 };
 
 
-/* Maybe this'll work someday.  We may have to do something to
-   make the thread look like it's not handling an exception */
+extern opcode _SPreset;
+
+/* Throw to the toplevel after a hard stack overflow.  Do not throw
+   from here: the handler holds the exception lock until it returns.
+   So make the context resume at _SPreset, on the stack of the
+   innermost catch, and let the handler return. */
 void
 reset_lisp_process(ExceptionInformation *xp)
 {
+  TCR *tcr = get_tcr(false);
+  catch_frame *last_catch = (catch_frame *) ptr_from_lispobj(untag(tcr->catch_top));
+
+#ifdef X8664
+  LispObj sp = last_catch->rsp;
+  xpGPR(xp, Ifp) = last_catch->rbp;
+#else
+  LispObj sp = last_catch->esp;
+  xpGPR(xp, Ifp) = last_catch->ebp;
+#endif
+
+  /* _SPreset pushes two words.  A binding made after the catch sits just
+     below its stack pointer, and the throw still has to undo it, so push
+     below that binding too. */
+  LispObj db = ptr_to_lispobj(tcr->db_link);
+
+  if (db && (db < sp)) {
+    sp = db;
+  }
+  xpGPR(xp, Isp) = sp;
+  xpPC(xp) = (LispObj)&_SPreset;
 }
 
 Boolean
 do_hard_stack_overflow(ExceptionInformation *xp, protected_area_ptr area, BytePtr addr)
 {
-  /*  reset_lisp_process(xp); */
-  Bug(xp, "Unrecoverable stack overflow.");
-  return false;
+  reset_lisp_process(xp);
+  return true;
 }
 
 
