@@ -9808,7 +9808,7 @@
             (! mem-ref-bit-fixnum vreg src-reg ($ *x862-arg-z*))
             (with-imm-target ()           ;OK if src-reg & dest overlap
                 (dest :u8)
-              (! mem-ref-bit dest src-reg offset)
+              (! mem-ref-bit dest src-reg ($ *x862-arg-z*))
               (<- dest)))))
       (^))))
 
@@ -10958,15 +10958,15 @@
          (constval (acode-fixnum-form-p newval)))
       (if (typep offval '(signed-byte 32))
         (with-imm-target () (src :address)
-          (x862-one-targeted-reg-form seg ptr src)
           (if constval
             (progn
+              (x862-one-targeted-reg-form seg ptr src)
               (if (eql constval 0)
                 (! mem-set-c-bit-0 src offval)
                 (! mem-set-c-bit-1 src offval))
               (when vreg
                 (x862-form seg vreg nil newval)))
-            (with-imm-target () (src :address)
+            (progn
               (x862-two-targeted-reg-forms seg ptr src newval ($ *x862-arg-z*))
               (! mem-set-c-bit-variable-value src offval ($ *x862-arg-z*))
               (<- ($ *x862-arg-z*)))))
