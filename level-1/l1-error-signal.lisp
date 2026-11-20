@@ -45,7 +45,7 @@
 	 (format-string (if errargs
 			  (format nil "~a : ~a" error-string "~s")
 			  error-string)))
-    (%err-disp-common nil err-type  format-string errargs frame-ptr)))
+    (%err-disp-common errno err-type  format-string errargs frame-ptr)))
 
 
 (defun %err-disp-internal (err-num errargs frame-ptr)
@@ -87,7 +87,8 @@
                  (simple-file-error (make-condition condition-name
                                              :pathname (car errargs)
                                              :error-type format-string
-                                             :format-arguments (cdr errargs)))
+                                             :format-arguments (cdr errargs)
+                                             :errno err-num))
                  (undefined-function (make-condition condition-name
                                                      :name (car errargs)))
                  (call-special-operator-or-macro
