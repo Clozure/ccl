@@ -1347,7 +1347,9 @@
          (double-float (truncate-rat-dfloat number divisor))
          (short-float (truncate-rat-sfloat number divisor))
          (ratio (with-temporary-bignum-buffers ((p1 (*-2-into number (%denominator divisor))))
-                  (truncate-no-rem p1 (%numerator divisor) res))))))
+                  (let ((q (truncate-no-rem p1 (%numerator divisor) res)))
+                    ;; A numerator of 1 hands back P1, which lives on the stack.
+                    (if (eq q p1) (maybe-copy-bignum q) q)))))))
      (bignum (number-case divisor
                (fixnum (if (eq divisor 1) number
                            (with-small-bignum-buffers ((bd divisor))
@@ -1356,7 +1358,8 @@
                (double-float  (truncate-rat-dfloat number divisor))
                (short-float (truncate-rat-sfloat number divisor))
                (ratio (with-temporary-bignum-buffers ((p1 (*-2-into number (%denominator divisor))))
-                        (truncate-no-rem p1 (%numerator divisor) res)))))
+                        (let ((q (truncate-no-rem p1 (%numerator divisor) res)))
+                          (if (eq q p1) (maybe-copy-bignum q) q))))))
      (double-float (if (eql divisor 1)
                      (let ((res (%unary-truncate number)))
                        RES)
