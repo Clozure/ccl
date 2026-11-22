@@ -582,7 +582,12 @@
 ;;;    stack (AAPCS64 C.11: no register/stack split, x7 is skipped).
 ;;;  - fp-regs-form is frame arithmetic (%inc-ptr CBF -64), not PPC's
 ;;;    deref of a pointer the trampoline stored into its frame.
-(defun arm64::generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name)
+;;;  - NATURAL-STACK-PACKING (Darwin): a scalar arg on the stack takes
+;;;    its natural size and alignment (1/2/4/8), not AAPCS64's uniform
+;;;    8-byte slot (C.5/C.16).  Composites stay 8-byte aligned.  This
+;;;    mirrors the call-out side (arm642-aapcs64-ff-call and %ff-call).
+(defun arm64::generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name
+                                          &key natural-stack-packing)
   (collect ((lets)
             (rlets)
             (inits)
@@ -636,9 +641,29 @@
             (when (typep argtype 'foreign-record-type)
               (multiple-value-setq (hfa-base hfa-count)
                 (arm64::hfa-type-info argtype)))
-            (labels ((stack-slot (words)
+            (labels ((align-stack-offset (alignment)
+                       (setq stack-offset
+                             (logandc2 (+ stack-offset (1- alignment))
+                                       (1- alignment))))
+                     (stack-slot (words)
+                       ;; WORDS whole 8-byte slots, 8-byte aligned.
+                       (align-stack-offset 8)
                        (prog1 stack-offset
                          (incf stack-offset (* 8 words))))
+                     (scalar-stack-slot ()
+                       ;; A non-composite arg on the stack: one 8-byte
+                       ;; slot, or on Darwin its natural size, aligned.
+                       (if natural-stack-packing
+                         (let* ((size (case (foreign-type-to-representation-type argtype)
+                                        ((:signed-byte :unsigned-byte) 1)
+                                        ((:signed-halfword :unsigned-halfword) 2)
+                                        ((:signed-fullword :unsigned-fullword
+                                          :single-float) 4)
+                                        (t 8))))
+                           (align-stack-offset size)
+                           (prog1 stack-offset
+                             (incf stack-offset size)))
+                         (stack-slot 1)))
                      (gpr-slot (words)
                        ;; x0..x7, then the caller's stack args.  A record
                        ;; never straddles the two: with one GPR left it
@@ -649,7 +674,9 @@
                            (incf ngrn words))
                          (progn
                            (setq ngrn 8)
-                           (stack-slot words)))))
+                           (if (typep argtype 'foreign-record-type)
+                             (stack-slot words)
+                             (scalar-stack-slot))))))
             (cond
               ;; HFA/HVA argument: it arrived in one V register per
               ;; member (AAPCS64 C.2), NOT in the GPR save area the
@@ -695,7 +722,7 @@
                (if (typep argtype 'foreign-float-type)
                  (if (< (incf fp-arg-num) 9)
                    (setq use-fp-args t)
-                   (setq offset (stack-slot 1)))
+                   (setq offset (scalar-stack-slot)))
                  (setq offset
                        (gpr-slot (if (and (typep argtype 'foreign-record-type)
                                           (<= bits 128))
