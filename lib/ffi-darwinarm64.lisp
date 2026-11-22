@@ -14,7 +14,8 @@
 ;;;   * variadic args are stack-only: %external-call-expander emits a
 ;;;     :variadic sentinel at the CDB :void boundary and
 ;;;     arm642-aapcs64-ff-call forces following args onto 8-byte slots
-;;;   * non-variadic stack overflow uses natural-size packing
+;;;   * non-variadic stack overflow uses natural-size packing, in both
+;;;     directions: generate-callback-bindings is told to unpack it
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require "FFI-ARM64"))
@@ -36,7 +37,8 @@
                                                  argvars argspecs result-spec
                                                  struct-result-name)
   (arm64::generate-callback-bindings
-   stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name))
+   stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name
+   :natural-stack-packing t))
 
 (defun arm64-darwin::generate-callback-return-value (stack-ptr fp-args-ptr
                                                      result return-type
