@@ -1,0 +1,57 @@
+name: Build and test (macOS arm64)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [master]
+
+env:
+  URL: https://github.com/Clozure/ccl/releases/latest/download/darwinarm64.tar.gz
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          path: ccl
+
+      - name: Fetch bootstrapping binaries
+        run: |
+          # be silent, still report errors,
+          # return a non-zero exit code on failure,
+          # follow redirections
+          curl -sSfL -O ${{ env.URL }}
+
+      - name: Install bootstrapping binaries
+        run: |
+          cd ccl
+          tar xf ../darwinarm64.tar.gz
+
+      - name: Compile lisp kernel
+        run: |
+          cd ccl/lisp-kernel/darwinarm64
+          make
+
+      - name: Rebuild CCL
+        run: |
+          cd ccl
+          ./darm64cl --batch --quiet -n -e '(rebuild-ccl :clean t)' </dev/null
+          # See the comment in build-linux.yml about the welcome banner.
+          ./darm64cl --batch -n </dev/null
+
+      - name: Check out tests
+        uses: actions/checkout@v7
+        with:
+          repository: Clozure/ccl-tests
+          path: ccl-tests
+
+      - name: Run tests
+        run: |
+          cd ccl-tests
+          make CCL=../ccl/darm64cl
