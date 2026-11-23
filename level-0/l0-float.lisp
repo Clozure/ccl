@@ -266,19 +266,26 @@
 (defun scale-float (float int)
   "Return the value (* f (expt (float 2 f) ex)), but with no unnecessary loss
   of precision or overflow."
-  (unless (fixnump int)(setq int (require-type int 'fixnum)))
+  (unless (integerp int) (setq int (require-type int 'integer)))
   (number-case float
     (double-float
      (let* ((float-exp (%double-float-exp float))
             (new-exp (+ float-exp int)))
        (if (eq 0 float-exp) ; already denormalized?
-         (if (%double-float-zerop float)
-           float 
-           (let ((result (%make-dfloat)))
-             (%%scale-dfloat! float (+ IEEE-double-float-bias int) result)))
+         (cond ((%double-float-zerop float) float)
+               ;; The multiplier 2^INT is a float only for -1022 <= INT <= 1023.
+               ((< int (- 1 IEEE-double-float-bias))
+                (if (%double-float-sign float) -0.0d0 0.0d0))
+               ((> int (- IEEE-double-float-normal-exponent-max IEEE-double-float-bias))
+                ;; Make it a normal number first, then scale by the rest.
+                (let ((n (- IEEE-double-float-normal-exponent-max IEEE-double-float-bias)))
+                  (scale-float (scale-float float n) (- int n))))
+               (t
+                (let ((result (%make-dfloat)))
+                  (%%scale-dfloat! float (+ IEEE-double-float-bias int) result))))
          (if (<= new-exp 0)  ; maybe going denormalized        
            (if (<= new-exp (- IEEE-double-float-digits))
-             0.0d0 ; should this be underflow? - should just be normal and result is fn of current fpu-mode
+             (if (%double-float-sign float) -0.0d0 0.0d0) ; should this be underflow? - should just be normal and result is fn of current fpu-mode
              ;(error "Can't scale ~s by ~s." float int) ; should signal something                      
              (let ((result (%make-dfloat)))
                (%copy-double-float float result)
@@ -301,19 +308,26 @@
      (let* ((float-exp (%short-float-exp float))
             (new-exp (+ float-exp int)))
        (if (eq 0 float-exp) ; already denormalized?
-         (if (%short-float-zerop float)
-           float
-           #+32-bit-target
-           (let ((result (%make-sfloat)))
-             (%%scale-sfloat! float (+ IEEE-single-float-bias int) result))
-           #+64-bit-target
-           (%%scale-sfloat float (+ IEEE-single-float-bias int)))
+         (cond ((%short-float-zerop float) float)
+               ;; The multiplier 2^INT is a float only for -126 <= INT <= 127.
+               ((< int (- 1 IEEE-single-float-bias))
+                (if (%short-float-sign float) -0.0s0 0.0s0))
+               ((> int (- IEEE-single-float-normal-exponent-max IEEE-single-float-bias))
+                ;; Make it a normal number first, then scale by the rest.
+                (let ((n (- IEEE-single-float-normal-exponent-max IEEE-single-float-bias)))
+                  (scale-float (scale-float float n) (- int n))))
+               (t
+                #+32-bit-target
+                (let ((result (%make-sfloat)))
+                  (%%scale-sfloat! float (+ IEEE-single-float-bias int) result))
+                #+64-bit-target
+                (%%scale-sfloat float (+ IEEE-single-float-bias int))))
          (if (<= new-exp 0)  ; maybe going denormalized        
            (if (<= new-exp (- IEEE-single-float-digits))
              ;; should this be underflow? - should just be normal and
              ;; result is fn of current fpu-mode (error "Can't scale
              ;; ~s by ~s." float int) ; should signal something
-             0.0s0
+             (if (%short-float-sign float) -0.0s0 0.0s0)
              #+32-bit-target
              (let ((result (%make-sfloat)))
                (%copy-short-float float result)
