@@ -1718,6 +1718,18 @@
 					  ((arg0 :single-float)
 					   (arg1 :single-float)))
   (comiss (:%xmm arg1) (:%xmm arg0)))
+
+;;; comisd and comiss set ZF, PF and CF when an operand is a NaN, so
+;;; "equal" would be true.  Clear ZF for that case; PF is set only by
+;;; an unordered compare.  Only for tests of E or NE: the other tests
+;;; (A, AE, B, BE) are already false or are not used with a NaN.
+(define-x8664-vinsn float-compare-unordered-not-equal (()
+                                                        ()
+                                                        ((temp :u32)))
+  (jpo :done)
+  (movl (:$l 1) (:%l temp))
+  (testl (:%l temp) (:%l temp))
+  :done)
               
 
 (define-x8664-vinsn double-float+-2 (((result :double-float))
