@@ -1372,7 +1372,10 @@
          (m (max x y)))
     (if (> m 1.8014399E+16)
       ;; Large argument escape
-      (let ((log-s 0))
+      (let ((log-s 0)
+            ;; For a real argument, (minusp ix) is never true, so use the
+            ;; sign of the real part, as the code below does.
+            (neg (if (complexp z) (minusp ix) (plusp rx))))
         (if (typep m 'double-float)
           (if (> m #.(/ most-positive-double-float 2))
             (setq log-s double-float-log2)
@@ -1381,9 +1384,12 @@
             (setq log-s single-float-log2)
             (setq z (* 2 z))))
         (if acos
-          (i* (+ log-s (log-e z))
-              (if (minusp ix) +1 -1))
-          (if (minusp ix)
+          (let ((w (+ log-s (log-e z))))
+            (if (and neg (not (complexp z)))
+              ;; Avoid the -0.0 real part that (i* w 1) would give.
+              (complex (float 0 w) w)
+              (i* w (if neg +1 -1))))
+          (if neg
             (i* (+ log-s (log-e (i* z 1))) -1)
             (i* (+ log-s (log-e (i* z -1))) 1))))
       (let ((qrx rx)
