@@ -382,6 +382,13 @@
         IEEE-single-float-digits))))
 
 
+;;; (round (* num (expt 2 shift)) den), rounding once even when SHIFT
+;;; is negative.
+(defun %round-scaled-quotient (num den shift)
+  (if (minusp shift)
+    (round num (ash den (- shift)))
+    (round (ash num shift) den)))
+
 (defun %double-float (number &optional result)
   ;(require-null-or-double-float-sym result)
   ; use number-case when macro is common
@@ -401,7 +408,9 @@
             (den (%denominator number)))
        ; dont error if result is floatable when either top or bottom is not.
        ; maybe do usual first, catching error
-       (if (not (or (bignump num)(bignump den)))
+       (if (and (not (or (bignump num)(bignump den)))
+                  (<= (integer-length num) IEEE-double-float-digits)
+                  (<= (integer-length den) IEEE-double-float-digits))
          (with-stack-double-floats ((fnum num)
                                         (fden den))       
              (%double-float/-2! fnum fden result))
@@ -409,41 +418,37 @@
                 (denlen (integer-length den))
                 (exp (- numlen denlen))
                 (minusp (minusp num)))
-           (if (and (<= numlen double-float-decode-bias)
-                    (<= denlen double-float-decode-bias)
-                    #|(not (minusp exp))|# 
-                    (<= (abs exp) IEEE-double-float-mantissa-width))
+           (if (and (<= numlen IEEE-double-float-digits)
+                    (<= denlen IEEE-double-float-digits))
              (with-stack-double-floats ((fnum num)
                                             (fden den))
        
                (%double-float/-2! fnum fden result))
-             (if (> exp IEEE-double-float-mantissa-width)
-               (progn  (%double-float (round num den) result))               
-               (if (>= exp 0)
-                 ; exp between 0 and 53 and nums big
-                 (let* ((shift (- IEEE-double-float-digits exp))
-                        (num (if minusp (- num) num))
-                        (int (round (ash num shift) den)) ; gaak
-                        (intlen (integer-length int))
-                        (new-exp (+ intlen (- double-float-decode-bias shift))))
-                   
-                   (when (> intlen IEEE-double-float-digits)
-                     (setq shift (1- shift))
-                     (setq int (round (ash num shift) den))
-                     (setq intlen (integer-length int))
-                     (setq new-exp (+ intlen (- double-float-decode-bias shift))))
-                   (when (> new-exp 2046)
-                     (error (make-condition 'floating-point-overflow
-                                            :operation 'double-float
-                                            :operands (list number))))
+             (if (>= exp 0)
+               ; num > den, or about as big
+               (let* ((shift (- IEEE-double-float-digits exp))
+                      (num (if minusp (- num) num))
+                      (int (%round-scaled-quotient num den shift))
+                      (intlen (integer-length int))
+                      (new-exp (+ intlen (- double-float-decode-bias shift))))
+                 
+                 (when (> intlen IEEE-double-float-digits)
+                   (setq shift (1- shift))
+                   (setq int (%round-scaled-quotient num den shift))
+                   (setq intlen (integer-length int))
+                   (setq new-exp (+ intlen (- double-float-decode-bias shift))))
+                 (when (> new-exp 2046)
+                   (error (make-condition 'floating-point-overflow
+                                          :operation 'double-float
+                                          :operands (list number))))
 		   (make-float-from-fixnums (ldb (byte 25 (- intlen 25)) int)
 					    (ldb (byte 28 (max (- intlen 53) 0)) int)
 					    new-exp ;(+ intlen (- double-float-decode-bias 53))
 					    (if minusp -1 1)
 					    result))
-                 ; den > num - exp negative
-                 (progn  
-                   (float-rat-neg-exp num den (if minusp -1 1) result)))))))))))
+               ; den > num - exp negative
+               (progn  
+                 (float-rat-neg-exp num den (if minusp -1 1) result))))))))))
 
 
 #+32-bit-target
@@ -453,7 +458,9 @@
          (den (%denominator number)))
     ;; dont error if result is floatable when either top or bottom is
     ;; not.  maybe do usual first, catching error
-    (if (not (or (bignump num)(bignump den)))
+    (if (and (not (or (bignump num)(bignump den)))
+             (<= (integer-length num) IEEE-single-float-digits)
+             (<= (integer-length den) IEEE-single-float-digits))
       (target::with-stack-short-floats ((fnum num)
 				       (fden den))       
         (%short-float/-2! fnum fden result))
@@ -461,39 +468,35 @@
              (denlen (integer-length den))
              (exp (- numlen denlen))
              (minusp (minusp num)))
-        (if (and (<= numlen single-float-decode-bias)
-                 (<= denlen single-float-decode-bias)
-                 #|(not (minusp exp))|# 
-                 (<= (abs exp) IEEE-single-float-mantissa-width))
+        (if (and (<= numlen IEEE-single-float-digits)
+                 (<= denlen IEEE-single-float-digits))
           (target::with-stack-short-floats ((fnum num)
 					   (fden den))
             (%short-float/-2! fnum fden result))
-          (if (> exp IEEE-single-float-mantissa-width)
-            (progn  (%short-float (round num den) result))               
-            (if (>= exp 0)
-              ; exp between 0 and 23 and nums big
-              (let* ((shift (- IEEE-single-float-digits exp))
-                     (num (if minusp (- num) num))
-                     (int (round (ash num shift) den)) ; gaak
-                     (intlen (integer-length int))
-                     (new-exp (+ intlen (- single-float-decode-bias shift))))
+          (if (>= exp 0)
+            ; num > den, or about as big
+            (let* ((shift (- IEEE-single-float-digits exp))
+                   (num (if minusp (- num) num))
+                   (int (%round-scaled-quotient num den shift))
+                   (intlen (integer-length int))
+                   (new-exp (+ intlen (- single-float-decode-bias shift))))
 		(when (> intlen IEEE-single-float-digits)
-                  (setq shift (1- shift))
-                  (setq int (round (ash num shift) den))
-                  (setq intlen (integer-length int))
-                  (setq new-exp (+ intlen (- single-float-decode-bias shift))))
-                (when (> new-exp IEEE-single-float-normal-exponent-max)
-                  (error (make-condition 'floating-point-overflow
-                                         :operation 'short-float
-                                         :operands (list number))))
-                (make-short-float-from-fixnums 
-                   (ldb (byte IEEE-single-float-digits  (- intlen  IEEE-single-float-digits)) int)
-                   new-exp
-                   (if minusp -1 1)
-                   result))
-              ; den > num - exp negative
-              (progn  
-                (float-rat-neg-exp num den (if minusp -1 1) result t)))))))))
+                (setq shift (1- shift))
+                (setq int (%round-scaled-quotient num den shift))
+                (setq intlen (integer-length int))
+                (setq new-exp (+ intlen (- single-float-decode-bias shift))))
+              (when (> new-exp IEEE-single-float-normal-exponent-max)
+                (error (make-condition 'floating-point-overflow
+                                       :operation 'short-float
+                                       :operands (list number))))
+              (make-short-float-from-fixnums 
+                 (ldb (byte IEEE-single-float-digits  (- intlen  IEEE-single-float-digits)) int)
+                 new-exp
+                 (if minusp -1 1)
+                 result))
+            ; den > num - exp negative
+            (progn  
+              (float-rat-neg-exp num den (if minusp -1 1) result t))))))))
 
 #+64-bit-target
 (defun %short-float-ratio (number)
@@ -501,44 +504,42 @@
          (den (%denominator number)))
     ;; dont error if result is floatable when either top or bottom is
     ;; not.  maybe do usual first, catching error
-    (if (not (or (bignump num)(bignump den)))
+    (if (and (not (or (bignump num)(bignump den)))
+             (<= (integer-length num) IEEE-single-float-digits)
+             (<= (integer-length den) IEEE-single-float-digits))
       (/ (the short-float (%short-float num))
          (the short-float (%short-float den)))
       (let* ((numlen (integer-length num))
              (denlen (integer-length den))
              (exp (- numlen denlen))
              (minusp (minusp num)))
-        (if (and (<= numlen single-float-decode-bias)
-                 (<= denlen single-float-decode-bias)
-                 #|(not (minusp exp))|# 
-                 (<= (abs exp) IEEE-single-float-mantissa-width))
+        (if (and (<= numlen IEEE-single-float-digits)
+                 (<= denlen IEEE-single-float-digits))
           (/ (the short-float (%short-float num))
              (the short-float (%short-float den)))
-          (if (> exp IEEE-single-float-mantissa-width)
-            (progn  (%short-float (round num den)))
-            (if (>= exp 0)
-              ; exp between 0 and 23 and nums big
-              (let* ((shift (- IEEE-single-float-digits exp))
-                     (num (if minusp (- num) num))
-                     (int (round (ash num shift) den)) ; gaak
-                     (intlen (integer-length int))
-                     (new-exp (+ intlen (- single-float-decode-bias shift))))
+          (if (>= exp 0)
+            ; num > den, or about as big
+            (let* ((shift (- IEEE-single-float-digits exp))
+                   (num (if minusp (- num) num))
+                   (int (%round-scaled-quotient num den shift))
+                   (intlen (integer-length int))
+                   (new-exp (+ intlen (- single-float-decode-bias shift))))
 		(when (> intlen IEEE-single-float-digits)
-                  (setq shift (1- shift))
-                  (setq int (round (ash num shift) den))
-                  (setq intlen (integer-length int))
-                  (setq new-exp (+ intlen (- single-float-decode-bias shift))))
-                (when (> new-exp IEEE-single-float-normal-exponent-max)
-                  (error (make-condition 'floating-point-overflow
-                                         :operation 'short-float
-                                         :operands (list number))))
-                (make-short-float-from-fixnums 
-                   (ldb (byte IEEE-single-float-digits  (- intlen  IEEE-single-float-digits)) int)
-                   new-exp
-                   (if minusp -1 1)))
-              ; den > num - exp negative
-              (progn  
-                (float-rat-neg-exp num den (if minusp -1 1) nil t)))))))))
+                (setq shift (1- shift))
+                (setq int (%round-scaled-quotient num den shift))
+                (setq intlen (integer-length int))
+                (setq new-exp (+ intlen (- single-float-decode-bias shift))))
+              (when (> new-exp IEEE-single-float-normal-exponent-max)
+                (error (make-condition 'floating-point-overflow
+                                       :operation 'short-float
+                                       :operands (list number))))
+              (make-short-float-from-fixnums 
+                 (ldb (byte IEEE-single-float-digits  (- intlen  IEEE-single-float-digits)) int)
+                 new-exp
+                 (if minusp -1 1)))
+            ; den > num - exp negative
+            (progn  
+              (float-rat-neg-exp num den (if minusp -1 1) nil t))))))))
 
 
 #+32-bit-target
