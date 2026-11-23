@@ -3383,7 +3383,7 @@ element-type is numeric."
        (unless (typep ,v 'ivector) (report-bad-arg ,v 'ivector))
        (without-gcing
          (with-macptrs ((,ptr))
-           (%vect-data-to-macptr ,v ,ptr)
+           (%ivector-data-to-macptr ,v ,ptr)
            ,@body)))))
       
 
