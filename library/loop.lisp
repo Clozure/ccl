@@ -1168,7 +1168,7 @@ collected result will be returned as the value of the LOOP."
          (when (and dtype
                     (null initialization)
                     (not (typep nil dtype)))
-           (if (eq dtype 'complex)
+           (if (and (subtypep dtype 'complex) (subtypep 'complex dtype))
              (setq initialization 0 dtype 'number)
              (when iteration-variable-p
                (setq dtype `(or null ,dtype)))))
@@ -2071,7 +2071,7 @@ collected result will be returned as the value of the LOOP."
 				   simple-vector single-float standard-char
 				   stream string base-char
 				   symbol t vector)
-	     :type-keywords nil
+	     :type-keywords '((fixnum fixnum) (float float) (t t))
 	     :ansi (if extended-p :extended t))))
     (add-loop-path '(hash-key hash-keys) 'loop-hash-table-iteration-path w
 		   :preposition-groups '((:of :in))
