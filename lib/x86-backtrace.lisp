@@ -309,21 +309,70 @@
     
 
 
-;;; We can't determine this reliably (yet).
-(defun last-foreign-sp-before (target)
-  (declare (fixnum target))
-  (do* ((cfp (%fixnum-ref (%current-tcr) (- target::tcr.foreign-sp
-					    target::tcr-bias))
-             (%fixnum-ref cfp target::csp-frame.backptr)))
-       ((zerop cfp))
-    (declare (fixnum cfp))
-    (let* ((rbp (%fixnum-ref cfp #+x8632-target x8632::csp-frame.ebp
-			         #+x8664-target x8664::csp-frame.rbp)))
-      (declare (fixnum rbp))
-      (if (> rbp target)
-        (return cfp)
-        (if (zerop rbp)
-          (return nil))))))
+;;; Return the values that tcr.foreign-sp and tcr.nfp had when the function
+;;; whose frame is TARGET was called.  START is a value that tcr.foreign-sp
+;;; had at or after that call.
+(defun last-foreign-sp-before (target start)
+  (declare (fixnum target start))
+  (let* ((tcr (%current-tcr))
+         (vs-area (%fixnum-ref tcr (- target::tcr.vs-area target::tcr-bias)))
+         (vs-low (%fixnum-ref vs-area target::area.low))
+         (vs-high (%fixnum-ref vs-area target::area.high))
+         (nfp (%fixnum-ref tcr (- target::tcr.nfp target::tcr-bias)))
+         (unowned nil))
+    (declare (fixnum vs-low vs-high nfp))
+    (labels ((owner (frame)
+               ;; A frame pointer on the value stack in csp-frame.rbp names
+               ;; the function that made the frame.
+               (let* ((rbp (%fixnum-ref frame #+x8632-target x8632::csp-frame.ebp
+                                              #+x8664-target x8664::csp-frame.rbp)))
+                 (declare (fixnum rbp))
+                 (if (and (> rbp vs-low) (< rbp vs-high))
+                   rbp)))
+             (previous-nfp (frame owner)
+               ;; A frame without an owner has the previous tcr.nfp in its
+               ;; second word.
+               (if owner
+                 (%fixnum-ref (%fixnum-ref frame target::csp-frame.backptr) -16)
+                 (%fixnum-ref frame target::node-size)))
+             (older (foreign-sp nfp)
+               ;; The NFP frame to go back to must belong to an older function
+               ;; than TARGET's.
+               (let* ((owner (if (eql nfp 0) nil (owner nfp))))
+                 (if (and owner (<= (the fixnum owner) target))
+                   (error "Can't tell where the foreign stack was before frame #x~x"
+                          (index->address target))
+                   (values foreign-sp nfp)))))
+      ;; NFP frames below START are newer than START.
+      (do* ()
+           ((or (eql nfp 0) (>= nfp start)))
+        (setq nfp (previous-nfp nfp (owner nfp))))
+      (do* ((fsp start (%fixnum-ref fsp target::csp-frame.backptr)))
+           ()
+        (declare (fixnum fsp))
+        (let* ((owner (owner fsp)))
+          (if (if owner (> (the fixnum owner) target) (not (eql fsp nfp)))
+            (cond (unowned
+                   (error "Can't tell which frame owns the NFP frame at #x~x"
+                          (index->address unowned)))
+                  ;; A frame of an older function, or the oldest frame on the
+                  ;; foreign stack, which has no owner and whose two words
+                  ;; are 0.
+                  ((or owner
+                       (and (eql 0 (%fixnum-ref fsp target::csp-frame.backptr))
+                            (eql 0 (%fixnum-ref fsp target::node-size))))
+                   (return (older fsp nfp)))
+                  (t
+                   (error "Can't tell which frame owns the foreign stack frame at #x~x"
+                          (index->address fsp))))
+            (progn
+              (setq unowned (if owner nil (or unowned fsp)))
+              (when (eql fsp nfp)
+                (setq nfp (previous-nfp nfp owner))
+                ;; A function makes its NFP frame before any other.
+                (when (eql owner target)
+                  (return (older (%fixnum-ref fsp target::csp-frame.backptr)
+                                 nfp)))))))))))
 
 
 (defun %tsp-frame-containing-progv-binding (db)
@@ -392,11 +441,35 @@
               
          
 (defun %apply-in-frame (frame function arglist)
-  (declare (ignore frame function arglist))
   (target-arch-case
    (:x8632 (error "%apply-in-frame doesn't work for x8632 yet"))
    (:x8664
-    (error "%apply-in-frame has bitrotted"))))
+    (let* ((target-catch (last-catch-since frame nil))
+	   (start-fp (if target-catch
+		       (uvref target-catch x8664::catch-frame.rbp-cell)
+		       (%get-frame-ptr)))
+	   (target-xcf (last-xcf-since frame start-fp nil))
+	   (target-db-link (last-binding-before frame))
+	   (target-tsp (last-tsp-before frame)))
+      (multiple-value-bind (target-foreign-sp target-nfp)
+	  (last-foreign-sp-before
+	   frame
+	   (cond (target-xcf (%fixnum-ref target-xcf target::xcf.foreign-sp))
+		 (target-catch (uvref target-catch x8664::catch-frame.foreign-sp-cell))
+		 (t (%fixnum-ref (%current-tcr) (- target::tcr.foreign-sp
+						   target::tcr-bias)))))
+	(let* ((thunk (%clone-x86-function #'%%apply-in-frame-proto
+					   frame
+					   target-catch
+					   target-db-link
+					   target-xcf
+					   target-tsp
+					   target-foreign-sp
+					   target-nfp
+					   (coerce-to-function function)
+					   arglist
+					   0)))
+	  (funcall thunk)))))))
 
             
     

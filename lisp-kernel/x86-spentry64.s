@@ -2230,6 +2230,7 @@ local_label(stack_misc_alloc_heap_alloc_ivector):
         __(subq $dnode_size,rcontext(tcr.foreign_sp))
         __(movq rcontext(tcr.foreign_sp),%imm0)
 	__(movq %imm1,(%imm0))
+        __(movq %rbp,csp_frame.save_rbp(%imm0))
 	__(jmp _SPmisc_alloc)	
 local_label(stack_misc_alloc_node):
 	__(movq %arg_y,%imm1)
