@@ -3063,7 +3063,7 @@
   (if members
     (collect ((non-numbers) (numbers))
       (dolist (m (remove-duplicates members))
-	(if (and (numberp m)
+	(if (and (realp m)
 		 (not (and (floatp m) (zerop m))))
 	  (numbers (ctype-of m))
 	  (non-numbers m)))
