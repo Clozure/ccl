@@ -619,7 +619,7 @@
                                  (setq x (/ x 2))))
                           (/ x (abs x)))))
         ((rationalp x) (if (plusp x) 1 (if (zerop x) 0 -1)))
-        ((zerop x) (float 0.0 x))
+        ((zerop x) x)
         (t (float-sign x))))
 
 
