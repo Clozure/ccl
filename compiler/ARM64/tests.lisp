@@ -141,6 +141,11 @@
     ;; fp
     (fadd s0 s1 s2)
     (fmov d0 (:$ 1.0))
+    ;; fixed-point to FP conversion (scale @ 15:10 holds 64-fbits)
+    (scvtf d0 x1 (:$ 3))
+    (scvtf s0 x1 (:$ 64))
+    (scvtf d2 w3 (:$ 32))
+    (ucvtf s4 w5 (:$ 1))
     ;; advanced simd lane insert/extract (element copy)
     (ins (:d q0 1) (:d q1 0))
     (ins (:s q0 1) (:s q1 0))

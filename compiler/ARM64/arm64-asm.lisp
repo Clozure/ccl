@@ -316,6 +316,8 @@
 (defconstant $fp-cmp-mask #xffe0fc1f) ;FP compare, register form (free Rm/Rn)
 (defconstant $fp-cmp-zero-mask #xfffffc1f) ;FP compare against #0.0 (free Rn only)
 (defconstant $fp-cvt-mask #xfffffc00) ;FP<->int convert, fmov gpr<->fpr (free Rn/Rd)
+(defconstant $fp-fixed-cvt-x-mask #xffff0000) ;FP<-fixed-point, X source (free scale/Rn/Rd)
+(defconstant $fp-fixed-cvt-w-mask #xffff8000) ;FP<-fixed-point, W source (scale<32 unallocated)
 (defconstant $fp-imm-mask #xffe01fe0) ;FP move immediate (free imm8 @ 20:13, Rd)
 (defconstant $movewide-mask #xff800000) ;move wide (immediate)
 (defconstant $bitfield-mask #xffc00000) ;bitfield
@@ -1196,6 +1198,16 @@
    (def ucvtf ((:rd :s) (:rn :x)) #x9e230000 $fp-cvt-mask)
    (def ucvtf ((:rd :d) (:rn :w)) #x1e630000 $fp-cvt-mask)
    (def ucvtf ((:rd :d) (:rn :x)) #x9e630000 $fp-cvt-mask)
+   ;; Fixed-point source: the result is scaled by 2^-fbits, so e.g.
+   ;; (scvtf d0 arg_z (:$ arm64::fixnumshift)) converts a fixnum.
+   (def scvtf ((:rd :s) (:rn :w) :fbits-w) #x1e028000 $fp-fixed-cvt-w-mask)
+   (def scvtf ((:rd :s) (:rn :x) :fbits-x) #x9e020000 $fp-fixed-cvt-x-mask)
+   (def scvtf ((:rd :d) (:rn :w) :fbits-w) #x1e428000 $fp-fixed-cvt-w-mask)
+   (def scvtf ((:rd :d) (:rn :x) :fbits-x) #x9e420000 $fp-fixed-cvt-x-mask)
+   (def ucvtf ((:rd :s) (:rn :w) :fbits-w) #x1e038000 $fp-fixed-cvt-w-mask)
+   (def ucvtf ((:rd :s) (:rn :x) :fbits-x) #x9e030000 $fp-fixed-cvt-x-mask)
+   (def ucvtf ((:rd :d) (:rn :w) :fbits-w) #x1e438000 $fp-fixed-cvt-w-mask)
+   (def ucvtf ((:rd :d) (:rn :x) :fbits-x) #x9e430000 $fp-fixed-cvt-x-mask)
    ;; truncate (round toward zero)
    (def fcvtzs ((:rd :w) (:rn :s)) #x1e380000 $fp-cvt-mask)
    (def fcvtzs ((:rd :x) (:rn :s)) #x9e380000 $fp-cvt-mask)
@@ -1322,6 +1334,9 @@
     :nzcv          ;4-bit flags immediate @ 3:0 (ccmp/ccmn)
     :fpzero        ;the literal #0.0 (fcmp/fcmpe zero form); encodes nothing
     :fpimm8        ;8-bit FP move immediate @ 20:13 (fmov scalar immediate)
+    :fbits-x       ;fixed-point fraction bits 1..64 (X source): scale @ 15:10
+                   ; holds 64-fbits (scvtf/ucvtf fixed-point form)
+    :fbits-w       ; ... and the W source, fbits 1..32
     :lsl-imm-x     ;lsl #n alias of ubfm: immr=(-n)&63, imms=63-n (X)
     :lsl-imm-w     ; ... and the W form (immr=(-n)&31, imms=31-n)
     :lsr-imm-x     ;lsr/asr #n alias of u/sbfm: immr=n, imms=63 (X)
@@ -1822,6 +1837,8 @@
         (:sysreg (and (eql shift 0) (typep value '(unsigned-byte 15))))
         (:fpzero (and (eql shift 0) (numberp value) (zerop value)))
         (:fpimm8 (and (eql shift 0) (encode-fp-imm8 value)))
+        (:fbits-x (and (eql shift 0) (typep value '(integer 1 64))))
+        (:fbits-w (and (eql shift 0) (typep value '(integer 1 32))))
         ((:lsl-imm-x :lsr-imm-x :asr-imm-x)
          (and (eql shift 0) (typep value '(integer 0 63))))
         ((:lsl-imm-w :lsr-imm-w :asr-imm-w)
@@ -2250,6 +2267,7 @@
        (set-field-value insn (byte 5 19) (ldb (byte 5 0) value))
        (set-field-value insn (byte 1 31) (ldb (byte 1 5) value)))
       (:fpimm8 (set-field-value insn (byte 8 13) (encode-fp-imm8 value)))
+      ((:fbits-x :fbits-w) (set-field-value insn (byte 6 10) (- 64 value)))
       (:pcrel
        (set-field-value insn (byte 2 29) (ldb (byte 2 0) value))
        (set-field-value insn (byte 19 5) (ash value -2)))
@@ -2310,6 +2328,7 @@
       ((:tbit-x :tbit-w)
        (imm (dpb (ldb (byte 1 31) word) (byte 1 5) (ldb (byte 5 19) word))))
       (:fpimm8 (imm (decode-fp-imm8 (ldb (byte 8 13) word))))
+      ((:fbits-x :fbits-w) (imm (- 64 (ldb (byte 6 10) word))))
       ;; A split field: immlo @ 30:29, immhi @ 23:5.  This is the inverse of
       ;; encode-immediate-operand's :pcrel arm; it cannot go through
       ;; extract-immediate-field, which handles one contiguous bytespec.
@@ -2548,6 +2567,7 @@
     (:nzcv "#nzcv")
     (:fpzero "#0.0")
     (:fpimm8 "#fpimm")
+    ((:fbits-x :fbits-w) "#fbits")
     ((:lsl-imm-x :lsl-imm-w :lsr-imm-x :lsr-imm-w :asr-imm-x :asr-imm-w)
      "#shift")
     ((:bf-lsb-x :bf-lsb-w :bfx-lsb-x :bfx-lsb-w) "#lsb")
