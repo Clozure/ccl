@@ -1,61 +1,6 @@
 ;;;; -*- Mode: Lisp; Package: CCL -*-
-;;;
-;;; arm64-float.lisp — ACTIVE seed (promoted from drafts wave-6 at the
-;;; 16m5p %INT-TO-SFLOAT demand; pin-gate sweep applied — see the
-;;; PIN-GATED CLUSTER banner).
 ;;;;
-;;;; arm64-float.lisp — wave-6 draft: level-0 float LAP functions for
-;;;; Matt Emerson's upstream arm64 (low-tag) design, pin d71a5ad.
-;;;;
-;;;; Source: vendor/ccl/level-0/PPC/ppc-float.lisp (PPC64/unguarded forms
-;;;; only; every form's feature guard re-verified against the source —
-;;;; see wave6-float-report.md ledger).
-;;;; Macro vocabulary: Matt's arm64-lapmacros.lisp (get-double-float,
-;;;; get-single-float-bits, unbox-fixnum, box-fixnum, check-nargs) plus
-;;;; upstream-port/level-0/drafts/arm64-lapmacros-additions.lisp
-;;;; (get/put-single-float, put-double-float, int-to-freg,
-;;;; clear-fpu-exceptions, macptr-ptr, vpush/vpop).
-;;;;
-;;;; Representation ground truth (his arm64-arch.lisp @ d71a5ad):
-;;;;   * single-floats are IMMEDIATE: tag-single-float = #b001 (:47),
-;;;;     fulltag-single-float = #b0001 (:57), subtag-single-float =
-;;;;     fulltag-single-float = 1 (:78), :single-float-tag-is-subtag nil
-;;;;     (:951).  IEEE bits live in the TOP 32 bits of the tagged word —
-;;;;     his own get-single-float-bits is `(lsr dest node (:$ 32))`
-;;;;     (arm64-lapmacros.lisp:49-51) — SAME packing as PPC64, so the
-;;;;     PPC64 single-float shift arithmetic ports line-for-line.
-;;;;     (MISSING-CONSTANTS-RATIFY.md §10.1 tracks ratification.)
-;;;;   * double-floats are uvectors: subtag-double-float (:144),
-;;;;     double-float.value = misc-data-offset = 4 (:432) — misc-biased,
-;;;;     NOT an 8-multiple, so all value accesses are ldur/stur.
-;;;;     LE cell map: value-cell=0 ALIASES val-low-cell=0; val-high-cell=1
-;;;;     (:433-437).
-;;;;   * FP register convention (this file): PPC fpN → dN (double) / sN
-;;;;     (single), SAME number: fp0→d0/s0, fp1→d1/s1, fp2→d2/s2.
-;;;;     get-single-float / put-single-float / int-to-freg stage through
-;;;;     imm0 (additions macros) — noted where imm0 is otherwise live.
-;;;;   * FP-EXCEPTION MODEL = ARM32/VFP lineage, NOT PPC (W6-D40):
-;;;;     ARMv8 FPCR trap-enable bits (IOE..IDE, bits 8-15) are OPTIONAL
-;;;;     and RAZ/WI on mainstream cores — untrapped FP is the baseline,
-;;;;     exactly the NEON situation vendor arm-float.lisp:384-390 solved.
-;;;;     Adopted model: the LOGICAL exception-enable mask lives in
-;;;;     SOFTWARE (bits 8-15 of *fp-logical-enables*, a special variable
-;;;;     and therefore per-thread); the hardware FPCR carries only the
-;;;;     rounding mode (RMode, bits 22-23); cumulative status comes from
-;;;;     tcr.foreign-fpsr, the FPSR the ffcall spentry captures and clears
-;;;;     around each foreign call (arm64-spentry.s:264-266).
-;;;;     mrs/msr fpsr/fpcr templates + names verified at tip
-;;;;     (arm64-asm.lisp:577-578, :1440-1443; resolves
-;;;;     MISSING-CONSTANTS-RATIFY.md §10.6's open question).
-;;;;     ⚠ UPDATED 16m44.  This block used to say the mask lives in
-;;;;     tcr.lisp-fpscr at offset 16 with tcr.ffi-exception at 136, and
-;;;;     flagged a W4-D20 disagreement with arm64-constants.h.  Both slots
-;;;;     were REMOVED upstream at f067047; only tcr.foreign-fpsr survives,
-;;;;     and lisp/kernel now agree on it.  The disagreement is closed and
-;;;;     the two offsets above are gone — do not reinstate them.
-;;;;
-;;;; STATUS: DRAFT — not compiled; brk placeholders: none (this file needs
-;;;; no subprims, no lisp frames, no constant-pool refs, no type-trap UUOs).
+;;;; SPDX-License-Identifier: Apache-2.0
 
 (in-package "CCL")
 
@@ -207,23 +152,13 @@
   (put-single-float s1 arg_z)
   (ret))
 
-;;; from ppc-float.lisp:343 (#+ppc64-target %int-to-sfloat)
-;;; PPC64 rounds int→double (int-to-freg) then double→single (frsp), and
-;;; materializes the tagged immediate via a pre-seeded 8-byte scratch slot
-;;; tcr.single-float-convert (stfs into it + ld the whole word).  The fmov
-;;; path (put-single-float) makes the scratch slot unnecessary — no tcr
-;;; field needed.  The two-step int→double→single rounding is kept
-;;; PPC-faithful (a direct scvtf-to-single would round once, differing for
-;;; magnitudes ≥ 2^53).
 (defarm64lapfunction %int-to-sfloat ((int arg_z))
-  (int-to-freg d0 int)                  ; additions macro: asr imm0 + scvtf d0
-  (fcvt s1 d0)                          ; PPC frsp fp1 fp0
-  (put-single-float s1 arg_z)
+  (scvtf s0 int (:$ arm64::fixnumshift))
+  (put-single-float s0 arg_z)
   (ret))
 
-;;; from ppc-float.lisp:351 (unguarded)
 (defarm64lapfunction %int-to-dfloat ((int arg_y) (dfloat arg_z))
-  (int-to-freg d0 int)
+  (scvtf d0 int (:$ arm64::fixnumshift))
   (put-double-float d0 dfloat)
   (ret))
 

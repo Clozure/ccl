@@ -514,22 +514,11 @@
      (lsl ,dest imm0 (:$ 32))
      (orr ,dest ,dest (:$ arm64::tag-single-float))))
 
-
 ;;; from ppc-lapmacros.lisp:675 (put-double-float)
 ;;; Store FPR into a double-float uvector.
 (defarm64lapmacro put-double-float (src node)
   ;; src: FPR (d-register), node: tagged pointer to double-float uvector
   `(stur ,src (:@ ,node (:$ arm64::double-float.value))))
-
-
-;;; from ppc-lapmacros.lisp: (int-to-freg — convert fixnum GPR to FPR)
-;;; PPC: unbox-fixnum then use kernel routine or FP convert instruction.
-;;; On arm64: asr to unbox, then scvtf.
-(defarm64lapmacro int-to-freg (fpr gpr)
-  ;; Converts a FIXNUM in gpr to a double in fpr
-  `(progn
-     (asr imm0 ,gpr (:$ arm64::fixnumshift))
-     (scvtf ,fpr imm0)))
 
 
 ;;; from ppc-lapmacros.lisp:682 (clear-fpu-exceptions)

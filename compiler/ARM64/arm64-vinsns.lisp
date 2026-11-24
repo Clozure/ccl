@@ -4964,13 +4964,18 @@
   (neg dest src))
 
 ;;; ============ fixnum->fpr ============
-;;; PPC64 (ppc2 idiom): unbox then integer->double convert.  v2 @6436.
-;;; asr undoes the fixnum shift; scvtf X->D (arm64-asm.lisp:1103).
+;;; The fixed-point form of scvtf treats the tagged fixnum as a
+;;; fixed-point value with fixnumshift fraction bits, so it unboxes
+;;; and converts in one instruction.
 (define-arm64-vinsn fixnum->fpr (((f :double-float))
-                                 ((fixnum :lisp))
-                                 ((temp :s64)))
-  (asr temp fixnum (:$ arm64::fixnumshift))
-  (scvtf f temp))
+                                 ((fixnum :lisp)))
+  (scvtf f fixnum (:$ arm64::fixnumshift)))
+
+;;; Converting straight to single rounds once.  Going through double
+;;; would round twice, and could differ for magnitudes >= 2^54.
+(define-arm64-vinsn fixnum->single-fpr (((f :single-float))
+                                        ((fixnum :lisp)))
+  (scvtf f fixnum (:$ arm64::fixnumshift)))
 
 ;;; ============ store-double ============
 ;;; PPC64 stfd -> D-form STUR at double-float.value (mirror of landed w1
