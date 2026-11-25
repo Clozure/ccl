@@ -14,7 +14,7 @@ permissions:
 jobs:
   macos:
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - name: Check out source
         uses: actions/checkout@v7
