@@ -16,6 +16,9 @@
 ;;;     arm642-aapcs64-ff-call forces following args onto 8-byte slots
 ;;;   * non-variadic stack overflow uses natural-size packing, in both
 ;;;     directions: generate-callback-bindings is told to unpack it
+;;;   * a non-variadic HFA that goes wholly to the stack is placed at
+;;;     its natural alignment and unrounded size, not in whole 8-byte
+;;;     slots (expand-ff-call's :natural-stack-hfa, passed below)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require "FFI-ARM64"))
@@ -31,7 +34,8 @@
                                         #'null-coerce-foreign-result))
   (arm64::expand-ff-call callform args
                          :arg-coerce arg-coerce
-                         :result-coerce result-coerce))
+                         :result-coerce result-coerce
+                         :natural-stack-hfa t))
 
 (defun arm64-darwin::generate-callback-bindings (stack-ptr fp-args-ptr
                                                  argvars argspecs result-spec

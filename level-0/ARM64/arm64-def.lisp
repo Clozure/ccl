@@ -330,7 +330,9 @@
          ;; Darwin (Apple ABI): a :variadic marker means every following
          ;; arg is a stack arg in an 8-byte slot; non-variadic overflow
          ;; beyond x0-x7/v0-v7 is packed at each scalar's NATURAL size
-         ;; and alignment.  Composite (C.13) copies stay 8-byte aligned.
+         ;; and alignment.  Composite (C.13) copies stay 8-byte aligned
+         ;; (expand-ff-call passes a stacked non-variadic Darwin HFA as
+         ;; scalar members instead, so this packing places it).
          ;; Linux never sees :variadic and always uses 8-byte NSAA slots.
          (darwin-p #+darwinarm64-target t #-darwinarm64-target nil)
          (force-stack nil))

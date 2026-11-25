@@ -9293,7 +9293,9 @@
     ;;   * non-variadic overflow beyond x0-x7/v0-v7 is packed at each
     ;;     argument's NATURAL size and alignment (1/2/4/8), not
     ;;     AAPCS64's uniform 8-byte slots.  Composite (C.13) copies stay
-    ;;     8-byte-aligned on both OSes.
+    ;;     8-byte-aligned on both OSes.  (A stacked non-variadic HFA is
+    ;;     not such a copy on Darwin: expand-ff-call passes its members
+    ;;     as scalar FP args, which this packing places.)
     ;; Linux ignores both and always uses 8-byte NSAA slots.
     (labels ((note-overflow (argspec)
                (if (and darwin-os-p (not force-stack))
@@ -9382,7 +9384,8 @@
           ;; class per C.3/C.11).  Always a stack slot; consumes no
           ;; register of either class.  Composite copies are 8-byte
           ;; aligned on Darwin too (the natural-packing deviation applies
-          ;; only to non-composite stack args).
+          ;; only to non-composite stack args; expand-ff-call does not
+          ;; use this for a non-variadic Darwin HFA).
           (:stack-doubleword (note-overflow :unsigned-doubleword))
           (t (if force-stack
                (note-overflow argspec)

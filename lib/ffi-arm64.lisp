@@ -30,10 +30,16 @@
 ;;;     below and passed by decomposing into scalar member argforms
 ;;;     (the darwinppc64 model, lib/ffi-darwinppc64.lisp).  Scalar args
 ;;;     of either class beyond the 8 registers go to the NSAA stack
-;;;     block in source order (implemented; see arm642-aapcs64-ff-call
-;;;     and the SP step in the ffcall spentries), but the C.3
-;;;     WHOLE-AGGREGATE stack case cannot be expressed by member-wise
-;;;     decomposition and is refused loudly in expand-ff-call.
+;;;     block in source order (see arm642-aapcs64-ff-call and the SP
+;;;     step in the ffcall spentries).  The C.3 whole-aggregate stack
+;;;     case is handled in expand-ff-call: the remaining V registers
+;;;     are wasted (NSRN := 8), then the aggregate is copied as raw
+;;;     8-byte :stack-doubleword words (AAPCS64, and Darwin variadic
+;;;     args), or, for a non-variadic arg on Darwin, passed as member
+;;;     argforms that the Darwin natural stack packing places at the
+;;;     aggregate's natural alignment and unrounded size (Apple ABI).
+;;;     Callbacks do not yet accept an HFA that arrives on the stack
+;;;     (generate-callback-bindings refuses it).
 ;;;   - Composite size <= 16 bytes (128 bits), not HFA: passed in GPRs
 ;;;     (X0..X7 as 1-2 doublewords, left-justified — NOT right-justified
 ;;;     like PowerOpen).
@@ -82,9 +88,10 @@
   ;; :stack-doubleword = one raw 8-byte slot in the NSAA stack-arg
   ;; block, never a register: one word of an AAPCS64 C.13 memory copy
   ;; of a composite the ABI sends WHOLLY to the stack (an HFA that
-  ;; cannot fit v0-v7, C.3; a 2-doubleword record with one GPR left,
-  ;; C.10/C.11).  Emitted only by expand-ff-call below; the same
-  ;; old-host rationale as :indirect-result applies.
+  ;; cannot fit v0-v7, C.3, except a non-variadic one on Darwin; a
+  ;; 2-doubleword record with one GPR left, C.10/C.11).  Emitted only
+  ;; by expand-ff-call below; the same old-host rationale as
+  ;; :indirect-result applies.
   (pushnew :stack-doubleword *arg-spec-keywords*))
 
 
@@ -254,7 +261,15 @@
                       (%get-unsigned-long ,regbuf ,w))))))
         `(progn ,@(forms))))))
 
-(defun arm64::expand-ff-call (callform args &key (arg-coerce #'null-coerce-foreign-arg) (result-coerce #'null-coerce-foreign-result))
+;;; NATURAL-STACK-HFA is true for Darwin (lib/ffi-darwinarm64.lisp):
+;;; Apple's arm64 ABI places a non-variadic HFA that goes wholly to the
+;;; stack at its natural alignment and unrounded size (a float HFA is
+;;; 4-byte aligned and 4*count bytes), where AAPCS64 C.3/C.4 round it up
+;;; to whole 8-byte slots.  See the C.3 arm below.
+(defun arm64::expand-ff-call (callform args
+                              &key (arg-coerce #'null-coerce-foreign-arg)
+                                   (result-coerce #'null-coerce-foreign-result)
+                                   (natural-stack-hfa nil))
   (let* ((result-type-spec (or (car (last args)) :void))
          (regbuf nil)
          (result-temp nil)
@@ -262,20 +277,20 @@
          (struct-result-type nil)
          (structure-arg-temp nil)
          ;; Running AAPCS64 register-class counts, advanced in source
-         ;; order by the arg loop below, so the DECOMPOSED composite
-         ;; cases can refuse the register/stack STRADDLE shapes at
-         ;; macroexpansion time.  Scalar overflow is supported (args 9+
-         ;; of either class go to the NSAA stack block), but AAPCS64
-         ;; never splits ONE composite across registers and stack: an
-         ;; HFA whose members do not all fit in v0-v7 goes wholly to the
-         ;; stack (C.3, with natural member packing the member-wise
-         ;; decomposition cannot express), and a 2-doubleword record
-         ;; with exactly one GPR left goes wholly to the stack (C.11).
-         ;; Both shapes used to be masked by the backend's blanket >8
-         ;; refusals; with stack args implemented they are refused HERE,
-         ;; precisely, and everything else flows.
+         ;; order by the arg loop below.  AAPCS64 never splits ONE
+         ;; composite across registers and stack: an HFA whose members
+         ;; do not all fit in v0-v7 goes wholly to the stack (C.3), and
+         ;; a 2-doubleword record with exactly one GPR left goes wholly
+         ;; to the stack (C.11).  Both rules also waste the remaining
+         ;; registers of that class.  The backend assigns registers to
+         ;; argspecs one at a time and cannot see a composite, so these
+         ;; counts decide the whole-to-stack cases here, and the dummy
+         ;; argforms they emit keep the backend's counters in step.
          (ngpr-words 0)
-         (nfpr-args 0))
+         (nfpr-args 0)
+         ;; True after a Darwin :variadic marker, where every arg
+         ;; (composites included) takes 8-byte stack slots.
+         (variadic-p nil))
     (declare (fixnum ngpr-words nfpr-args))
     (multiple-value-bind (result-type error)
         (ignore-errors (parse-foreign-type result-type-spec))
@@ -330,7 +345,8 @@
                     ;; treat both register classes as exhausted -- later
                     ;; composites take the whole-to-stack arms below and
                     ;; C.3's dummy register burns degenerate to nothing.
-                    (:variadic (setq ngpr-words 8 nfpr-args 8))
+                    (:variadic (setq ngpr-words 8 nfpr-args 8
+                                     variadic-p t))
                     (t (incf ngpr-words (if (typep arg-type-spec 'unsigned-byte)
                                           arg-type-spec
                                           1))))
@@ -364,7 +380,7 @@
                         (cond
                           ;;; ARM64-DEVIATION: HFA/HVA passed in one V
                           ;;; register per member (AAPCS64 C.2), by
-                          ;;; decomposing into scalar float argforms —
+                          ;;; decomposing into scalar float argforms --
                           ;;; the darwinppc64 "constituent elements as
                           ;;; scalars" model.  The arg-value-form is
                           ;;; evaluated ONCE into a dynamic-extent temp;
@@ -372,41 +388,44 @@
                           ;;; If the members would NOT all fit in v0-v7,
                           ;;; C.3 sends the WHOLE aggregate to the stack
                           ;;; (never a register/stack split) AND sets
-                          ;;; NSRN := 8 — see the stack branch below.
+                          ;;; NSRN := 8.
                           (hfa-base
-                           (if (> (+ nfpr-args hfa-count) 8)
-                             ;; C.3: NSRN := 8; size rounded up to a
-                             ;; multiple of 8; the aggregate is copied to
-                             ;; the NSAA with NATURAL member packing (a
-                             ;; float member is 4 bytes here — which is
-                             ;; why this cannot be expressed as scalar
-                             ;; :single-float argforms; C.5 widens those
-                             ;; to 8-byte slots).
-                             ;; The dummy :double-float argforms below ARE
-                             ;; C.3's register waste: v-registers the
-                             ;; callee's prototype ignores.  They also
-                             ;; keep the BACKEND's FP counter in lockstep
-                             ;; with this one, so later scalar FP args
-                             ;; flow through its existing NSAA overflow
-                             ;; arm (C.1 can never fire again).
-                             ;; ARM64-DEVIATION vs the x86-64 donor
-                             ;; (x8664-backend.lisp expand-ff-call):
-                             ;; SysV's MEMORY class burns nothing; C.3's
-                             ;; burn is AAPCS64-specific.  PPC64 has no
-                             ;; analog (PowerOpen always has a memory
-                             ;; slot per parameter).
-                             (progn
+                           (let* ((stacked (> (+ nfpr-args hfa-count) 8)))
+                             (when stacked
+                               ;; C.3: NSRN := 8.  The dummy
+                               ;; :double-float argforms ARE C.3's
+                               ;; register waste: v-registers the
+                               ;; callee's prototype ignores.  They also
+                               ;; keep the BACKEND's FP counter in
+                               ;; lockstep with this one, so the
+                               ;; aggregate's members (Darwin) and later
+                               ;; scalar FP args flow through its
+                               ;; existing NSAA overflow arm.
+                               ;; ARM64-DEVIATION vs the x86-64 donor
+                               ;; (x8664-backend.lisp expand-ff-call):
+                               ;; SysV's MEMORY class burns nothing;
+                               ;; C.3's burn is AAPCS64-specific.
                                (dotimes (i (- 8 nfpr-args))
                                  (declare (ignorable i))
                                  (argforms :double-float)
                                  (argforms 0.0d0))
-                               (setq nfpr-args 8)
-                               ;; C.13 memory copy: ceil(size/8) raw NSAA
+                               (setq nfpr-args 8))
+                             (if (and stacked
+                                      (or variadic-p
+                                          (not natural-stack-hfa)))
+                               ;; AAPCS64 C.3/C.4/C.13 (Linux, and a
+                               ;; Darwin variadic arg): the aggregate is
+                               ;; copied to the NSAA with natural member
+                               ;; packing, its size rounded up to a
+                               ;; multiple of 8, so ceil(size/8) raw NSAA
                                ;; words through the evaluate-once temp.
-                               ;; A <=4-byte tail is read narrow so we
-                               ;; never read more than 3 bytes past the
-                               ;; object; the slot's high bytes are C.3
-                               ;; round-up padding, unspecified.
+                               ;; (Scalar :single-float argforms cannot
+                               ;; express this: C.5 widens each one to
+                               ;; its own 8-byte slot.)  A <=4-byte tail
+                               ;; is read narrow so we never read more
+                               ;; than 3 bytes past the object; the
+                               ;; slot's high bytes are round-up padding,
+                               ;; unspecified.
                                (let* ((temp (struct-arg-temp))
                                       (nbytes (ceiling bits 8)))
                                  (do* ((off 0 (+ off 8)))
@@ -418,24 +437,31 @@
                                                    temp)))
                                       (if (<= (- nbytes off) 4)
                                         `(%get-unsigned-long ,base ,off)
-                                        `(%%get-unsigned-longlong ,base ,off)))))))
-                             ;; C.2: enough SIMD registers — one member
-                             ;; per v-register, as before.
-                             (let* ((temp (struct-arg-temp))
-                                    (single-p (eq hfa-base :single-float))
-                                    (accessor (if single-p
-                                                '%get-single-float
-                                                '%get-double-float))
-                                    (memsize (if single-p 4 8)))
-                               (incf nfpr-args hfa-count)
-                               (dotimes (i hfa-count)
-                                 (argforms hfa-base)
-                                 (argforms
-                                  `(,accessor
-                                    ,(if (eql i 0)
-                                       `(%setf-macptr ,temp ,arg-value-form)
-                                       temp)
-                                    ,(* i memsize)))))))
+                                        `(%%get-unsigned-longlong ,base ,off))))))
+                               ;; C.2 (enough v-registers): one member
+                               ;; per v-register.  Darwin C.3: Apple
+                               ;; places a stacked non-variadic HFA at
+                               ;; its natural alignment and unrounded
+                               ;; size -- exactly where the backend's
+                               ;; Darwin natural packing puts the same
+                               ;; member argforms once v0-v7 are used up
+                               ;; (a single at 4-byte alignment, a
+                               ;; double at 8).
+                               (let* ((temp (struct-arg-temp))
+                                      (single-p (eq hfa-base :single-float))
+                                      (accessor (if single-p
+                                                  '%get-single-float
+                                                  '%get-double-float))
+                                      (memsize (if single-p 4 8)))
+                                 (incf nfpr-args hfa-count)
+                                 (dotimes (i hfa-count)
+                                   (argforms hfa-base)
+                                   (argforms
+                                    `(,accessor
+                                      ,(if (eql i 0)
+                                         `(%setf-macptr ,temp ,arg-value-form)
+                                         temp)
+                                      ,(* i memsize))))))))
                           ;;; ARM64-DEVIATION: <=64 bit non-HFA struct
                           ;;; passed left-justified (raw value, no ash).
                           ;;; PPC64 source right-justified via
