@@ -381,165 +381,145 @@
           0)
         IEEE-single-float-digits))))
 
-
 ;;; (round (* num (expt 2 shift)) den), rounding once even when SHIFT
 ;;; is negative.
-(defun %round-scaled-quotient (num den shift)
+(defun %round-scaled (num den shift)
   (if (minusp shift)
     (round num (ash den (- shift)))
     (round (ash num shift) den)))
 
 (defun %double-float (number &optional result)
-  ;(require-null-or-double-float-sym result)
-  ; use number-case when macro is common
   (number-case number
     (double-float
      (if result 
        (%copy-double-float number result)
-         number))
+       number))
     (short-float
      (%short-float->double-float number (or result (%make-dfloat))))
-    (fixnum
-     (%fixnum-dfloat number (or result (%make-dfloat))))
+    (fixnum (%fixnum-dfloat number (or result (%make-dfloat))))
     (bignum (%bignum-dfloat number result))
-    (ratio 
-     (if (not result)(setq result (%make-dfloat)))
-     (let* ((num (%numerator number))
-            (den (%denominator number)))
-       ; dont error if result is floatable when either top or bottom is not.
-       ; maybe do usual first, catching error
-       (if (and (not (or (bignump num)(bignump den)))
-                  (<= (integer-length num) IEEE-double-float-digits)
-                  (<= (integer-length den) IEEE-double-float-digits))
-         (with-stack-double-floats ((fnum num)
-                                        (fden den))       
-             (%double-float/-2! fnum fden result))
-         (let* ((numlen (integer-length num))
-                (denlen (integer-length den))
-                (exp (- numlen denlen))
-                (minusp (minusp num)))
-           (if (and (<= numlen IEEE-double-float-digits)
-                    (<= denlen IEEE-double-float-digits))
-             (with-stack-double-floats ((fnum num)
-                                            (fden den))
-       
-               (%double-float/-2! fnum fden result))
-             (if (>= exp 0)
-               ; num > den, or about as big
-               (let* ((shift (- IEEE-double-float-digits exp))
-                      (num (if minusp (- num) num))
-                      (int (%round-scaled-quotient num den shift))
-                      (intlen (integer-length int))
-                      (new-exp (+ intlen (- double-float-decode-bias shift))))
-                 
-                 (when (> intlen IEEE-double-float-digits)
-                   (setq shift (1- shift))
-                   (setq int (%round-scaled-quotient num den shift))
-                   (setq intlen (integer-length int))
-                   (setq new-exp (+ intlen (- double-float-decode-bias shift))))
-                 (when (> new-exp 2046)
-                   (error (make-condition 'floating-point-overflow
-                                          :operation 'double-float
-                                          :operands (list number))))
-		   (make-float-from-fixnums (ldb (byte 25 (- intlen 25)) int)
-					    (ldb (byte 28 (max (- intlen 53) 0)) int)
-					    new-exp ;(+ intlen (- double-float-decode-bias 53))
-					    (if minusp -1 1)
-					    result))
-               ; den > num - exp negative
-               (progn  
-                 (float-rat-neg-exp num den (if minusp -1 1) result))))))))))
+    (ratio (%double-float-ratio number result))))
 
+(defun %double-float-ratio (number &optional result)
+  (unless result (setq result (%make-dfloat)))
+  (let* ((num (%numerator number))
+         (den (%denominator number))
+         (numlen (integer-length num))
+         (denlen (integer-length den))
+         (exp (- numlen denlen))
+         (minusp (minusp num)))
+    (if (and (<= numlen IEEE-double-float-digits)
+             (<= denlen IEEE-double-float-digits))
+      ;; Both convert exactly, so the quotient is rounded once.
+      (with-stack-double-floats ((fnum num)
+                                 (fden den))
+        (%double-float/-2! fnum fden result))
+      (if (>= exp 0)
+        ;; 2^(exp-1) < |num/den| < 2^(exp+1).  Pick SHIFT such that
+        ;; |num/den| * 2^shift is in [2^52, 2^53): if |num| < den*2^exp,
+        ;; |num/den| is in the lower of those two binades, otherwise in
+        ;; the upper.  Rounding it then yields the value INT in
+        ;; [2^52, 2^53], which is 2^53 only when the rounding carried
+        ;; out of the top bit.
+        (let* ((num (if minusp (- num) num))
+               (shift (if (< num (ash den exp))
+                        (- IEEE-double-float-digits exp)
+                        (- IEEE-double-float-mantissa-width exp)))
+               (int (%round-scaled num den shift)))
+          (when (> (integer-length int) IEEE-double-float-digits)
+            ;; Carried to 2^53, which is 2^52 one binade up.
+            (setq int (ash int -1))
+            (decf shift))
+          ;; The float's value is now +/-int * 2^-shift.
+          (let ((new-exp (- (+ IEEE-double-float-digits
+                               double-float-decode-bias)
+                            shift)))
+            (when (> new-exp IEEE-double-float-normal-exponent-max)
+              (error (make-condition 'floating-point-overflow
+                                     :operation 'double-float
+                                     :operands (list number))))
+            (make-float-from-fixnums (ldb (byte 25 28) int)
+                                     (ldb (byte 28 0) int)
+                                     new-exp
+                                     (if minusp -1 1)
+                                     result)))
+        ;; |num/den| < 1
+        (float-rat-neg-exp num den (if minusp -1 1) result)))))
 
 #+32-bit-target
 (defun %short-float-ratio (number &optional result)
-  (if (not result)(setq result (%make-sfloat)))
+  (unless result (setq result (%make-sfloat)))
   (let* ((num (%numerator number))
-         (den (%denominator number)))
-    ;; dont error if result is floatable when either top or bottom is
-    ;; not.  maybe do usual first, catching error
-    (if (and (not (or (bignump num)(bignump den)))
-             (<= (integer-length num) IEEE-single-float-digits)
-             (<= (integer-length den) IEEE-single-float-digits))
+         (den (%denominator number))
+         (numlen (integer-length num))
+         (denlen (integer-length den))
+         (exp (- numlen denlen))
+         (minusp (minusp num)))
+    (if (and (<= numlen IEEE-single-float-digits)
+             (<= denlen IEEE-single-float-digits))
+      ;; Both convert exactly, so the quotient is rounded once.
       (target::with-stack-short-floats ((fnum num)
-				       (fden den))       
+                                        (fden den))
         (%short-float/-2! fnum fden result))
-      (let* ((numlen (integer-length num))
-             (denlen (integer-length den))
-             (exp (- numlen denlen))
-             (minusp (minusp num)))
-        (if (and (<= numlen IEEE-single-float-digits)
-                 (<= denlen IEEE-single-float-digits))
-          (target::with-stack-short-floats ((fnum num)
-					   (fden den))
-            (%short-float/-2! fnum fden result))
-          (if (>= exp 0)
-            ; num > den, or about as big
-            (let* ((shift (- IEEE-single-float-digits exp))
-                   (num (if minusp (- num) num))
-                   (int (%round-scaled-quotient num den shift))
-                   (intlen (integer-length int))
-                   (new-exp (+ intlen (- single-float-decode-bias shift))))
-		(when (> intlen IEEE-single-float-digits)
-                (setq shift (1- shift))
-                (setq int (%round-scaled-quotient num den shift))
-                (setq intlen (integer-length int))
-                (setq new-exp (+ intlen (- single-float-decode-bias shift))))
-              (when (> new-exp IEEE-single-float-normal-exponent-max)
-                (error (make-condition 'floating-point-overflow
-                                       :operation 'short-float
-                                       :operands (list number))))
-              (make-short-float-from-fixnums 
-                 (ldb (byte IEEE-single-float-digits  (- intlen  IEEE-single-float-digits)) int)
-                 new-exp
-                 (if minusp -1 1)
-                 result))
-            ; den > num - exp negative
-            (progn  
-              (float-rat-neg-exp num den (if minusp -1 1) result t))))))))
+      (if (>= exp 0)
+        ;; See %double-float-ratio.  INT ends up in [2^23, 2^24).
+        (let* ((num (if minusp (- num) num))
+               (shift (if (< num (ash den exp))
+                        (- IEEE-single-float-digits exp)
+                        (- IEEE-single-float-mantissa-width exp)))
+               (int (%round-scaled num den shift)))
+          (when (> (integer-length int) IEEE-single-float-digits)
+            ;; Carried to 2^24, which is 2^23 one binade up.
+            (setq int (ash int -1))
+            (decf shift))
+          ;; The float's value is now +/-int * 2^-shift.
+          (let ((new-exp (- (+ IEEE-single-float-digits
+                               single-float-decode-bias)
+                            shift)))
+            (when (> new-exp IEEE-single-float-normal-exponent-max)
+              (error (make-condition 'floating-point-overflow
+                                     :operation 'short-float
+                                     :operands (list number))))
+            (make-short-float-from-fixnums int new-exp
+                                           (if minusp -1 1) result)))
+        ;; |num/den| < 1
+        (float-rat-neg-exp num den (if minusp -1 1) result t)))))
 
 #+64-bit-target
 (defun %short-float-ratio (number)
   (let* ((num (%numerator number))
-         (den (%denominator number)))
-    ;; dont error if result is floatable when either top or bottom is
-    ;; not.  maybe do usual first, catching error
-    (if (and (not (or (bignump num)(bignump den)))
-             (<= (integer-length num) IEEE-single-float-digits)
-             (<= (integer-length den) IEEE-single-float-digits))
+         (den (%denominator number))
+         (numlen (integer-length num))
+         (denlen (integer-length den))
+         (exp (- numlen denlen))
+         (minusp (minusp num)))
+    (if (and (<= numlen IEEE-single-float-digits)
+             (<= denlen IEEE-single-float-digits))
+      ;; Both convert exactly, so the quotient is rounded once.
       (/ (the short-float (%short-float num))
          (the short-float (%short-float den)))
-      (let* ((numlen (integer-length num))
-             (denlen (integer-length den))
-             (exp (- numlen denlen))
-             (minusp (minusp num)))
-        (if (and (<= numlen IEEE-single-float-digits)
-                 (<= denlen IEEE-single-float-digits))
-          (/ (the short-float (%short-float num))
-             (the short-float (%short-float den)))
-          (if (>= exp 0)
-            ; num > den, or about as big
-            (let* ((shift (- IEEE-single-float-digits exp))
-                   (num (if minusp (- num) num))
-                   (int (%round-scaled-quotient num den shift))
-                   (intlen (integer-length int))
-                   (new-exp (+ intlen (- single-float-decode-bias shift))))
-		(when (> intlen IEEE-single-float-digits)
-                (setq shift (1- shift))
-                (setq int (%round-scaled-quotient num den shift))
-                (setq intlen (integer-length int))
-                (setq new-exp (+ intlen (- single-float-decode-bias shift))))
-              (when (> new-exp IEEE-single-float-normal-exponent-max)
-                (error (make-condition 'floating-point-overflow
-                                       :operation 'short-float
-                                       :operands (list number))))
-              (make-short-float-from-fixnums 
-                 (ldb (byte IEEE-single-float-digits  (- intlen  IEEE-single-float-digits)) int)
-                 new-exp
-                 (if minusp -1 1)))
-            ; den > num - exp negative
-            (progn  
-              (float-rat-neg-exp num den (if minusp -1 1) nil t))))))))
+      (if (>= exp 0)
+        ;; See %double-float-ratio.  INT ends up in [2^23, 2^24).
+        (let* ((num (if minusp (- num) num))
+               (shift (if (< num (ash den exp))
+                        (- IEEE-single-float-digits exp)
+                        (- IEEE-single-float-mantissa-width exp)))
+               (int (%round-scaled num den shift)))
+          (when (> (integer-length int) IEEE-single-float-digits)
+            ;; Carried to 2^24, which is 2^23 one binade up.
+            (setq int (ash int -1))
+            (decf shift))
+          ;; The float's value is now +/-int * 2^-shift.
+          (let ((new-exp (- (+ IEEE-single-float-digits
+                               single-float-decode-bias)
+                            shift)))
+            (when (> new-exp IEEE-single-float-normal-exponent-max)
+              (error (make-condition 'floating-point-overflow
+                                     :operation 'short-float
+                                     :operands (list number))))
+            (make-short-float-from-fixnums int new-exp (if minusp -1 1))))
+        ;; |num/den| < 1
+        (float-rat-neg-exp num den (if minusp -1 1) nil t)))))
 
 
 #+32-bit-target
