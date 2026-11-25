@@ -1,19 +1,6 @@
-;;;-*- Mode: Lisp; Package: CCL -*-
-;;;
-;;; Copyright 2026 (CCL ARM64 port)
-;;; Based on lib/ffi-linuxppc64.lisp (Copyright 2007-2009 Clozure Associates)
-;;;
-;;; Licensed under the Apache License, Version 2.0 (the "License");
-;;; you may not use this file except in compliance with the License.
-;;; You may obtain a copy of the License at
-;;;
-;;;     http://www.apache.org/licenses/LICENSE-2.0
-;;;
-;;; Unless required by applicable law or agreed to in writing, software
-;;; distributed under the License is distributed on an "AS IS" BASIS,
-;;; WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-;;; See the License for the specific language governing permissions and
-;;; limitations under the License.
+;;;; -*- Mode: Lisp; Package: CCL -*-
+;;;;
+;;;; SPDX-License-Identifier: Apache-2.0
 
 ;;; Shared AAPCS64 FFI support for the arm64 targets.  The OS files
 ;;; (lib/ffi-linuxarm64.lisp, lib/ffi-darwinarm64.lisp) define the four
@@ -22,12 +9,6 @@
 ;;; handled downstream in the compiler and interpreted %ff-call, keyed
 ;;; on the target OS.
 
-;;; PPC64 LINE-PORT (source: lib/ffi-linuxppc64.lisp)
-;;; Ported 2026-05-22.  Calling-convention details replaced with AAPCS64
-;;; (ARM Procedure Call Standard for the 64-bit Arm Architecture).
-;;; Deviations from the PPC64 source are tagged inline with
-;;;   ;;; ARM64-DEVIATION: <reason>
-;;;
 ;;; AAPCS64 reference summary (per IHI 0055C, §5-§6):
 ;;;   - X0..X7   : integer/pointer args (8 GPR slots); return in X0..X1
 ;;;   - V0..V7   : SIMD&FP args (8 VFP slots); return in V0..V1
@@ -586,7 +567,9 @@
 ;;;    its natural size and alignment (1/2/4/8), not AAPCS64's uniform
 ;;;    8-byte slot (C.5/C.16).  Composites stay 8-byte aligned.  This
 ;;;    mirrors the call-out side (arm642-aapcs64-ff-call and %ff-call).
-(defun arm64::generate-callback-bindings (stack-ptr fp-args-ptr argvars argspecs result-spec struct-result-name
+(defun arm64::generate-callback-bindings (stack-ptr fp-args-ptr argvars
+                                          argspecs result-spec
+                                          struct-result-name
                                           &key natural-stack-packing)
   (collect ((lets)
             (rlets)
@@ -653,13 +636,12 @@
                      (scalar-stack-slot ()
                        ;; A non-composite arg on the stack: one 8-byte
                        ;; slot, or on Darwin its natural size, aligned.
+                       ;; The size table is the call-out side's, so the
+                       ;; two directions cannot disagree.
                        (if natural-stack-packing
-                         (let* ((size (case (foreign-type-to-representation-type argtype)
-                                        ((:signed-byte :unsigned-byte) 1)
-                                        ((:signed-halfword :unsigned-halfword) 2)
-                                        ((:signed-fullword :unsigned-fullword
-                                          :single-float) 4)
-                                        (t 8))))
+                         (let* ((size (natural-stack-arg-bytes
+                                       (foreign-type-to-representation-type
+                                        argtype))))
                            (align-stack-offset size)
                            (prog1 stack-offset
                              (incf stack-offset size)))
@@ -687,15 +669,16 @@
               ;; LE: a single-float member's payload sits at
               ;; its d-save slot's BASE (same reasoning as the scalar
               ;; single-float case below).  An HFA that would overflow
-              ;; v0-v7 goes WHOLLY to the stack (C.3) -- stack-passed
-              ;; args are not ratified on this port, so refuse loudly at
-              ;; definition time, the same policy as the call-out
-              ;; direction's refusals.
+              ;; v0-v7 goes WHOLLY to the stack (C.3), a shape this
+              ;; generator does not decode (scalar stack args are
+              ;; handled), so refuse it at definition time.  The
+              ;; call-out direction does handle it (expand-ff-call's
+              ;; :stack-doubleword copy).
               (hfa-base
                (unless (<= (+ fp-arg-num hfa-count) 8)
                  (error "HFA argument ~s would overflow v0-v7 (AAPCS64 ~
-                         C.3 stack case); stack-passed callback ~
-                         arguments are not yet supported"
+                         C.3 stack case); a callback cannot yet take ~
+                         an HFA argument on the stack"
                         (unparse-foreign-type argtype)))
                (let* ((nsrn fp-arg-num)
                       (single-p (eq hfa-base :single-float))

@@ -9251,7 +9251,7 @@
 ;;; Darwin divergences (variadic args forced to the stack; natural-size stack
 ;;; packing) are handled as target-os policy in the register-vs-stack
 ;;; assignment below, not as a separate variant.
-(defun arm642-aapcs64-stack-arg-bytes (argspec)
+(defun natural-stack-arg-bytes (argspec)
   (case argspec
     ((:signed-byte :unsigned-byte) 1)
     ((:signed-halfword :unsigned-halfword) 2)
@@ -9297,13 +9297,13 @@
     ;; Linux ignores both and always uses 8-byte NSAA slots.
     (labels ((note-overflow (argspec)
                (if (and darwin-os-p (not force-stack))
-                 (let* ((sz (arm642-aapcs64-stack-arg-bytes argspec)))
+                 (let* ((sz (natural-stack-arg-bytes argspec)))
                    (setq overflow-bytes
                          (+ (arm642-align-up overflow-bytes sz) sz)))
                  (incf nother-words)))
              (store-overflow-gpr (reg argspec)
                (if (and darwin-os-p (not force-stack))
-                 (let* ((sz (arm642-aapcs64-stack-arg-bytes argspec))
+                 (let* ((sz (natural-stack-arg-bytes argspec))
                         (off (arm642-align-up other-byte-offset sz)))
                    (ecase sz
                      (1 (! set-c-arg-byte reg off))
@@ -9316,7 +9316,7 @@
                    (incf other-offset))))
              (store-overflow-fpr (freg argspec)
                (if (and darwin-os-p (not force-stack))
-                 (let* ((sz (arm642-aapcs64-stack-arg-bytes argspec))
+                 (let* ((sz (natural-stack-arg-bytes argspec))
                         (off (arm642-align-up other-byte-offset sz)))
                    (if (eq argspec :double-float)
                      (! set-double-c-arg-bytes freg off)
