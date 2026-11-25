@@ -659,7 +659,7 @@
 (defconstant max-32-bit-constant-index (ash (+ #xfff arm::misc-data-offset) -2))
 (defconstant max-16-bit-constant-index (ash (+ #xfff arm::misc-data-offset) -1))
 (defconstant max-8-bit-constant-index (+ #xfff arm::misc-data-offset))
-(defconstant max-1-bit-constant-index (ash (+ #xfff arm::misc-data-offset) 5))
+(defconstant max-1-bit-constant-index (ash (+ #xfff arm::misc-data-offset) 3))
 
 
 ;;; The objects themselves look something like this:

@@ -1880,7 +1880,9 @@
                (with-imm-temps () (word-index bitnum)
                  (if index-known-fixnum
                    (progn
-                     (arm642-lri seg word-index (+ (arch::target-misc-data-offset arch) (ash index-known-fixnum -5)))
+                     (arm642-lri seg word-index
+                                 (+ (arch::target-misc-data-offset arch)
+                                    (ash (ash index-known-fixnum -5) 2)))
                      (arm642-lri seg bitnum (logand index-known-fixnum #x1f)))
                    (! scale-1bit-misc-index word-index bitnum unscaled-idx))
                  (let* ((dest word-index))
@@ -2638,7 +2640,15 @@
                          (with-imm-temps () (word-index bit-number temp)
                            (unless constval
                              (! compare-immediate crf unboxed-val-reg 0))
-                           (! scale-1bit-misc-index word-index bit-number unscaled-idx)
+                           (if index-known-fixnum
+                             (progn
+                               (arm642-lri
+                                seg word-index
+                                (+ (arch::target-misc-data-offset arch)
+                                   (ash (ash index-known-fixnum -5) 2)))
+                               (arm642-lri seg bit-number
+                                           (logand index-known-fixnum #x1f)))
+                             (! scale-1bit-misc-index word-index bit-number unscaled-idx))
                            (! lri temp 1)
                            (! shift-left-variable-word bit-number temp bit-number)
                            (! misc-ref-u32 temp src word-index)
