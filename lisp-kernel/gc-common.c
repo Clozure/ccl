@@ -982,13 +982,18 @@ preforward_weakvll ()
       LispObj *base = ptr_from_lispobj(this);
       if (header_subtag(base[0]) == subtag_weak) {
         natural dnode = area_dnode(&base[3], tenured_low);
-        if (base[3] >= GCarealow) {
+        /* Only references into the area being collected need
+           forwarding.  NIL and static symbols are not in it, wherever
+           static space is; a refbit set for them has no refidx bit, and
+           the write barrier treats it as already memoized. */
+        if (gc_area_dnode(base[3]) < GCndnodes_in_area) {
           if (dnode < tenured_dnodes) {
             set_bit(refbits, dnode);
           }
         }
         /* might have set termination list to a new pointer */
-        if ((base[2] >> population_termination_bit) && (base[4] >= GCarealow)) {
+        if ((base[2] >> population_termination_bit) &&
+            (gc_area_dnode(base[4]) < GCndnodes_in_area)) {
           if ((dnode + 1) < tenured_dnodes) {
             set_bit(refbits, dnode+1);
           }
