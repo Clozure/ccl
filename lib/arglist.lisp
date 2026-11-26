@@ -105,7 +105,8 @@
              ;; Presumably (lambda (... arglist) ...)
              (values (strip (cadr def)) :definition))
             ((neq (setq ll (getf (%lfun-info def) 'arglist *eof-value*)) *eof-value*)
-             (values ll :definition))
+             ;; Recorded by DEFUN; see the %ARGLIST declaration.
+             (values (copy-tree ll) :definition))
             ((and (not macrop) (setq ll (uncompile-function def)))
              (values (strip (cadr ll)) (or type :definition)))
             ((lfunp def)

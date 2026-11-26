@@ -712,6 +712,8 @@
     (let* ((lambda-expression `(lambda ,args 
                                 ,@(if global-name
                                     `((declare (global-function-name ,global-name))))
+                                ,@(if *save-arglist-info*
+                                    `((declare (%arglist ,args))))
                                 ,@decls ,body))
            (info (if (and inline-spec
                           (binding-free-environment-p env)
