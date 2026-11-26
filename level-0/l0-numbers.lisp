@@ -212,7 +212,7 @@
                                    (= (the double-float x) (the double-float dy))))
                     (fixnum (eq 0 (fixnum-dfloat-compare  y x)))
                     (bignum (eq 0 (bignum-dfloat-compare y x)))
-                    (ratio (= (rational x) y))
+                    (ratio (eq 0 (ratio-float-compare y x)))
                     (complex (and (zerop (%imagpart y)) (= x (%realpart y))))))
     (short-float (number-case y
                    (short-float (= (the short-float x) (the short-float y)))
@@ -220,7 +220,7 @@
                                    (= (the double-float dx) (the double-float y))))
                    (fixnum (eq 0 (fixnum-sfloat-compare y x)))
                    (bignum (eq 0 (bignum-sfloat-compare y x)))
-                   (ratio (= (rational x) y))
+                   (ratio (eq 0 (ratio-float-compare y x)))
                    (complex (and (zerop (%imagpart y)) (= x (%realpart y))))))
     (bignum (number-case y 
               (bignum (eq 0 (bignum-compare x y)))
@@ -233,7 +233,7 @@
              (ratio
               (and (eql (%numerator x) (%numerator y))
                    (eql (%denominator x) (%denominator y))))
-             (float (= x (rational y)))
+             (float (eq 0 (ratio-float-compare x y)))
              (complex (and (zerop (%imagpart y)) (= x (%realpart y))))))
     (complex (number-case y
                (complex (and (= (%realpart x) (%realpart y))
@@ -271,14 +271,14 @@
                                    (< (the double-float x) (the double-float dy))))
                     (fixnum (eq 1 (fixnum-dfloat-compare  y x)))
                     (bignum (eq 1 (bignum-dfloat-compare y x)))
-                    (ratio (< (rational x) y))))
+                    (ratio (eq 1 (ratio-float-compare y x)))))
     (short-float (number-case y
                     (short-float (< (the short-float x) (the short-float y)))
                     (double-float (with-stack-double-floats ((dx x))
                                     (< (the double-float dx) (the double-float y))))
                     (fixnum (eq 1 (fixnum-sfloat-compare y x)))
                     (bignum (eq 1 (bignum-sfloat-compare y x)))
-                    (ratio (< (rational x) y))))
+                    (ratio (eq 1 (ratio-float-compare y x)))))
     (bignum (number-case y 
               (bignum (EQ -1 (bignum-compare x y)))
               (fixnum (not (bignum-plusp x)))
@@ -292,7 +292,7 @@
                     (%denominator (the ratio y)))
                  (* (%numerator (the ratio y))
                     (%denominator (the ratio x)))))
-             (float (< x (rational y)))))))
+             (float (eq -1 (ratio-float-compare x y)))))))
 
 
 
@@ -312,14 +312,14 @@
                                    (> (the double-float x) (the double-float dy))))
                     (fixnum (eq -1 (fixnum-dfloat-compare  y x)))
                     (bignum (eq -1 (bignum-dfloat-compare y x)))
-                    (ratio (> (rational x) y))))
+                    (ratio (eq -1 (ratio-float-compare y x)))))
     (short-float (number-case y
                     (short-float (> (the short-float x) (the short-float y)))
                     (double-float (with-stack-double-floats ((dx x))
                                    (> (the double-float dx) (the double-float y))))
                     (fixnum (eq -1 (fixnum-sfloat-compare  y x)))
                     (bignum (eq -1 (bignum-sfloat-compare y x)))
-                    (ratio (> (rational x) y))))
+                    (ratio (eq -1 (ratio-float-compare y x)))))
     (bignum (number-case y
               (fixnum (bignum-plusp x))
               (bignum (eq 1 (bignum-compare x y)))
@@ -335,7 +335,7 @@
                     (%denominator (the ratio y)))
                  (* (%numerator (the ratio y))
                     (%denominator (the ratio x)))))
-             (float (> x (rational y)))))))
+             (float (eq 1 (ratio-float-compare x y)))))))
 
 
 ; t if any bits set after exp (unbiased)
@@ -356,7 +356,31 @@
 
 
 
+;;; The order of any integer or ratio relative to FLOAT, which is an
+;;; infinity or a NaN: -1 below +infinity, 1 above -infinity.  A NaN is
+;;; unordered, so the result is NIL, which is none of -1, 0 and 1.  The
+;;; NaN is compared with zero first, so that the invalid-operation trap
+;;; is signaled if it is enabled, as for a compare of two floats.
+(defun non-finite-float-compare (float)
+  (if (infinity-p float)
+    (if (etypecase float
+          (double-float (%double-float-minusp float))
+          (short-float (%short-float-minusp float)))
+      1
+      -1)
+    (progn
+      (etypecase float
+        (double-float (= float 0.0d0))
+        (short-float (= float 0.0s0)))
+      nil)))
+
 (defun fixnum-dfloat-compare (int dfloat)
+  (declare (double-float dfloat) (fixnum int))
+  (if (nan-or-infinity-p dfloat)
+    (non-finite-float-compare dfloat)
+    (%fixnum-dfloat-compare int dfloat)))
+
+(defun %fixnum-dfloat-compare (int dfloat)
   (declare (double-float dfloat) (fixnum int))
   (if (and (eq int 0)(= dfloat 0.0d0))
     0
@@ -396,6 +420,12 @@
 
 
 (defun fixnum-sfloat-compare (int sfloat)
+  (declare (short-float sfloat) (fixnum int))
+  (if (nan-or-infinity-p sfloat)
+    (non-finite-float-compare sfloat)
+    (%fixnum-sfloat-compare int sfloat)))
+
+(defun %fixnum-sfloat-compare (int sfloat)
   (declare (short-float sfloat) (fixnum int))
   (if (and (eq int 0)(= sfloat 0.0s0))
     0
@@ -437,9 +467,11 @@
 
         
 ;;; lotta stuff to avoid making a rational from a float
-;;; returns -1 less, 0 equal, 1 greater
+;;; returns -1 less, 0 equal, 1 greater, or NIL if FLOAT is a NaN
 (defun bignum-dfloat-compare (int float)
   (cond 
+   ;; The exponent test below would treat an infinity as 2^1024.
+   ((nan-or-infinity-p float) (non-finite-float-compare float))
    ((and (eq int 0)(= float 0.0d0)) 0)
    (t
     (let* ((fminus  (%double-float-minusp float))
@@ -486,6 +518,17 @@
                 )))))))))
 
 
+
+;;; Compare a ratio with a float, as if by comparing the ratio with
+;;; (RATIONAL float).  Returns -1 if ratio < float, 0 if =, 1 if >, or
+;;; NIL if FLOAT is a NaN.
+(defun ratio-float-compare (ratio float)
+  (if (nan-or-infinity-p float)
+    (non-finite-float-compare float)
+    (let ((rat (rational float)))
+      (cond ((< ratio rat) -1)
+            ((> ratio rat) 1)
+            (t 0)))))
 
 ;;; I don't know if it's worth doing a more "real" version of this.
 (defun bignum-sfloat-compare (int float)
