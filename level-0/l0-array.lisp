@@ -1034,5 +1034,17 @@ minimum number of elements to add if it must be extended."
     (%uvector-replace  new start oldv 0 oldsize typecode)))
 
 
+;;; %VECT-DATA-TO-MACPTR returns the address of the vector's first data
+;;; word (target::misc-data-offset).  For (SIMPLE-ARRAY (COMPLEX
+;;; DOUBLE-FLOAT) (*)) on x86-64 and ARM64 there is a 64-bit pad at the
+;;; start of the vector (see SUBTAG-BYTES), so the first element starts
+;;; one node after that address.  Make PTR point at the first byte of
+;;; actual element data, as WITH-POINTER-TO-IVECTOR documents.
+(defun %ivector-data-to-macptr (vector ptr)
+  (%vect-data-to-macptr vector ptr)
+  #+(or x8664-target arm64-target)
+  (when (eql (typecode vector) target::subtag-complex-double-float-vector)
+    (%incf-ptr ptr target::node-size))
+  ptr)
 
 ; end of l0-array.lisp

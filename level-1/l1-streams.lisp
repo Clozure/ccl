@@ -222,7 +222,7 @@
                                  ))))
     (let ((vect (fudge-heap-pointer ptr subtype size-in-elts))
           (p (%null-ptr)))
-      (%vect-data-to-macptr vect p)
+      (%ivector-data-to-macptr vect p)
       (with-lock-grabbed (*heap-ivector-lock*)
         (push vect *heap-ivectors*))
       (values vect p))))
