@@ -1431,7 +1431,10 @@ new_tcr(natural vstack_size, natural tstack_size)
 #ifndef WINDOWS
   sigset_t sigmask;
 
+  /* Keep the process-interrupt signal blocked until thread_init_tcr has
+     set up what its handler uses. */
   sigemptyset(&sigmask);
+  sigaddset(&sigmask, SIGNAL_FOR_PROCESS_INTERRUPT);
   pthread_sigmask(SIG_SETMASK,&sigmask, NULL);
 #endif
 
@@ -1733,6 +1736,16 @@ thread_init_tcr(TCR *tcr, void *stack_base, natural stack_size)
   TCR_AUX(tcr)->native_thread_info = malloc(sizeof(CONTEXT));
 #endif
   TCR_AUX(tcr)->log2_allocation_quantum = unbox_fixnum(lisp_global(DEFAULT_ALLOCATION_QUANTUM));
+#ifndef WINDOWS
+  {
+    /* new_tcr and create_system_thread block this signal. */
+    sigset_t sigmask;
+
+    sigemptyset(&sigmask);
+    sigaddset(&sigmask, SIGNAL_FOR_PROCESS_INTERRUPT);
+    pthread_sigmask(SIG_UNBLOCK, &sigmask, NULL);
+  }
+#endif
 }
 
 /*
@@ -1841,12 +1854,13 @@ lisp_thread_entry(void *param)
   LispObj *start_vsp;
 #ifndef WINDOWS
   sigset_t mask, old_mask;
-
-  sigemptyset(&mask);
-  pthread_sigmask(SIG_SETMASK, &mask, &old_mask);
 #endif
 
   register_thread_tcr(tcr);
+#ifndef WINDOWS
+  sigemptyset(&mask);
+  pthread_sigmask(SIG_SETMASK, &mask, &old_mask);
+#endif
 
 #ifndef WINDOWS
   pthread_cleanup_push(tcr_cleanup,(void *)tcr);
@@ -2013,7 +2027,17 @@ create_system_thread(size_t stack_size,  void *stackaddr,
      getting suspended (by grabbing TCR_AREA_LOCK)
   */
   LOCK(lisp_global(TCR_AREA_LOCK),current);
-  err = pthread_create(&returned_thread, &attr, start_routine, param);
+  {
+    /* The new thread starts with this signal blocked, so that it cannot
+       arrive before the thread has a TCR.  thread_init_tcr unblocks it. */
+    sigset_t block, old;
+
+    sigemptyset(&block);
+    sigaddset(&block, SIGNAL_FOR_PROCESS_INTERRUPT);
+    pthread_sigmask(SIG_BLOCK, &block, &old);
+    err = pthread_create(&returned_thread, &attr, start_routine, param);
+    pthread_sigmask(SIG_SETMASK, &old, NULL);
+  }
   UNLOCK(lisp_global(TCR_AREA_LOCK),current);
   pthread_attr_destroy(&attr);
   return (err == 0);
