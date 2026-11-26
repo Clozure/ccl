@@ -240,10 +240,14 @@ typedef struct catch_frame {
   LispObj catch_tag;
   LispObj link;
   LispObj mvflag;
-  LispObj csp;
+  LispObj rsp;
+  LispObj rbp;
+  LispObj foreign_sp;
   LispObj db_link;
   LispObj xframe;
   LispObj pc;
+  LispObj nfp;
+  LispObj pad;
 } catch_frame;
 
 #define catch_frame_element_count ((sizeof(catch_frame)/sizeof(LispObj))-1)
