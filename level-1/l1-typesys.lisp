@@ -140,6 +140,10 @@
   (setq name (require-type name 'symbol))
   (multiple-value-bind (lambda doc)
       (parse-macro-internal name arglist body env '*)
+    (when *save-arglist-info*
+      (setq lambda `(lambda ,(cadr lambda)
+                      (declare (%arglist ,arglist))
+                      ,@(cddr lambda))))
     `(progn
        (eval-when (:compile-toplevel)
 	 (note-type-info ',name 'macro ,env))

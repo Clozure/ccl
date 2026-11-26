@@ -591,6 +591,8 @@
                (code `(lambda (,generic-fn-symbol ,methods-sym ,options-sym)
                         ,@(unless gf-symbol-specified?
                             `((declare (ignore-if-unused ,generic-fn-symbol))))
+                        ,@(when *save-arglist-info*
+                            `((declare (%arglist ,lambda-list))))
                         (let* (,@(progn
                                   (multiple-value-setq (arg-vars arg-vals)
                                     (lfmc-bindings generic-fn-symbol

@@ -195,12 +195,19 @@
          (def-name (validate-function-name name)))
     (unless (eq def-name block-name)
       (setq block-name (cadr block-name)))
-    (let ((body (parse-macro-1 block-name arglist body env)))
+    (multiple-value-bind (lambda-form doc)
+        (parse-macro-1 block-name arglist body env)
+      (when *save-arglist-info*
+        (setq lambda-form `(lambda ,(cadr lambda-form)
+                             (declare (%arglist ,arglist))
+                             ,@(cddr lambda-form))))
       `(eval-when (:compile-toplevel :load-toplevel :execute)
          (eval-when (:load-toplevel :execute)
            (record-source-file ',name 'compiler-macro))
          (setf (compiler-macro-function ',name)
-               (nfunction (compiler-macro-function ,name)  ,body))
+               (nfunction (compiler-macro-function ,name) ,lambda-form))
+         ,@(when doc
+             `((set-documentation ',name 'compiler-macro ,doc)))
          ',name))))
 
 ;;; This is silly (as may be the whole idea of actually -using-
