@@ -359,6 +359,7 @@
      
 
 (defun thread-interrupt (thread process function &rest args)
+  (declare (ignore process))
   (with-lock-grabbed ((lisp-thread.state-change-lock thread))
     (case (lisp-thread.state thread)
       (:run 
@@ -368,29 +369,17 @@
 	     (push (cons function args)
 		   (lisp-thread.interrupt-functions thread))
 	     (eql 0 (%tcr-interrupt tcr))))))
-      (:starting
-       ;; The thread has been enabled, but isn't ready to take an
-       ;; interrupt yet.  Queue the function; the thread runs it just
-       ;; before its initial function (see RUN-PROCESS-INITIAL-FORM).
+      ((:starting :reset)
+       ;; Either the thread has been enabled but isn't ready to take an
+       ;; interrupt yet, or it has not been enabled.  Queue the function;
+       ;; the thread runs it just before its initial function, once it is
+       ;; enabled (see RUN-PROCESS-INITIAL-FORM).  Don't enable a :reset
+       ;; thread from here: its creator may be about to enable it, and
+       ;; both would then wait for the thread's one reset completion.
        (with-lock-grabbed ((lisp-thread.interrupt-lock thread))
 	 (push (cons function args)
 	       (lisp-thread.interrupt-functions thread)))
-       t)
-      (:reset
-       ;; Preset the thread with a function that'll return to the :reset
-       ;; state
-       (let* ((pif (process-initial-form process))
-	      (pif-f (car pif))
-	      (pif-args (cdr pif)))
-	 (process-preset process #'(lambda ()
-				     (%rplaca pif pif-f)
-				     (%rplacd pif pif-args)
-				     (apply function args)
-				     ;; If function returns normally,
-				     ;; return to the reset state
-				     (%process-reset nil)))
-	 (thread-enable thread (process-termination-semaphore process) (1- (integer-length (process-allocation-quantum process))) 0)
-         t)))))
+       t))))
 
 (defun thread-handle-interrupts ()
   (let* ((thread *current-lisp-thread*))
@@ -417,15 +406,20 @@
       #-(and windows-target x8632-target)
       (%setf-macptr-to-object s (%fixnum-ref tcr target::tcr.reset-completion))
       (when (%timed-wait-on-semaphore-ptr s timeout nil)
-        (%set-tcr-toplevel-function
-         tcr
-         (lisp-thread.startup-function thread))
-        ;; The thread stays :STARTING until RUN-PROCESS-INITIAL-FORM is
-        ;; ready for interrupts, so that THREAD-INTERRUPT won't mistake
-        ;; it for a thread that's in the :RESET state.
-        (thread-change-state thread :reset :starting)
-        (%activate-tcr tcr termination-semaphore allocation-quantum)
-        thread))))
+        ;; The token alone doesn't show that the thread is still
+        ;; waiting to be enabled: another enable may have run it, and
+        ;; it may have exited.  Activate it only if it is :RESET.
+        (with-lock-grabbed ((lisp-thread.state-change-lock thread))
+          (when (eq (lisp-thread.state thread) :reset)
+            (%set-tcr-toplevel-function
+             tcr
+             (lisp-thread.startup-function thread))
+            ;; The thread stays :STARTING until RUN-PROCESS-INITIAL-FORM
+            ;; is ready for interrupts, so that THREAD-INTERRUPT won't
+            ;; mistake it for a thread that's in the :RESET state.
+            (setf (lisp-thread.state thread) :starting)
+            (%activate-tcr tcr termination-semaphore allocation-quantum)
+            thread))))))
 			      
 
 (defun cleanup-thread-tcr (thread tcr)
