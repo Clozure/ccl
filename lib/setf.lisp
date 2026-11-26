@@ -207,6 +207,7 @@
   (unless (symbolp access-fn) (signal-program-error $xnotsym access-fn))
   (if (non-nil-symbol-p (%car rest))
     `(eval-when (:compile-toplevel :load-toplevel :execute)
+       (record-source-file ',access-fn 'setf-expander)
        (store-setf-method
         ',access-fn
         ',(%car rest)
