@@ -168,6 +168,10 @@
     (signal-program-error $xnotsym access-fn))
   (multiple-value-bind (lambda-form doc)
                        (parse-macro-1 access-fn lambda-list body)
+    (when *save-arglist-info*
+      (setq lambda-form `(lambda ,(cadr lambda-form)
+                           (declare (%arglist ,lambda-list))
+                           ,@(cddr lambda-form))))
     `(eval-when (load compile eval)
        (record-source-file ',access-fn 'setf-expander)
        (store-setf-method ',access-fn
@@ -215,7 +219,8 @@
         rest
       (unless (verify-lambda-list lambda-list)
         (signal-program-error $XBadLambdaList lambda-list))
-      (let* ((store-vars (cons store-var mv-store-vars)))
+      (let* ((store-vars (cons store-var mv-store-vars))
+             (arglist lambda-list))
         (multiple-value-bind (lambda-list lambda-temps lambda-vars)
                              (rename-lambda-vars lambda-list)
           (multiple-value-bind (body decls doc)
@@ -234,6 +239,8 @@
                   ',access-fn
                   #'(lambda (,access-form ,environment)
                       (declare (ignore ,environment))
+                      ,@(when *save-arglist-info*
+                          `((declare (%arglist ,arglist))))
                       (do* ((,args (cdr ,access-form) (cdr ,args))
                             (,dummies nil (cons (gensym) ,dummies))
                             (,newval-vars (mapcar #'(lambda (v) (declare (ignore v)) (gensym)) ',store-vars))
@@ -252,8 +259,8 @@
                                    ,',@ignorable
                                    ,,@body)
                                  ,@,dummies)
-                               ,new-access-form))))))
-                 ,@(if doc (list doc))
+                               ,new-access-form)))))
+                  ,@(if doc (list doc)))
                  ',access-fn))))))))
   
 (defmacro define-modify-macro (name lambda-list function &optional doc-string)

@@ -297,7 +297,7 @@ are running on, or NIL if we can't find any useful information."
       (documentation name doc-type)
       (%get-documentation l doc-type))))
 
-(defmethod (setf documentation) ((new t) (l cons) (doc-type (eql 'compiler-macr0)))
+(defmethod (setf documentation) ((new t) (l cons) (doc-type (eql 'compiler-macro)))
   (let* ((name (setf-function-spec-name l)))
     (if name
       (setf (documentation name doc-type) new)
