@@ -3219,9 +3219,18 @@
 		 (type<=-set types2 types1))
 	    t)))
 
+;;; If the component types don't match, that has to mean "don't know".
+;;; Suppose we have the types (and (member :a :b foo) (satisfies p))
+;;; and (and (member :a :b) (satisfies p)).  These types are equal
+;;; (i.e., denote the same set) if p is keywordp, but not if p is
+;;; symbolp.  (We can't call p here because p can be redefined later,
+;;; and answers computed here end up in cached types and in compiled
+;;; code.)
 (define-type-method (intersection :simple-=) (type1 type2)
-  (type=-set (intersection-ctype-types type1)
-	     (intersection-ctype-types type2)))
+  (if (type=-set (intersection-ctype-types type1)
+		 (intersection-ctype-types type2))
+    (values t t)
+    (values nil nil)))
 
 (defun %intersection-complex-subtypep-arg1 (type1 type2)
   (type= type1 (type-intersection type1 type2)))
@@ -3632,7 +3641,16 @@
 ;;; structure types, we require that the type be defined in both the current
 ;;; and compiler environments, and that the INCLUDES be the same.
 ;;;
-(defun ctypep (obj type)
+;;; The call-predicates optional argument is a slight kluge.  The type
+;;; system itself calls ctypep when parsing and comparing types, and
+;;; parsed types are cached.  Because of the caching, we can't call a
+;;; satisfies predicate when parsing or comparing types: the predicate
+;;; is generally subject to redefinition.  (We make an exception for
+;;; standard CL functions since we're allowed to assume they don't get
+;;; redefined.)  Callers that check a value at run time, such as
+;;; require-type, want the predicate's current definition, so they
+;;; pass t for call-predicates.
+(defun ctypep (obj type &optional call-predicates)
   (declare (type ctype type))
   (etypecase type
     ((or numeric-ctype named-ctype member-ctype array-ctype cons-ctype)
@@ -3641,9 +3659,15 @@
      (values (not (null (class-typep  obj (class-ctype-class type)))) t)
 )
     (union-ctype
-     (any/type #'ctypep obj (union-ctype-types type)))
+     (any/type (if call-predicates
+                 #'(lambda (obj type) (ctypep obj type t))
+                 #'ctypep)
+               obj (union-ctype-types type)))
     (intersection-ctype
-     (every/type #'ctypep obj (intersection-ctype-types type)))
+     (every/type (if call-predicates
+                   #'(lambda (obj type) (ctypep obj type t))
+                   #'ctypep)
+                 obj (intersection-ctype-types type)))
     (function-ctype
      (values (functionp obj) t))
     (unknown-ctype
@@ -3652,7 +3676,7 @@
      (values (foreign-typep obj (foreign-ctype-foreign-type type)) t))
     (negation-ctype
      (multiple-value-bind (res win)
-	 (ctypep obj (negation-ctype-type type))
+	 (ctypep obj (negation-ctype-type type) call-predicates)
        (if win
 	   (values (not res) t)
 	   (values nil nil))))
@@ -3666,19 +3690,22 @@
 	    (values t t)
 	    (dolist (spec (cdr hairy-spec) (values t t))
 	      (multiple-value-bind (res win)
-		  (ctypep obj (specifier-type spec))
+		  (ctypep obj (specifier-type spec) call-predicates)
 		(unless win (return (values nil nil)))
 		(unless res (return (values nil t)))))))
 	   (not				; how would this get there ?
 	    (multiple-value-bind
 	      (res win)
-		(ctypep obj (specifier-type (cadr hairy-spec)))
+		(ctypep obj (specifier-type (cadr hairy-spec)) call-predicates)
 	      (if win
 		(values (not res) t)
 		(values nil nil))))
 	   (satisfies
 	    (let ((fun (second hairy-spec)))
-	      (cond ((and (symbolp fun) (fboundp fun))
+	      (cond ((and (symbolp fun) (fboundp fun)
+			  (or call-predicates
+			      (eq (symbol-package fun)
+				  *common-lisp-package*)))
                      ;; Binding *BREAK-ON-SIGNALS* here is a modularity
                      ;; violation intended to improve the signal-to-noise
                      ;; ratio on a mailing list.
@@ -4314,7 +4341,7 @@
    (dpb 1 $lfbits-numreq 0)))
 
 (defun check-ctypep (thing ctype)
-  (multiple-value-bind (win sure) (ctypep thing ctype)
+  (multiple-value-bind (win sure) (ctypep thing ctype t)
     (or win (not sure))))
 
 
@@ -4379,6 +4406,6 @@
                            (setf (slot-value spec 'type-predicate)
                                  (generate-predicate-for-ctype nowctype)))
                          (multiple-value-bind (win sure)
-                             (ctypep value nowctype)
+                             (ctypep value nowctype t)
                            (or (not sure) win))))))))))
 

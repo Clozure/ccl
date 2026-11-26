@@ -305,7 +305,7 @@
 ;;; anything, and so can be done entirely out-of-line.
 (defun require-type (arg type)
   (multiple-value-bind (win sure)
-      (ctypep  arg (specifier-type type))
+      (ctypep arg (specifier-type type) t)
     (if (or win (not sure))
       arg
       (%kernel-restart $xwrongtype arg type))))
