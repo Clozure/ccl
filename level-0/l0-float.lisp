@@ -85,10 +85,10 @@
 
 
 (defun %double-float-minusp (n)
-  (and (%double-float-sign n)(not (%double-float-zerop n))))
+  (and (%double-float-sign n) (not (%double-float-zerop n)) (not (nan-p n))))
 
 (defun %short-float-minusp (n)
-  (and (%short-float-sign n) (not (%short-float-zerop n))))
+  (and (%short-float-sign n) (not (%short-float-zerop n)) (not (nan-p n))))
 
 (defun %double-float-abs (n)
   (if (not (%double-float-sign n))
@@ -135,6 +135,9 @@
        (declare (fixnum bits exp mantissa))
        (and (= exp 255)
             (zerop mantissa))))))
+
+(defun nan-p (n)
+  (and (nan-or-infinity-p n) (not (infinity-p n))))
 
 #+32-bit-target
 (defun fixnum-decode-short-float (float)

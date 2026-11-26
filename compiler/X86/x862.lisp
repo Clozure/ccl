@@ -4894,6 +4894,12 @@
     (#.x86::x86-g-bits #.x86::x86-a-bits)))
 
 
+;;; After a float compare that is about to be tested with E or NE, make
+;;; a NaN operand look "not equal" (see FLOAT-COMPARE-UNORDERED-NOT-EQUAL).
+(defmacro x862-float-compare-fix-unordered (cr-bit)
+  `(when (eql ,cr-bit x86::x86-e-bits)
+     (! float-compare-unordered-not-equal)))
+
 (defun x862-compare-double-float-registers (seg vreg xfer ireg jreg cr-bit true-p)
   (with-x86-local-vinsn-macros (seg vreg xfer)
     (if vreg
@@ -4903,9 +4909,11 @@
          (vreg)
          (progn
            (! double-float-compare ireg jreg)
+           (x862-float-compare-fix-unordered cr-bit)
            (^ cr-bit true-p))
          (progn
            (! double-float-compare ireg jreg)
+           (x862-float-compare-fix-unordered cr-bit)
            (ensuring-node-target (target vreg)
              (if (not true-p)
                (setq cr-bit (logxor 1 cr-bit)))
@@ -4922,9 +4930,11 @@
          (vreg)
          (progn
            (! single-float-compare ireg jreg)
+           (x862-float-compare-fix-unordered cr-bit)
            (^ cr-bit true-p))
          (progn
            (! single-float-compare ireg jreg)
+           (x862-float-compare-fix-unordered cr-bit)
            (ensuring-node-target (target vreg)
              (if (not true-p)
                (setq cr-bit (logxor 1 cr-bit)))
