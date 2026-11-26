@@ -134,7 +134,8 @@
 (setq *nx-known-declarations*
   '(special inline notinline type ftype function ignore optimize dynamic-extent ignorable
     ignore-if-unused settable unsettable 
-     notspecial global-function-name debugging-function-name resident))
+     notspecial global-function-name debugging-function-name resident
+     %arglist))
 
 (defun find-optimize-quantity (name env)
   (let ((pair ()))
@@ -1057,6 +1058,13 @@ function to the indicated name is true.")
     (let ((name (cadr decl)))
       (setq *nx-global-function-name* (setf (afunc-name *nx-current-function*) name))
       (setq *nx-inlined-self* (not (nx-declared-notinline-p name env))))))
+
+;;; Used by DEFUN to keep the lambda list as written with the function;
+;;; ARGLIST finds it in the function's info plist.
+(defnxdecl %arglist (pending decl env)
+  (declare (ignore pending env))
+  (when *nx-parsing-lambda-decls*
+    (setf (getf (afunc-lfun-info *nx-current-function*) 'arglist) (cadr decl))))
 
 (defnxdecl debugging-function-name (pending decl env)
   (declare (ignore pending env))
