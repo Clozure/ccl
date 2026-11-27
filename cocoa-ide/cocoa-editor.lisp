@@ -46,6 +46,9 @@
 (def-cocoa-default *wrap-lines-to-window* :bool nil
 		   "Soft wrap lines to window width")
 
+(def-cocoa-default *show-line-numbers* :bool t
+		   "Show line numbers in newly created editor windows")
+
 (def-cocoa-default *use-screen-fonts* :bool t "Use bitmap screen fonts when available")
 
 (def-cocoa-default *option-is-meta* :bool t "Use option key as meta?")
@@ -1986,6 +1989,170 @@
                 (#/setDocumentView: scrollview tv)	      
                 (values tv scrollview)))))))))
 
+;;; A vertical ruler that labels each visible Hemlock line once, even when
+;;; soft-wrapped across multiple text-view line fragments.
+(defvar *line-number-ruler-attributes* nil)
+(defvar *line-number-ruler-draw-error* nil)
+(defvar *line-number-ruler-install-error* nil)
+
+(defclass line-number-ruler-view (ns:ns-ruler-view)
+    ()
+  (:metaclass ns:+ns-object))
+
+(objc:defmethod (#/dealloc :void) ((self line-number-ruler-view))
+  (#/removeObserver: (#/defaultCenter ns:ns-notification-center) self)
+  (call-next-method))
+
+(defun line-number-ruler-attributes ()
+  (let ((attrs *line-number-ruler-attributes*))
+    (if (and (typep attrs 'macptr) (not (%null-ptr-p attrs)))
+      attrs
+      (let* ((font (#/systemFontOfSize: ns:ns-font
+                                        (#/smallSystemFontSize ns:ns-font)))
+             (dict (make-instance 'ns:ns-mutable-dictionary :with-capacity 2)))
+        (#/setObject:forKey: dict font #&NSFontAttributeName)
+        (#/setObject:forKey: dict
+                             (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.4d0 1.0d0)
+                             #&NSForegroundColorAttributeName)
+        (setq *line-number-ruler-attributes* (#/retain dict))))))
+
+(defun draw-line-number-labels (ruler)
+  (let ((tv (#/clientView ruler)))
+    (when (and (not (%null-ptr-p tv)) (typep tv 'hemlock-text-view))
+      (let* ((buffer (hemlock-buffer tv))
+             (layout (#/layoutManager tv))
+             (container (#/textContainer tv))
+             (attrs (line-number-ruler-attributes))
+             (origin (#/textContainerOrigin tv))
+             (ox (ns:ns-point-x origin))
+             (oy (ns:ns-point-y origin))
+             (visible (#/visibleRect tv))
+             (vbottom (+ (ns:ns-rect-y visible) (ns:ns-rect-height visible)))
+             (width (ns:ns-rect-width (#/bounds ruler)))
+             (total (#/length (#/textStorage tv)))
+             (crect (ns:make-ns-rect (- (ns:ns-rect-x visible) ox)
+                                     (- (ns:ns-rect-y visible) oy)
+                                     (ns:ns-rect-width visible)
+                                     (ns:ns-rect-height visible)))
+             (glyph-range (#/glyphRangeForBoundingRect:inTextContainer:
+                           layout crect container))
+             (char-range (#/characterRangeForGlyphRange:actualGlyphRange:
+                          layout glyph-range (%null-ptr)))
+             (first-index (min (ns:ns-range-location char-range) total)))
+        (when buffer
+          (let* ((hi::*current-buffer* buffer)
+                 (mark (hi::copy-mark (hi::buffer-point buffer) :temporary)))
+            (when (hi::move-to-absolute-position mark first-index)
+              (hi::line-start mark)
+              (let* ((line (hi::mark-line mark))
+                     (pos (hi::mark-absolute-position mark))
+                     (number (do* ((l (hi::line-previous line) (hi::line-previous l))
+                                   (n 1 (1+ n)))
+                                  ((null l) n))))
+                (loop
+                  (when (null line) (return))
+                  (multiple-value-bind (top height)
+                      (if (< pos total)
+                        (let* ((glyph (#/glyphIndexForCharacterAtIndex: layout pos))
+                               (rect (#/lineFragmentRectForGlyphAtIndex:effectiveRange:
+                                      layout glyph (%null-ptr))))
+                          (values (ns:ns-rect-y rect) (ns:ns-rect-height rect)))
+                        (let ((rect (#/extraLineFragmentRect layout)))
+                          (if (plusp (ns:ns-rect-height rect))
+                            (values (ns:ns-rect-y rect) (ns:ns-rect-height rect))
+                            (values nil nil))))
+                    (when (null top) (return))
+                    (let ((y-in-tv (+ top oy)))
+                      (when (> y-in-tv vbottom) (return))
+                      (let* ((y (ns:ns-point-y
+                                 (#/convertPoint:fromView: ruler
+                                                           (ns:make-ns-point 0 y-in-tv)
+                                                           tv)))
+                             (label (#/autorelease
+                                     (%make-nsstring (format nil "~d" number))))
+                             (size (#/sizeWithAttributes: label attrs))
+                             (x (- width (ns:ns-size-width size) 5.0d0))
+                             (ty (+ y (/ (- height (ns:ns-size-height size)) 2.0d0))))
+                        (#/drawAtPoint:withAttributes:
+                         label (ns:make-ns-point x ty) attrs))))
+                  (setq pos (+ pos (hi::line-length line) 1)
+                        line (hi::line-next line)
+                        number (1+ number)))))))))))
+
+(objc:defmethod (#/drawHashMarksAndLabelsInRect: :void)
+    ((self line-number-ruler-view) (rect :<NSR>ect))
+  (declare (ignore rect))
+  (let* ((bounds (#/bounds self))
+         (width (ns:ns-rect-width bounds))
+         (height (ns:ns-rect-height bounds)))
+    (#/set (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.94d0 1.0d0))
+    (#_NSRectFill bounds)
+    (#/set (#/colorWithCalibratedWhite:alpha: ns:ns-color 0.7d0 1.0d0))
+    (#_NSRectFill (ns:make-ns-rect (- width 1.0d0) 0.0d0 1.0d0 height))
+    (handler-case
+        (progn
+          (setq *line-number-ruler-draw-error* nil)
+          (draw-line-number-labels self))
+      (error (condition)
+        (setq *line-number-ruler-draw-error* condition)))))
+
+(objc:defmethod (#/lineNumberTextChanged: :void)
+    ((self line-number-ruler-view) notification)
+  (declare (ignore notification))
+  (#/setNeedsDisplay: self t))
+
+(defun install-line-number-ruler (scrollview text-view)
+  (let* ((ruler (make-instance 'line-number-ruler-view
+                               :with-scroll-view scrollview
+                               :orientation #$NSVerticalRuler))
+         (attrs (line-number-ruler-attributes))
+         (digits-width
+           (ns:ns-size-width
+            (#/sizeWithAttributes: (#/autorelease (%make-nsstring "99999"))
+                                   attrs))))
+    (#/setReservedThicknessForMarkers: ruler 0.0d0)
+    (#/setReservedThicknessForAccessoryView: ruler 0.0d0)
+    (#/setRuleThickness: ruler (+ digits-width 10.0d0))
+    (#/setVerticalRulerView: scrollview ruler)
+    (#/setHasVerticalRuler: scrollview t)
+    (#/setClientView: ruler text-view)
+    (#/setRulersVisible: scrollview t)
+    (let ((center (#/defaultCenter ns:ns-notification-center)))
+      (#/addObserver:selector:name:object:
+       center ruler (@selector #/lineNumberTextChanged:)
+       #&NSTextStorageDidProcessEditingNotification (#/textStorage text-view))
+      (#/addObserver:selector:name:object:
+       center ruler (@selector #/lineNumberTextChanged:)
+       #&NSViewFrameDidChangeNotification text-view)
+      (let ((clip (#/contentView scrollview)))
+        (#/setPostsBoundsChangedNotifications: clip t)
+        (#/addObserver:selector:name:object:
+         center ruler (@selector #/lineNumberTextChanged:)
+         #&NSViewBoundsDidChangeNotification clip)))
+    (#/release ruler)
+    ruler))
+
+(defun pane-in-listener-window-p (pane)
+  (let* ((window (#/window pane))
+         (listener-class (find-class 'hemlock-listener-frame nil)))
+    (and listener-class
+         (not (%null-ptr-p window))
+         (typep window 'hemlock-listener-frame))))
+
+(defun install-line-number-ruler-for-pane (pane scrollview text-view)
+  (unless (pane-in-listener-window-p pane)
+    (handler-case
+        (progn
+          (install-line-number-ruler scrollview text-view)
+          ;; The ruler changes the scroll view's tiling after the window is
+          ;; already on screen.  Re-tile and redraw so nothing stays unpainted.
+          (#/tile scrollview)
+          (#/setNeedsDisplay: scrollview t)
+          (#/setNeedsDisplay: (#/contentView (#/window scrollview)) t)
+          (setq *line-number-ruler-install-error* nil))
+      (error (condition)
+        (setq *line-number-ruler-install-error* condition)))))
+
 (defun make-scrolling-textview-for-pane (pane textstorage track-width color style)
   (let* ((contentrect (#/frame (#/contentView pane)) ))
     (multiple-value-bind (tv scrollview)
@@ -2003,6 +2170,11 @@
         (decf (ns:ns-rect-height r) 15)
         (incf (ns:ns-rect-y r) 15)
         (#/setFrame: scrollview r))
+      (when *show-line-numbers*
+        ;; Defer installation until the pane has finished being constructed.
+        (queue-for-gui
+         (lambda ()
+           (install-line-number-ruler-for-pane pane scrollview tv))))
       #-cocotron
       (#/setAutohidesScrollers: scrollview t)
       (setf (slot-value pane 'scroll-view) scrollview
@@ -3696,4 +3868,3 @@
                                (when (probe-file lpath)
                                  lpath))))))))
   +null-ptr+)
-
