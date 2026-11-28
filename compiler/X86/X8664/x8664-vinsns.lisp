@@ -2606,18 +2606,23 @@
     (subl (:$b 1) (:%l count))
     (jge :loop))))
   
+;;; An NFP frame, from tcr.nfp up: the old tcr.foreign-sp, the rbp of the
+;;; function that made it, the spill area (which starts 16 bytes up), the
+;;; old tcr.nfp (the word 16 bytes below the address the first word holds),
+;;; and a word that keeps the stack 16-byte aligned.
 (define-x8664-vinsn save-nfp (()
                               ()
                               ((nfp :imm)))
   ((:pred > (:apply x862-max-nfp-depth) 0)
    (movq (:rcontext x8664::tcr.foreign-sp) (:%mmx x8664::stack-temp))
-   (:if (:pred < (:apply + 16 (:apply x862-max-nfp-depth)) 128)
-     (subq (:$b (:apply + 16 (:apply x862-max-nfp-depth))) (:rcontext x8664::tcr.foreign-sp))
-     (subq (:$l (:apply + 16 (:apply x862-max-nfp-depth))) (:rcontext x8664::tcr.foreign-sp)))
+   (:if (:pred < (:apply + 32 (:apply x862-max-nfp-depth)) 128)
+     (subq (:$b (:apply + 32 (:apply x862-max-nfp-depth))) (:rcontext x8664::tcr.foreign-sp))
+     (subq (:$l (:apply + 32 (:apply x862-max-nfp-depth))) (:rcontext x8664::tcr.foreign-sp)))
    (movq (:rcontext x8664::tcr.foreign-sp) (:%q nfp))
    (movq (:%mmx x8664::stack-temp) (:@ (:%q nfp)))
+   (movq (:% x8664::rbp) (:@ x8664::csp-frame.rbp (:%q nfp)))
    (movq (:rcontext x8664::tcr.nfp) (:%mmx x8664::stack-temp))
-   (movq (:%mmx x8664::stack-temp) (:@ 8 (:%q nfp)))
+   (movq (:%mmx x8664::stack-temp) (:@ (:apply + 16 (:apply x862-max-nfp-depth)) (:%q nfp)))
    (movq (:%q nfp) (:rcontext x8664::tcr.nfp))))
 
 (define-x8664-vinsn restore-nfp (()
@@ -2625,7 +2630,7 @@
                                  ((temp :imm)))
   ((:pred > (:apply x862-max-nfp-depth) 0)
    (movq (:rcontext x8664::tcr.nfp) (:%q temp))
-   (movq (:@ 8 (:%q temp)) (:%mmx x8664::stack-temp))
+   (movq (:@ (:apply + 16 (:apply x862-max-nfp-depth)) (:%q temp)) (:%mmx x8664::stack-temp))
    (movq (:@ (:%q temp)) (:%q temp))
    (movq (:%q temp) (:rcontext x8664::tcr.foreign-sp))
    (movq (:%mmx x8664::stack-temp) (:rcontext x8664::tcr.nfp))))
