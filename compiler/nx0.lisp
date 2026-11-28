@@ -1337,19 +1337,21 @@ function to the indicated name is true.")
              (not (gethash sym *nx1-alphatizers*))
              (not *nx-current-code-note*))
       (multiple-value-bind (info afunc) (unless global-only (nx-lexical-finfo sym env))
-        (if info (setq token afunc 
-                       containing-env (afunc-environment afunc)
-                       lambda-form (afunc-lambdaform afunc)))
-        (setq info (cdr (retrieve-environment-function-info sym env)))
-        (if (def-info.lambda info)
-          (setq lambda-form (%def-info.lambda info)
-                token sym
-                containing-env (new-lexical-environment (%def-info.environment info)))
-          (unless info
-            (if (cdr (setq info (assq sym *nx-globally-inline*)))
-              (setq lambda-form (%cdr info)
+        (if info
+          (setq token afunc
+                containing-env (afunc-environment afunc)
+                lambda-form (afunc-lambdaform afunc))
+          (progn
+            (setq info (cdr (retrieve-environment-function-info sym env)))
+            (if (def-info.lambda info)
+              (setq lambda-form (%def-info.lambda info)
                     token sym
-                    containing-env (new-lexical-environment (new-definition-environment nil))))))))
+                    containing-env (new-lexical-environment (%def-info.environment info)))
+              (unless info
+                (if (cdr (setq info (assq sym *nx-globally-inline*)))
+                  (setq lambda-form (%cdr info)
+                        token sym
+                        containing-env (new-lexical-environment (new-definition-environment nil))))))))))
     (values lambda-form (nx-closed-environment env containing-env) token)))
 
 (defun nx-closed-environment (current-env target)
