@@ -276,96 +276,96 @@
 					 single-float-decode-bias)
 		   (- old-exp single-float-decode-bias) sign)))))))
 
-; (* float (expt 2 int))
-(defun scale-float (float int)
-  "Return the value (* f (expt (float 2 f) ex)), but with no unnecessary loss
-  of precision or overflow."
-  (unless (integerp int) (setq int (require-type int 'integer)))
+(defun scale-float (float integer)
+  "Return the value (* float (expt (float 2 float) integer)), but with no
+   unnecessary loss of precision or overflow."
+  (unless (integerp integer) (setq integer (require-type integer 'integer)))
   (number-case float
     (double-float
-     (let* ((float-exp (%double-float-exp float))
-            (new-exp (+ float-exp int)))
-       (if (eq 0 float-exp) ; already denormalized?
-         (cond ((%double-float-zerop float) float)
-               ;; The multiplier 2^INT is a float only for -1022 <= INT <= 1023.
-               ((< int (- 1 IEEE-double-float-bias))
-                (if (%double-float-sign float) -0.0d0 0.0d0))
-               ((> int (- IEEE-double-float-normal-exponent-max IEEE-double-float-bias))
-                ;; Make it a normal number first, then scale by the rest.
-                (let ((n (- IEEE-double-float-normal-exponent-max IEEE-double-float-bias)))
-                  (scale-float (scale-float float n) (- int n))))
-               (t
+     (let* ((f float)
+            (n integer)
+            (f-exp (%double-float-exp f)))
+       (when (eq 0 f-exp)
+         (when (%double-float-zerop f)
+           (return-from scale-float f))
+         ;; A denormal.  Make it normal, which is exact, and then scale,
+         ;; well, normally.
+         (setq f (%%scale-dfloat! f (+ IEEE-double-float-bias
+                                       IEEE-double-float-digits)
+                                  (%make-dfloat))
+               n (- n IEEE-double-float-digits)
+               f-exp (%double-float-exp f)))
+       (let ((new-exp (+ f-exp n)))
+         (cond ((<= new-exp (- IEEE-double-float-digits))
+                (if (%double-float-sign f) -0.0d0 0.0d0))
+               ((<= new-exp 0)          ;denormal result
                 (let ((result (%make-dfloat)))
-                  (%%scale-dfloat! float (+ IEEE-double-float-bias int) result))))
-         (if (<= new-exp 0)  ; maybe going denormalized        
-           (if (<= new-exp (- IEEE-double-float-digits))
-             (if (%double-float-sign float) -0.0d0 0.0d0) ; should this be underflow? - should just be normal and result is fn of current fpu-mode
-             ;(error "Can't scale ~s by ~s." float int) ; should signal something                      
-             (let ((result (%make-dfloat)))
-               (%copy-double-float float result)
-               (set-%double-float-exp result 1) ; scale by float-exp -1
-               (%%scale-dfloat! result (+ double-float-decode-bias (+ float-exp int)) result)
-               result))
-           (cond ((<= new-exp IEEE-double-float-normal-exponent-max)
-                  (let ((new-float (%make-dfloat)))
-                    (%copy-double-float float new-float)
-                    (set-%double-float-exp new-float new-exp)
-                    new-float))
-                 ((get-fpu-mode :overflow)
-                  (error (make-condition 'floating-point-overflow
-                                         :operation 'scale-float
-                                         :operands (list float int))))
-                 ;; Overflow trap is off, return infinity of appropriate sign, or NaN stays as is.
-                 ((eq float-exp 2047) float)
-                 (t (double-float-from-bits (if (minusp float) #xFFF00000 #x7FF00000) 0)))))))
+                  (%copy-double-float f result)
+                  (set-%double-float-exp result 1) ;scale by f-exp - 1
+                  (%%scale-dfloat! result (+ double-float-decode-bias new-exp)
+                                   result)))
+               ((<= new-exp IEEE-double-float-normal-exponent-max)
+                (let ((new-float (%make-dfloat)))
+                  (%copy-double-float f new-float)
+                  (set-%double-float-exp new-float new-exp)
+                  new-float))
+               ((get-fpu-mode :overflow)
+                (error (make-condition 'floating-point-overflow
+                                       :operation 'scale-float
+                                       :operands (list float integer))))
+               ;; Overflow trap is off, return infinity of
+               ;; appropriate sign, or NaN stays as is.
+               ((eq f-exp 2047) f)
+               (t (double-float-from-bits (if (minusp f) #xFFF00000 #x7FF00000)
+                                          0))))))
     (short-float
-     (let* ((float-exp (%short-float-exp float))
-            (new-exp (+ float-exp int)))
-       (if (eq 0 float-exp) ; already denormalized?
-         (cond ((%short-float-zerop float) float)
-               ;; The multiplier 2^INT is a float only for -126 <= INT <= 127.
-               ((< int (- 1 IEEE-single-float-bias))
-                (if (%short-float-sign float) -0.0s0 0.0s0))
-               ((> int (- IEEE-single-float-normal-exponent-max IEEE-single-float-bias))
-                ;; Make it a normal number first, then scale by the rest.
-                (let ((n (- IEEE-single-float-normal-exponent-max IEEE-single-float-bias)))
-                  (scale-float (scale-float float n) (- int n))))
-               (t
+     (let* ((f float)
+            (n integer)
+            (f-exp (%short-float-exp f)))
+       (when (eq 0 f-exp)
+         (when (%short-float-zerop f)
+           (return-from scale-float f))
+         ;; A denormal.  Make it normal, which is exact, and then scale,
+         ;; well, normally.
+         (setq f #+32-bit-target
+                 (%%scale-sfloat! f (+ IEEE-single-float-bias
+                                       IEEE-single-float-digits)
+                                  (%make-sfloat))
+                 #+64-bit-target
+                 (%%scale-sfloat f (+ IEEE-single-float-bias
+                                      IEEE-single-float-digits))
+               n (- n IEEE-single-float-digits)
+               f-exp (%short-float-exp f)))
+       (let ((new-exp (+ f-exp n)))
+         (cond ((<= new-exp (- IEEE-single-float-digits))
+                (if (%short-float-sign f) -0.0s0 0.0s0))
+               ((<= new-exp 0)          ;denormal result
                 #+32-bit-target
                 (let ((result (%make-sfloat)))
-                  (%%scale-sfloat! float (+ IEEE-single-float-bias int) result))
+                  (%copy-short-float f result)
+                  (set-%short-float-exp result 1) ;scale by f-exp - 1
+                  (%%scale-sfloat! result (+ single-float-decode-bias new-exp)
+                                   result))
                 #+64-bit-target
-                (%%scale-sfloat float (+ IEEE-single-float-bias int))))
-         (if (<= new-exp 0)  ; maybe going denormalized        
-           (if (<= new-exp (- IEEE-single-float-digits))
-             ;; should this be underflow? - should just be normal and
-             ;; result is fn of current fpu-mode (error "Can't scale
-             ;; ~s by ~s." float int) ; should signal something
-             (if (%short-float-sign float) -0.0s0 0.0s0)
-             #+32-bit-target
-             (let ((result (%make-sfloat)))
-               (%copy-short-float float result)
-               (set-%short-float-exp result 1) ; scale by float-exp -1
-               (%%scale-sfloat! result (+ single-float-decode-bias (+ float-exp int)) result)
-               result)
-             #+64-bit-target
-             (%%scale-sfloat (set-%short-float-exp float 1)
-                             (+ single-float-decode-bias (+ float-exp int))))
-           (cond ((<= new-exp IEEE-single-float-normal-exponent-max)
-                  #+32-bit-target
-                  (let ((new-float (%make-sfloat)))
-                    (%copy-short-float float new-float)
-                    (set-%short-float-exp new-float new-exp)
-                    new-float)
-                  #+64-bit-target
-                  (set-%short-float-exp float new-exp))
-                 ((get-fpu-mode :overflow)
-                  (error (make-condition 'floating-point-overflow
-                                         :operation 'scale-float
-                                         :operands (list float int))))
-                 ;; Overflow trap is off, return infinity of appropriate sign, or NaN stays as is.
-                 ((eq float-exp 255) float)
-                 (t (host-single-float-from-unsigned-byte-32 (if (minusp float) #xFF800000 #x7F800000))))))))))
+                (%%scale-sfloat (set-%short-float-exp f 1)
+                                (+ single-float-decode-bias new-exp)))
+               ((<= new-exp IEEE-single-float-normal-exponent-max)
+                #+32-bit-target
+                (let ((new-float (%make-sfloat)))
+                  (%copy-short-float f new-float)
+                  (set-%short-float-exp new-float new-exp)
+                  new-float)
+                #+64-bit-target
+                (set-%short-float-exp f new-exp))
+               ((get-fpu-mode :overflow)
+                (error (make-condition 'floating-point-overflow
+                                       :operation 'scale-float
+                                       :operands (list float integer))))
+               ;; Overflow trap is off, return infinity of
+               ;; appropriate sign, or NaN stays as is.
+               ((eq f-exp 255) f)
+               (t (host-single-float-from-unsigned-byte-32
+                   (if (minusp f) #xFF800000 #x7F800000)))))))))
 
 (defun %copy-float (f)
   ;Returns a freshly consed float.  float can also be a macptr.
