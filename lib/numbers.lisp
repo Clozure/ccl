@@ -32,6 +32,12 @@
 (defconstant double-float-negative-infinity
   #.(double-float-from-bits #xfff00000 0))
 
+(defconstant single-float-positive-infinity
+  #.(host-single-float-from-unsigned-byte-32 #x7f800000))
+
+(defconstant single-float-negative-infinity
+  #.(host-single-float-from-unsigned-byte-32 #xff800000))
+
 ;;; Below is a different definition of double-float-nan than in 1.14.
 ;;; The redefinition triggers a bug in define-constant when it's looking at NaN's.
 #-bootstrapped (undefine-constant 'double-float-nan) ;;  Can remove this once the release image has define-constant fixed.
