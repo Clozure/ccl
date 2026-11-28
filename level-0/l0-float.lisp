@@ -439,9 +439,13 @@
                                double-float-decode-bias)
                             shift)))
             (when (> new-exp IEEE-double-float-normal-exponent-max)
-              (error (make-condition 'floating-point-overflow
-                                     :operation 'double-float
-                                     :operands (list number))))
+              (when (get-fpu-mode :overflow)
+                (error (make-condition 'floating-point-overflow
+                                       :operation 'float
+                                       :operands (list number 1.0d0))))
+              ;; The trap is masked, so make an infinity.
+              (setq new-exp (1+ IEEE-double-float-normal-exponent-max)
+                    int 0))
             (make-float-from-fixnums (ldb (byte 25 28) int)
                                      (ldb (byte 28 0) int)
                                      new-exp
@@ -481,9 +485,13 @@
                                single-float-decode-bias)
                             shift)))
             (when (> new-exp IEEE-single-float-normal-exponent-max)
-              (error (make-condition 'floating-point-overflow
-                                     :operation 'short-float
-                                     :operands (list number))))
+              (when (get-fpu-mode :overflow)
+                (error (make-condition 'floating-point-overflow
+                                       :operation 'float
+                                       :operands (list number 1.0s0))))
+              ;; The trap is masked, so make an infinity.
+              (setq new-exp (1+ IEEE-single-float-normal-exponent-max)
+                    int 0))
             (make-short-float-from-fixnums int new-exp
                                            (if minusp -1 1) result)))
         ;; |num/den| < 1
@@ -518,9 +526,13 @@
                                single-float-decode-bias)
                             shift)))
             (when (> new-exp IEEE-single-float-normal-exponent-max)
-              (error (make-condition 'floating-point-overflow
-                                     :operation 'short-float
-                                     :operands (list number))))
+              (when (get-fpu-mode :overflow)
+                (error (make-condition 'floating-point-overflow
+                                       :operation 'float
+                                       :operands (list number 1.0s0))))
+              ;; The trap is masked, so make an infinity.
+              (setq new-exp (1+ IEEE-single-float-normal-exponent-max)
+                    int 0))
             (make-short-float-from-fixnums int new-exp (if minusp -1 1))))
         ;; |num/den| < 1
         (float-rat-neg-exp num den (if minusp -1 1) nil t)))))
@@ -596,9 +608,14 @@
                      (when bit (setq lo (%ilogior #x8000000 lo))))))
                (when (> (+ double-float-decode-bias int-len)
                         IEEE-double-float-normal-exponent-max)
-                 (error (make-condition 'floating-point-overflow
-                                        :operation 'float
-                                        :operands (list big 1.0d0))))
+                 (when (get-fpu-mode :overflow)
+                   (error (make-condition 'floating-point-overflow
+                                          :operation 'float
+                                          :operands (list big 1.0d0))))
+                 ;; The trap is masked, so make an infinity.
+                 (setq hi 0 lo 0
+                       int-len (- (1+ IEEE-double-float-normal-exponent-max)
+                                  double-float-decode-bias)))
                (make-float-from-fixnums hi lo (+ double-float-decode-bias
                                                  int-len)
                                         (if minusp -1 1) result))
@@ -636,9 +653,14 @@
                (setq lo (%ilsr 1 lo))))
            (when (> (+ single-float-decode-bias int-len)
                     IEEE-single-float-normal-exponent-max)
-             (error (make-condition 'floating-point-overflow
-                                    :operation 'float
-                                    :operands (list big 1.0s0))))
+             (when (get-fpu-mode :overflow)
+               (error (make-condition 'floating-point-overflow
+                                      :operation 'float
+                                      :operands (list big 1.0s0))))
+             ;; The trap is masked, so make an infinity.
+             (setq lo 0
+                   int-len (- (1+ IEEE-single-float-normal-exponent-max)
+                              single-float-decode-bias)))
            (make-short-float-from-fixnums lo (+ single-float-decode-bias
                                                 int-len)
                                           (if minusp -1 1)
