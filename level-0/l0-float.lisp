@@ -1373,9 +1373,10 @@
     (if (> m 1.8014399E+16)
       ;; Large argument escape
       (let ((log-s 0)
-            ;; For a real argument, (minusp ix) is never true, so use the
-            ;; sign of the real part, as the code below does.
-            (neg (if (complexp z) (minusp ix) (plusp rx))))
+            ;; True if z is below the real axis.  A positive real
+            ;; counts as below, since the branch cut to the right of 1
+            ;; is continuous with quadrant IV.
+            (below (if (complexp z) (minusp ix) (plusp rx))))
         (if (typep m 'double-float)
           (if (> m #.(/ most-positive-double-float 2))
             (setq log-s double-float-log2)
@@ -1385,11 +1386,11 @@
             (setq z (* 2 z))))
         (if acos
           (let ((w (+ log-s (log-e z))))
-            (if (and neg (not (complexp z)))
+            (if (realp w)
               ;; Avoid the -0.0 real part that (i* w 1) would give.
               (complex (float 0 w) w)
-              (i* w (if neg +1 -1))))
-          (if neg
+              (i* w (if below +1 -1))))
+          (if below
             (i* (+ log-s (log-e (i* z 1))) -1)
             (i* (+ log-s (log-e (i* z -1))) 1))))
       (let ((qrx rx)
