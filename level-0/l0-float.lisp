@@ -57,32 +57,18 @@
     (the fixnum (logand significand
                         (1- (ash 1 IEEE-single-float-hidden-bit)))))))
 
-
-(defun float-sign (n1 &optional n2) ; second arg silly
-  "Return a floating-point number that has the same sign as
-   FLOAT1 and, if FLOAT2 is given, has the same absolute value
-   as FLOAT2."
-  (if (and n2 (not (typep n2 'float)))
-    (setq n2 (require-type n2 'float)))
-  (number-case n1
-    (double-float                       
-     (if (%double-float-sign n1) 
-       (if n2
-         (if (if (typep n2 'double-float) (%double-float-minusp n2) (%short-float-minusp n2)) n2 (- n2))
-         -1.0d0)
-       (if n2
-         (if (if (typep n2 'double-float) (%double-float-minusp n2) (%short-float-minusp n2)) (- n2) n2)
-         1.0d0)))
-    (short-float
-     (if (%short-float-sign n1)
-       (if n2
-         (if (if (typep n2 'double-float) (%double-float-minusp n2) (%short-float-minusp n2)) n2 (- n2))
-         -1.0s0)
-       (if n2
-         (if (if (typep n2 'double-float) (%double-float-minusp n2) (%short-float-minusp n2)) (- n2) n2)
-         1.0s0)))))
-
-
+(defun float-sign (f1 &optional f2)
+  "Return a floating-point number with the sign of F1 and the same
+   absolute value and format as F2.  F2 defaults to (FLOAT 1 F1)."
+  (flet ((sign-bit (f)
+           (number-case f
+             (double-float (%double-float-sign f))
+             (short-float (%short-float-sign f)))))
+    (declare (inline sign-bit))
+    (let ((f1-sign (sign-bit f1)))
+      (cond (f2 (if (eq f1-sign (sign-bit f2)) f2 (- f2)))
+            ((typep f1 'double-float) (if f1-sign -1.0d0 1.0d0))
+            (t (if f1-sign -1.0s0 1.0s0))))))
 
 (defun %double-float-minusp (n)
   (and (%double-float-sign n)(not (%double-float-zerop n))))
