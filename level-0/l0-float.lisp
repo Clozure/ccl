@@ -271,6 +271,9 @@
      (let* ((f float)
             (n integer)
             (f-exp (%double-float-exp f)))
+       ;; Scaling an infinity or a NaN leaves it as it is.
+       (when (> f-exp IEEE-double-float-normal-exponent-max)
+         (return-from scale-float f))
        (when (eq 0 f-exp)
          (when (%double-float-zerop f)
            (return-from scale-float f))
@@ -300,14 +303,16 @@
                                        :operation 'scale-float
                                        :operands (list float integer))))
                ;; Overflow trap is off, return infinity of
-               ;; appropriate sign, or NaN stays as is.
-               ((eq f-exp 2047) f)
+               ;; appropriate sign.
                (t (double-float-from-bits (if (minusp f) #xFFF00000 #x7FF00000)
                                           0))))))
     (short-float
      (let* ((f float)
             (n integer)
             (f-exp (%short-float-exp f)))
+       ;; Scaling an infinity or a NaN leaves it as it is.
+       (when (> f-exp IEEE-single-float-normal-exponent-max)
+         (return-from scale-float f))
        (when (eq 0 f-exp)
          (when (%short-float-zerop f)
            (return-from scale-float f))
@@ -348,8 +353,7 @@
                                        :operation 'scale-float
                                        :operands (list float integer))))
                ;; Overflow trap is off, return infinity of
-               ;; appropriate sign, or NaN stays as is.
-               ((eq f-exp 255) f)
+               ;; appropriate sign.
                (t (host-single-float-from-unsigned-byte-32
                    (if (minusp f) #xFF800000 #x7F800000)))))))))
 
