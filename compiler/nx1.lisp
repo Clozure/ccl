@@ -444,13 +444,24 @@
     arg
     (make-acode (%nx1-operator not) (nx1-immediate context :eq) arg)))
 
+;;; With a NaN, (not (< a b)) is not (>= a b).
+(defun nx1-compare-may-be-unordered-p (form)
+  (let* ((op (acode-operator form)))
+    (and (or (eql op (%nx1-operator numcmp))
+             (eql op (%nx1-operator double-float-compare)))
+         (destructuring-bind (cc form1 form2) (acode-operands form)
+           (and (member (car (acode-operands cc)) '(:lt :le :gt :ge))
+                (not (and (nx-acode-form-typep form1 'rational *nx-lexical-environment*)
+                          (nx-acode-form-typep form2 'rational *nx-lexical-environment*))))))))
+
 (defun nx1-negate-form (form)
   (let* ((subform (nx-untyped-form form)))
     (when (and (acode-p subform) (typep (acode-operator subform) 'fixnum))  
       (let* ((op (acode-operator subform)))
         (declare (fixnum op))
-        (when (logbitp operator-cc-invertable-bit op)
-          (%rplaca 
+        (when (and (logbitp operator-cc-invertable-bit op)
+                   (not (nx1-compare-may-be-unordered-p subform)))
+          (%rplaca
            (acode-operands (car (acode-operands subform)))
            (acode-invert-condition-keyword (car (acode-operands (car (acode-operands subform))))))
           t)))))
