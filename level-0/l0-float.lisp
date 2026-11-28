@@ -550,107 +550,82 @@
       ;; why do it return 2 values?
       (values (float-and-scale-and-round sign quotient (- shift-factor)  short result)))))
 
-
-
-;;; when is (negate-bignum (bignum-ashift-right big)) ; can't negate
-;;; in place cause may get bigger cheaper than (negate-bignum big) - 6
-;;; 0r 8 digits ; 8 longs so win if digits > 7 or negate it on the
-;;; stack
-
-(defun %bignum-dfloat (big &optional result)  
-  (let* ((minusp (bignum-minusp big)))
-    (flet 
+(defun %bignum-dfloat (big &optional result)
+  (let ((minusp (bignum-minusp big)))
+    (flet
       ((doit (new-big)
-         (let* ((int-len (bignum-integer-length new-big)))
-           (when (>= int-len (- 2047 double-float-decode-bias)) ; args?
-             (error (make-condition 'floating-point-overflow 
-                                    :operation 'float :operands (list big))))
-           (if (> int-len 53)
-             (let* ((hi (ldb (byte 25  (- int-len  25)) new-big))
-                    (lo (ldb (byte 28 (- int-len 53)) new-big)))
-               ;(print (list new-big hi lo))
-               (when (and (logbitp (- int-len 54) new-big)  ; round bit
-                          (or (%ilogbitp 0 lo)    ; oddp
+         (let ((int-len (bignum-integer-length new-big)))
+           ;; make-float-from-fixnums takes the 53-bit significand as a
+           ;; 25-bit high part and a 28-bit low part.
+           (if (> int-len IEEE-double-float-digits)
+             (let* ((round-pos (- int-len IEEE-double-float-digits 1))
+                    (hi (ldb (byte 25 (- int-len 25)) new-big))
+                    (lo (ldb (byte 28 (- int-len IEEE-double-float-digits))
+                             new-big)))
+               (when (and (logbitp round-pos new-big) ;round bit
+                          (or (%ilogbitp 0 lo)        ;oddp
                               ;; or more bits below round
-                              (%i< (one-bignum-factor-of-two new-big) (- int-len 54))))
+                              (%i< (one-bignum-factor-of-two new-big)
+                                   round-pos)))
                  (if (eq lo #xfffffff)
                    (setq hi (1+ hi) lo 0)
                    (setq lo (1+ lo)))
-                 (when (%ilogbitp 25 hi) ; got bigger
+                 (when (%ilogbitp 25 hi) ;got bigger
                    (setq int-len (1+ int-len))
-                   (when (>= int-len (- 2047 double-float-decode-bias))
-                     (error (make-condition 'floating-point-overflow
-                                            :operation 'float :operands (list big))))
                    (let ((bit (%ilogbitp 0 hi)))
                      (setq hi (%ilsr 1 hi))
                      (setq lo (%ilsr 1 lo))
-                     (if bit (setq lo (%ilogior #x8000000 lo))))))
-               (make-float-from-fixnums hi lo (+ double-float-decode-bias int-len)(if minusp -1 1) result))
-             (let* ((hi (ldb (byte 25  (- int-len  25)) new-big))
+                     (when bit (setq lo (%ilogior #x8000000 lo))))))
+               (when (> (+ double-float-decode-bias int-len)
+                        IEEE-double-float-normal-exponent-max)
+                 (error (make-condition 'floating-point-overflow
+                                        :operation 'float
+                                        :operands (list big 1.0d0))))
+               (make-float-from-fixnums hi lo (+ double-float-decode-bias
+                                                 int-len)
+                                        (if minusp -1 1) result))
+             ;; Convert exactly. In practice, only reachable on 32-bit
+             ;; targets: on 64-bit targets, any bignum will be longer
+             ;; than 53 bits.
+             (let* ((hi (ldb (byte 25 (- int-len 25)) new-big))
                     (lobits (min (- int-len 25) 28))
-                    (lo (ldb (byte lobits (- int-len (+ lobits 25))) new-big)))
-               (if (< lobits 28) (setq lo (ash lo (- 28 lobits))))
-               (make-float-from-fixnums hi lo (+ double-float-decode-bias int-len) (if minusp -1 1) result))))))
-      (declare (dynamic-extent #'doit))
+                    (lo (ldb (byte lobits (- int-len (+ lobits 25)))
+                             new-big)))
+               (when (< lobits 28) (setq lo (ash lo (- 28 lobits))))
+               (make-float-from-fixnums hi lo (+ double-float-decode-bias
+                                                 int-len)
+                                        (if minusp -1 1) result))))))
       (with-one-negated-bignum-buffer big doit))))
 
-#+32-bit-target
-(defun %bignum-sfloat (big &optional result)  
-  (let* ((minusp (bignum-minusp big)))
-    (flet 
+(defun %bignum-sfloat #+32-bit-target (big &optional result)
+                      #+64-bit-target (big)
+  (let ((minusp (bignum-minusp big)))
+    (flet
       ((doit (new-big)
-         (let* ((int-len (bignum-integer-length new-big)))
-           (when (>= int-len (- 255 single-float-decode-bias)) ; args?
-             (error (make-condition 'floating-point-overflow 
-                                    :operation 'float :operands (list big 1.0s0))))
-           (if t ;(> int-len IEEE-single-float-digits) ; always true
-             (let* ((lo (ldb (byte IEEE-single-float-digits  (- int-len  IEEE-single-float-digits)) new-big)))
-               (when (and (logbitp (- int-len 25) new-big)  ; round bit
-                          (or (%ilogbitp 0 lo)    ; oddp
-                              ; or more bits below round
-                              (%i< (one-bignum-factor-of-two new-big) (- int-len 25))))
-                 (setq lo (1+ lo))
-                 (when (%ilogbitp 24 lo) ; got bigger
-                   (setq int-len (1+ int-len))
-                   (when (>= int-len (- 255 single-float-decode-bias))
-                     (error (make-condition 'floating-point-overflow
-                                            :operation 'float :operands (list big 1.0s0))))
-                   (setq lo (%ilsr 1 lo))))
-               (make-short-float-from-fixnums  lo (+ single-float-decode-bias int-len)(if minusp -1 1) result))
-             ))))
-      (declare (dynamic-extent #'doit))
+         (let* ((int-len (bignum-integer-length new-big))
+                (round-pos (- int-len IEEE-single-float-digits 1))
+                (lo (ldb (byte IEEE-single-float-digits
+                               (- int-len IEEE-single-float-digits))
+                         new-big)))
+           (when (and (logbitp round-pos new-big) ;round bit
+                      (or (%ilogbitp 0 lo)        ;oddp
+                          ;; or more bits below round
+                          (%i< (one-bignum-factor-of-two new-big)
+                               round-pos)))
+             (setq lo (1+ lo))
+             (when (%ilogbitp IEEE-single-float-digits lo) ;got bigger
+               (setq int-len (1+ int-len))
+               (setq lo (%ilsr 1 lo))))
+           (when (> (+ single-float-decode-bias int-len)
+                    IEEE-single-float-normal-exponent-max)
+             (error (make-condition 'floating-point-overflow
+                                    :operation 'float
+                                    :operands (list big 1.0s0))))
+           (make-short-float-from-fixnums lo (+ single-float-decode-bias
+                                                int-len)
+                                          (if minusp -1 1)
+                                          #+32-bit-target result))))
       (with-one-negated-bignum-buffer big doit))))
-
-
-#+64-bit-target
-(defun %bignum-sfloat (big)  
-  (let* ((minusp (bignum-minusp big)))
-    (flet 
-      ((doit (new-big)
-         (let* ((int-len (bignum-integer-length new-big)))
-           (when (>= int-len (- 255 single-float-decode-bias)) ; args?
-             (error (make-condition 'floating-point-overflow 
-                                    :operation 'float :operands (list big 1.0s0))))
-           (if t ;(> int-len IEEE-single-float-digits) ; always true
-             (let* ((lo (ldb (byte IEEE-single-float-digits  (- int-len  IEEE-single-float-digits)) new-big)))
-               (when (and (logbitp (- int-len 25) new-big)  ; round bit
-                          (or (%ilogbitp 0 lo)    ; oddp
-                              ; or more bits below round
-                              (%i< (one-bignum-factor-of-two new-big) (- int-len 25))))
-                 (setq lo (1+ lo))
-                 (when (%ilogbitp 24 lo) ; got bigger
-                   (setq int-len (1+ int-len))
-                   (when (>= int-len (- 255 single-float-decode-bias))
-                     (error (make-condition 'floating-point-overflow
-                                            :operation 'float :operands (list big 1.0s0))))
-                   (setq lo (%ilsr 1 lo))))
-               (make-short-float-from-fixnums  lo (+ single-float-decode-bias int-len)(if minusp -1 1)))
-             ))))
-      (declare (dynamic-extent #'doit))
-      (with-one-negated-bignum-buffer big doit))))
-
-
-
 
 (defun %fixnum-dfloat (fix &optional result)  
   (if (eq 0 fix) 
